@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>$(War3NetCodeAnalysisDecompilersVersion)</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Description>Regenerate war3map files from a Warcraft III map script.</Description>
+    <PackageTags>jass;warcraft3</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="War3Net.Build.Core" Version="5.7.1" />
+    <PackageReference Include="War3Net.CodeAnalysis.Jass" Version="5.6.1" />
+  </ItemGroup>
+
+</Project>
