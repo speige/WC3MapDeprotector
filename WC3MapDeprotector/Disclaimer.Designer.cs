@@ -73,7 +73,7 @@
             // btnEasterEgg
             // 
             btnEasterEgg.Anchor = AnchorStyles.Bottom;
-            btnEasterEgg.Location = new Point(623, 607);
+            btnEasterEgg.Location = new Point(580, 607);
             btnEasterEgg.Margin = new Padding(0);
             btnEasterEgg.Name = "btnEasterEgg";
             btnEasterEgg.Size = new Size(26, 31);

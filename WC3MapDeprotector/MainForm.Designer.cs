@@ -71,7 +71,7 @@
             // 
             // fdInputFile
             // 
-            fdInputFile.Filter = "\"Warcraft 3 Maps\"|*.w3m; *.w3x";
+            fdInputFile.Filter = "\"Warcraft 3 Maps\"|*.w3m; *.w3x;*.w3n";
             // 
             // fdOutputFile
             // 

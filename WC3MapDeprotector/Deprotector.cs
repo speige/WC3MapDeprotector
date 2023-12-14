@@ -1511,6 +1511,21 @@ namespace WC3MapDeprotector
                                             foreach (var trigger in triggerDefinitions)
                                             {
                                                 trigger.Functions.RemoveAll(x => string.Equals(x.ToString(), "CustomScriptCode(\"\")", StringComparison.InvariantCultureIgnoreCase));
+                                                foreach (var function in trigger.Functions)
+                                                {
+                                                    if (function.Name == "SetVariable" && function.Parameters[1].Type == TriggerFunctionParameterType.String)
+                                                    {
+                                                        var stringValue = function.Parameters[1].Value;
+                                                        if (Regex.IsMatch(stringValue, "^[0-9a-zA-Z]{4}$") && !string.Equals(stringValue, "true", StringComparison.InvariantCultureIgnoreCase))
+                                                        {
+                                                            var correctedText = $"set udg_{function.Parameters[0].Value}{(function.Parameters[0].ArrayIndexer != null ? $"[{function.Parameters[0].ArrayIndexer.Value}]" : "")} = '{stringValue}'";
+                                                            function.Type = TriggerFunctionType.Action;
+                                                            function.Name = "CustomScriptCode";
+                                                            function.Parameters.Clear();
+                                                            function.Parameters.Add(new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = correctedText });
+                                                        }
+                                                    }
+                                                }
                                             }
 
                                             _logEvent("map triggers recovered");
