@@ -1,6 +1,7 @@
 ﻿using CSharpLua;
 using ICSharpCode.Decompiler.Util;
 using IniParser;
+using IniParser.Model.Configuration;
 using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
 using NuGet.Packaging;
@@ -508,7 +509,7 @@ namespace WC3MapDeprotector
             {
                 File.WriteAllText(skinPath, "");
             }
-            var parser = new FileIniDataParser();
+            var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true }));
             var ini = parser.ReadFile(skinPath);
             ini.Configuration.AssigmentSpacer = "";
             ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0hJR0g=")] = decode("REVQUk9URUNURUQ=");
