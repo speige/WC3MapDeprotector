@@ -256,6 +256,20 @@ namespace WC3MapDeprotector
             }
         }
 
+        protected class MpqArchiveRefelctionData
+        {
+            internal object HashTable;
+            internal object BlockTable;
+            internal uint HashTableSize;
+            internal MpqHash[] Hashes;
+            internal List<MpqEntry> BlockTableEntries;
+            internal List<MpqHash> AllHashes;
+            internal List<ulong> UnknownHashes;
+            internal object StormBuffer;
+            internal object StormBufferValue;
+            internal uint[] Buffer;
+        }
+
         protected class IndexedJassCompilationUnitSyntax
         {
             public JassCompilationUnitSyntax CompilationUnit { get; }
@@ -449,13 +463,42 @@ namespace WC3MapDeprotector
 
             using (var inMPQArchive = MpqArchive.Open(_inMapFile, true))
             {
+                try
+                {
+                    inMPQArchive.DiscoverFileNames();
+                    inMPQArchive.AddFileNames(listFile);
+                }
+                catch
+                {
+                    _logEvent("MPQ Header corrupted. Attempting to repair.");
+                    _deprotectionResult.CountOfProtectionsFound++;
+                    using (var stream = MpqArchive.Restore(_inMapFile))
+                    {
+                        _inMapFile = Path.Combine(TempFolderPath, Path.GetFileName(_inMapFile));
+                        stream.CopyToFile(_inMapFile);
+                    }
+                }
+            }
+
+            using (var inMPQArchive = MpqArchive.Open(_inMapFile, true))
+            {
+                RemoveInvalidFiles(inMPQArchive); // must be done immediately after opening archive, to avoid exceptions in other methods
+
                 if (CountUnknownFiles(inMPQArchive) > 0)
                 {
                     _deprotectionResult.CountOfProtectionsFound++;
                 }
 
-                inMPQArchive.DiscoverFileNames();
-                inMPQArchive.AddFileNames(listFile);
+                try
+                {
+                    inMPQArchive.DiscoverFileNames();
+                    inMPQArchive.AddFileNames(listFile);
+                }
+                catch (Exception e)
+                {
+                    _logEvent(e.Message);
+                    throw new Exception("MPQ Header corrupted, unable to repair.");
+                }
 
                 var initialMpqFiles = inMPQArchive.GetMpqFiles().ToList();
                 var knownFileNames = new HashSet<string>();
@@ -980,22 +1023,39 @@ namespace WC3MapDeprotector
             return archive.GetMpqFiles().Where(x => x is MpqUnknownFile).Count();
         }
 
+        protected MpqArchiveRefelctionData GetMpqArchiveInteralData(MpqArchive archive)
+        {
+            var result = new MpqArchiveRefelctionData();
+            result.HashTable = typeof(MpqArchive).GetField("_hashTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
+            result.BlockTable = typeof(MpqArchive).GetField("_blockTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
+            result.HashTableSize = (uint)result.HashTable.GetType().GetProperty("Size", BindingFlags.Instance | BindingFlags.Public).GetValue(result.HashTable);
+            result.Hashes = (MpqHash[])result.HashTable.GetType().GetField("_hashes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(result.HashTable);
+            result.BlockTableEntries = (List<MpqEntry>)result.BlockTable.GetType().GetField("_entries", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(result.BlockTable);
+            result.AllHashes = Enumerable.Range(0, (int)result.HashTableSize).Select(x => result.Hashes[x]).Where(x => !x.IsEmpty && !x.IsDeleted).ToList();
+            result.UnknownHashes = result.AllHashes.Where(x => ((int)x.BlockIndex) < result.BlockTableEntries.Count && result.BlockTableEntries[(int)x.BlockIndex].FileName == null).Select(x => x.Name).ToList();
+            result.StormBuffer = typeof(MpqArchive).Assembly.GetType("War3Net.IO.Mpq.StormBuffer").GetField("_stormBuffer", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            result.StormBufferValue = result.StormBuffer.GetType().GetProperty("Value", BindingFlags.Public | BindingFlags.Instance).GetValue(result.StormBuffer);
+            result.Buffer = (uint[])result.StormBufferValue.GetType().GetField("_buffer", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(result.StormBufferValue);
+            return result;
+        }
+
+        protected void RemoveInvalidFiles(MpqArchive archive)
+        {
+            var reflectionData = GetMpqArchiveInteralData(archive);
+            for (var hashIndex = 0; hashIndex < reflectionData.HashTableSize; hashIndex++)
+            {
+                var mpqHash = reflectionData.Hashes[hashIndex];
+                if (mpqHash.BlockIndex >= reflectionData.BlockTableEntries.Count)
+                {
+                    reflectionData.Hashes[hashIndex] = MpqHash.NULL;
+                }
+            }
+        }
+
         protected void BruteForceUnknownFileNames(MpqArchive archive, DeprotectionResult deprotectionResult)
         {
             var unknownFileCount = CountUnknownFiles(archive);
             _logEvent($"unknown files remaining: {unknownFileCount}");
-
-            var hashTable = typeof(MpqArchive).GetField("_hashTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
-            var blockTable = typeof(MpqArchive).GetField("_blockTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
-            var hashTableSize = (uint)hashTable.GetType().GetProperty("Size", BindingFlags.Instance | BindingFlags.Public).GetValue(hashTable);
-            var hashes = (MpqHash[])hashTable.GetType().GetField("_hashes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(hashTable);
-            var blockTableEntries = (List<MpqEntry>)blockTable.GetType().GetField("_entries", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(blockTable);
-            var allHashes = Enumerable.Range(0, (int)hashTableSize).Select(x => hashes[x]).Where(x => !x.IsEmpty && !x.IsDeleted).ToList();
-            var unknownHashes = allHashes.Where(x => blockTableEntries[(int)x.BlockIndex].FileName == null).Select(x => x.Name).ToList();
-
-            var stormBuffer = typeof(MpqArchive).Assembly.GetType("War3Net.IO.Mpq.StormBuffer").GetField("_stormBuffer", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
-            var stormBufferValue = stormBuffer.GetType().GetProperty("Value", BindingFlags.Public | BindingFlags.Instance).GetValue(stormBuffer);
-            var buffer = (uint[])stormBufferValue.GetType().GetField("_buffer", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(stormBufferValue);
 
             var directories = archive.GetMpqFiles().Where(x => x is MpqKnownFile).Cast<MpqKnownFile>().Select(x => Path.GetDirectoryName(x.FileName).ToUpperInvariant()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct().ToList();
 
@@ -1006,6 +1066,8 @@ namespace WC3MapDeprotector
             _logEvent($"Brute forcing filenames from length 1 to {maxFileNameLength}");
 
             var possibleCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_!&()' .".ToUpperInvariant().ToCharArray();
+
+            var reflectionData = GetMpqArchiveInteralData(archive);
 
             var foundFileLock = new object();
             var foundFileCount = 0;
@@ -1023,9 +1085,9 @@ namespace WC3MapDeprotector
                     for (var i = 0; i < directoryName.Length; i++)
                     {
                         var val = (int)directoryName[i];
-                        leftDirectoryHash = buffer[leftOffset + val] ^ (leftDirectoryHash + leftDirectorySeed);
+                        leftDirectoryHash = reflectionData.Buffer[leftOffset + val] ^ (leftDirectoryHash + leftDirectorySeed);
                         leftDirectorySeed = (uint)val + leftDirectoryHash + leftDirectorySeed + (leftDirectorySeed << 5) + 3;
-                        rightDirectoryHash = buffer[rightOffset + val] ^ (rightDirectoryHash + rightDirectorySeed);
+                        rightDirectoryHash = reflectionData.Buffer[rightOffset + val] ^ (rightDirectoryHash + rightDirectorySeed);
                         rightDirectorySeed = (uint)val + rightDirectoryHash + rightDirectorySeed + (rightDirectorySeed << 5) + 3;
                     }
 
@@ -1039,9 +1101,9 @@ namespace WC3MapDeprotector
                         for (var i = 0; i < bruteText.Length; i++)
                         {
                             var val = (int)bruteText[i];
-                            leftBruteTextHash = buffer[leftOffset + val] ^ (leftBruteTextHash + leftBruteTextSeed);
+                            leftBruteTextHash = reflectionData.Buffer[leftOffset + val] ^ (leftBruteTextHash + leftBruteTextSeed);
                             leftBruteTextSeed = (uint)val + leftBruteTextHash + leftBruteTextSeed + (leftBruteTextSeed << 5) + 3;
-                            rightBruteTextHash = buffer[rightOffset + val] ^ (rightBruteTextHash + rightBruteTextSeed);
+                            rightBruteTextHash = reflectionData.Buffer[rightOffset + val] ^ (rightBruteTextHash + rightBruteTextSeed);
                             rightBruteTextSeed = (uint)val + rightBruteTextHash + rightBruteTextSeed + (rightBruteTextSeed << 5) + 3;
                         }
 
@@ -1054,13 +1116,13 @@ namespace WC3MapDeprotector
                             for (var i = 0; i < fileExtension.Length; i++)
                             {
                                 var val = (int)fileExtension[i];
-                                leftFileExtensionHash = buffer[leftOffset + val] ^ (leftFileExtensionHash + leftFileExtensionSeed);
+                                leftFileExtensionHash = reflectionData.Buffer[leftOffset + val] ^ (leftFileExtensionHash + leftFileExtensionSeed);
                                 leftFileExtensionSeed = (uint)val + leftFileExtensionHash + leftFileExtensionSeed + (leftFileExtensionSeed << 5) + 3;
-                                rightFileExtensionHash = buffer[rightOffset + val] ^ (rightFileExtensionHash + rightFileExtensionSeed);
+                                rightFileExtensionHash = reflectionData.Buffer[rightOffset + val] ^ (rightFileExtensionHash + rightFileExtensionSeed);
                                 rightFileExtensionSeed = (uint)val + rightFileExtensionHash + rightFileExtensionSeed + (rightFileExtensionSeed << 5) + 3;
                             }
                             var finalHash = leftFileExtensionHash | ((ulong)rightFileExtensionHash << 32);
-                            if (unknownHashes.Contains(finalHash))
+                            if (reflectionData.UnknownHashes.Contains(finalHash))
                             {
                                 lock (foundFileLock)
                                 {
@@ -1150,12 +1212,13 @@ namespace WC3MapDeprotector
 
         protected void ScanForUnknownFiles(MpqArchive archive, List<string> scanList, DeprotectionResult deprotectionResult)
         {
-            _logEvent("Scanning for possible filenames...");
-
             var filesFound = 0;
             try
             {
+                _logEvent("Scanning for possible filenames...");
                 var externalReferencedFiles = ScanFilesForExternalFileReferences(scanList);
+
+                _logEvent("Performing deep scan for unknown files ...");
 
                 var fileNames = new HashSet<string>(externalReferencedFiles.Select(x => Path.GetFileName(x).ToUpperInvariant()));
                 var directories = new HashSet<string>();
@@ -1181,8 +1244,14 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                foreach (var scannedFileName in filesToTest)
+                var tenPercent = filesToTest.Count / 10;
+                for (var i = 0; i < filesToTest.Count; i++)
                 {
+                    if (i % tenPercent == 0)
+                    {
+                        _logEvent($"{10*i / tenPercent}% deep scan completed");
+                    }
+                    var scannedFileName = filesToTest[i];
                     if (!_extractedMapFiles.Contains(scannedFileName.ToLower()) && archive.FileExists(scannedFileName))
                     {
                         var extractedScannedFileName = Path.Combine(MapFilesPath, scannedFileName);
@@ -1200,6 +1269,8 @@ namespace WC3MapDeprotector
                         }
                     }
                 }
+
+                _logEvent("Deep scan completed.");
             }
             finally
             {
