@@ -37,6 +37,7 @@
             // 
             // rtbDisclaimer
             // 
+            rtbDisclaimer.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             rtbDisclaimer.Location = new Point(19, 20);
             rtbDisclaimer.Margin = new Padding(5);
             rtbDisclaimer.Name = "rtbDisclaimer";
@@ -47,6 +48,7 @@
             // 
             // btnOkay
             // 
+            btnOkay.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOkay.DialogResult = DialogResult.OK;
             btnOkay.Location = new Point(19, 600);
             btnOkay.Margin = new Padding(5);
@@ -58,6 +60,7 @@
             // 
             // btnCancel
             // 
+            btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
             btnCancel.Location = new Point(942, 600);
             btnCancel.Margin = new Padding(5);
@@ -69,6 +72,7 @@
             // 
             // btnEasterEgg
             // 
+            btnEasterEgg.Anchor = AnchorStyles.Bottom;
             btnEasterEgg.Location = new Point(623, 607);
             btnEasterEgg.Margin = new Padding(0);
             btnEasterEgg.Name = "btnEasterEgg";
@@ -92,6 +96,7 @@
             Font = new Font("Segoe UI", 14F);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Margin = new Padding(5);
+            MinimumSize = new Size(700, 400);
             Name = "frmDisclaimer";
             Text = "Disclaimer : Please Read";
             Load += frmDisclaimer_Load;

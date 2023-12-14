@@ -14,6 +14,7 @@ namespace WC3MapDeprotector
         public MainForm()
         {
             InitializeComponent();
+            WindowUITracker.Tracker.Track(this);
         }
 
         protected class GitHubReleaseInfo

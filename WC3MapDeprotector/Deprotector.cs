@@ -258,16 +258,16 @@ namespace WC3MapDeprotector
 
         protected class MpqArchiveRefelctionData
         {
-            internal object HashTable;
-            internal object BlockTable;
-            internal uint HashTableSize;
-            internal MpqHash[] Hashes;
-            internal List<MpqEntry> BlockTableEntries;
-            internal List<MpqHash> AllHashes;
-            internal List<ulong> UnknownHashes;
-            internal object StormBuffer;
-            internal object StormBufferValue;
-            internal uint[] Buffer;
+            public object HashTable;
+            public object BlockTable;
+            public uint HashTableSize;
+            public MpqHash[] Hashes;
+            public List<MpqEntry> BlockTableEntries;
+            public List<MpqHash> AllHashes;
+            public List<ulong> UnknownHashes;
+            public object StormBuffer;
+            public object StormBufferValue;
+            public uint[] Buffer;
         }
 
         protected class IndexedJassCompilationUnitSyntax

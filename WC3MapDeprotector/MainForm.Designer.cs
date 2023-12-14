@@ -34,23 +34,24 @@
             fdInputFile = new OpenFileDialog();
             fdOutputFile = new SaveFileDialog();
             btnRebuildMap = new Button();
-            tbDebugLog = new TextBox();
             label1 = new Label();
             label2 = new Label();
-            label3 = new Label();
             btnInputFileBrowse = new Button();
             btnOutputFileBrowse = new Button();
             cbTranspileToLua = new CheckBox();
             cbBruteForceUnknowns = new CheckBox();
             btnDonate = new Button();
             btnBugReport = new Button();
+            cbVisualTriggers = new CheckBox();
             label4 = new Label();
             tbWarningMessages = new TextBox();
-            cbVisualTriggers = new CheckBox();
+            label3 = new Label();
+            tbDebugLog = new TextBox();
             SuspendLayout();
             // 
             // tbInputFile
             // 
+            tbInputFile.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             tbInputFile.Location = new Point(132, 27);
             tbInputFile.Margin = new Padding(5);
             tbInputFile.Name = "tbInputFile";
@@ -60,6 +61,7 @@
             // 
             // tbOutputFile
             // 
+            tbOutputFile.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             tbOutputFile.Location = new Point(132, 93);
             tbOutputFile.Margin = new Padding(5);
             tbOutputFile.Name = "tbOutputFile";
@@ -77,6 +79,7 @@
             // 
             // btnRebuildMap
             // 
+            btnRebuildMap.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnRebuildMap.Location = new Point(1046, 225);
             btnRebuildMap.Margin = new Padding(5);
             btnRebuildMap.Name = "btnRebuildMap";
@@ -85,17 +88,6 @@
             btnRebuildMap.Text = "Rebuild Map";
             btnRebuildMap.UseVisualStyleBackColor = true;
             btnRebuildMap.Click += btnRebuildMap_Click;
-            // 
-            // tbDebugLog
-            // 
-            tbDebugLog.Location = new Point(19, 552);
-            tbDebugLog.Margin = new Padding(5);
-            tbDebugLog.Multiline = true;
-            tbDebugLog.Name = "tbDebugLog";
-            tbDebugLog.ReadOnly = true;
-            tbDebugLog.ScrollBars = ScrollBars.Both;
-            tbDebugLog.Size = new Size(1217, 175);
-            tbDebugLog.TabIndex = 3;
             // 
             // label1
             // 
@@ -117,18 +109,9 @@
             label2.TabIndex = 5;
             label2.Text = "Output File";
             // 
-            // label3
-            // 
-            label3.AutoSize = true;
-            label3.Location = new Point(19, 522);
-            label3.Margin = new Padding(5, 0, 5, 0);
-            label3.Name = "label3";
-            label3.Size = new Size(104, 25);
-            label3.TabIndex = 6;
-            label3.Text = "Debug Log";
-            // 
             // btnInputFileBrowse
             // 
+            btnInputFileBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnInputFileBrowse.Image = (Image)resources.GetObject("btnInputFileBrowse.Image");
             btnInputFileBrowse.Location = new Point(1169, 15);
             btnInputFileBrowse.Margin = new Padding(5);
@@ -140,6 +123,7 @@
             // 
             // btnOutputFileBrowse
             // 
+            btnOutputFileBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnOutputFileBrowse.Image = (Image)resources.GetObject("btnOutputFileBrowse.Image");
             btnOutputFileBrowse.Location = new Point(1169, 83);
             btnOutputFileBrowse.Margin = new Padding(5);
@@ -171,6 +155,7 @@
             // 
             // btnDonate
             // 
+            btnDonate.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnDonate.Image = (Image)resources.GetObject("btnDonate.Image");
             btnDonate.Location = new Point(1079, 754);
             btnDonate.Name = "btnDonate";
@@ -181,6 +166,7 @@
             // 
             // btnBugReport
             // 
+            btnBugReport.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnBugReport.Image = (Image)resources.GetObject("btnBugReport.Image");
             btnBugReport.Location = new Point(1170, 754);
             btnBugReport.Name = "btnBugReport";
@@ -188,27 +174,6 @@
             btnBugReport.TabIndex = 12;
             btnBugReport.UseVisualStyleBackColor = true;
             btnBugReport.Click += btnBugReport_Click;
-            // 
-            // label4
-            // 
-            label4.AutoSize = true;
-            label4.Location = new Point(20, 273);
-            label4.Margin = new Padding(5, 0, 5, 0);
-            label4.Name = "label4";
-            label4.Size = new Size(92, 25);
-            label4.TabIndex = 14;
-            label4.Text = "Warnings";
-            // 
-            // tbWarningMessages
-            // 
-            tbWarningMessages.Location = new Point(20, 303);
-            tbWarningMessages.Margin = new Padding(5);
-            tbWarningMessages.Multiline = true;
-            tbWarningMessages.Name = "tbWarningMessages";
-            tbWarningMessages.ReadOnly = true;
-            tbWarningMessages.ScrollBars = ScrollBars.Both;
-            tbWarningMessages.Size = new Size(1217, 175);
-            tbWarningMessages.TabIndex = 13;
             // 
             // cbVisualTriggers
             // 
@@ -220,30 +185,78 @@
             cbVisualTriggers.Text = "Create Visual Triggers (experimental)";
             cbVisualTriggers.UseVisualStyleBackColor = true;
             // 
+            // label4
+            // 
+            label4.AutoSize = true;
+            label4.Location = new Point(19, 262);
+            label4.Margin = new Padding(5, 0, 5, 0);
+            label4.Name = "label4";
+            label4.Size = new Size(92, 25);
+            label4.TabIndex = 26;
+            label4.Text = "Warnings";
+            // 
+            // tbWarningMessages
+            // 
+            tbWarningMessages.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            tbWarningMessages.Location = new Point(19, 292);
+            tbWarningMessages.Margin = new Padding(5);
+            tbWarningMessages.MinimumSize = new Size(0, 100);
+            tbWarningMessages.Multiline = true;
+            tbWarningMessages.Name = "tbWarningMessages";
+            tbWarningMessages.ReadOnly = true;
+            tbWarningMessages.ScrollBars = ScrollBars.Both;
+            tbWarningMessages.Size = new Size(1217, 175);
+            tbWarningMessages.TabIndex = 25;
+            // 
+            // label3
+            // 
+            label3.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            label3.AutoSize = true;
+            label3.Location = new Point(18, 481);
+            label3.Margin = new Padding(5, 0, 5, 0);
+            label3.Name = "label3";
+            label3.Size = new Size(104, 25);
+            label3.TabIndex = 24;
+            label3.Text = "Debug Log";
+            // 
+            // tbDebugLog
+            // 
+            tbDebugLog.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            tbDebugLog.Location = new Point(18, 511);
+            tbDebugLog.Margin = new Padding(5);
+            tbDebugLog.MinimumSize = new Size(0, 100);
+            tbDebugLog.Multiline = true;
+            tbDebugLog.Name = "tbDebugLog";
+            tbDebugLog.ReadOnly = true;
+            tbDebugLog.ScrollBars = ScrollBars.Both;
+            tbDebugLog.Size = new Size(1217, 235);
+            tbDebugLog.TabIndex = 23;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1257, 821);
-            Controls.Add(cbVisualTriggers);
             Controls.Add(label4);
             Controls.Add(tbWarningMessages);
+            Controls.Add(label3);
+            Controls.Add(tbDebugLog);
+            Controls.Add(cbVisualTriggers);
             Controls.Add(btnBugReport);
             Controls.Add(btnDonate);
             Controls.Add(cbBruteForceUnknowns);
             Controls.Add(cbTranspileToLua);
             Controls.Add(btnOutputFileBrowse);
             Controls.Add(btnInputFileBrowse);
-            Controls.Add(label3);
             Controls.Add(label2);
             Controls.Add(label1);
-            Controls.Add(tbDebugLog);
             Controls.Add(btnRebuildMap);
             Controls.Add(tbOutputFile);
             Controls.Add(tbInputFile);
             Font = new Font("Segoe UI", 14F);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Margin = new Padding(5);
+            MinimumSize = new Size(800, 775);
             Name = "MainForm";
             Text = "WC3MapDeprotector by http://www.youtube.com/@ai-gamer";
             Load += MainForm_Load;
@@ -258,18 +271,18 @@
         private OpenFileDialog fdInputFile;
         private SaveFileDialog fdOutputFile;
         private Button btnRebuildMap;
-        private TextBox tbDebugLog;
         private Label label1;
         private Label label2;
-        private Label label3;
         private Button btnInputFileBrowse;
         private Button btnOutputFileBrowse;
         private CheckBox cbTranspileToLua;
         private CheckBox cbBruteForceUnknowns;
         private Button btnDonate;
         private Button btnBugReport;
+        private CheckBox cbVisualTriggers;
         private Label label4;
         private TextBox tbWarningMessages;
-        private CheckBox cbVisualTriggers;
+        private Label label3;
+        private TextBox tbDebugLog;
     }
 }

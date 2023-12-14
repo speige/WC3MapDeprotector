@@ -7,6 +7,7 @@ namespace WC3MapDeprotector
         public frmDisclaimer()
         {
             InitializeComponent();
+            WindowUITracker.Tracker.Track(this);
         }
 
         protected void frmDisclaimer_Load(object sender, EventArgs e)

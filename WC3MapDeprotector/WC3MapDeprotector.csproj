@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="ini-parser-netstandard" Version="2.5.2" />
+    <PackageReference Include="Jot" Version="2.1.17" />
     <PackageReference Include="Microsoft.ClearScript.V8" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-arm" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.linux-arm64" Version="7.4.4" />
