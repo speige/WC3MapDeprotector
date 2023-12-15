@@ -1032,7 +1032,7 @@ namespace WC3MapDeprotector
             result.Hashes = (MpqHash[])result.HashTable.GetType().GetField("_hashes", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(result.HashTable);
             result.BlockTableEntries = (List<MpqEntry>)result.BlockTable.GetType().GetField("_entries", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(result.BlockTable);
             result.AllHashes = Enumerable.Range(0, (int)result.HashTableSize).Select(x => result.Hashes[x]).Where(x => !x.IsEmpty && !x.IsDeleted).ToList();
-            result.UnknownHashes = result.AllHashes.Where(x => ((int)x.BlockIndex) < result.BlockTableEntries.Count && result.BlockTableEntries[(int)x.BlockIndex].FileName == null).Select(x => x.Name).ToList();
+            result.UnknownHashes = result.AllHashes.Where(x => ((int)x.BlockIndex) > 0 && ((int)x.BlockIndex) < result.BlockTableEntries.Count && result.BlockTableEntries[(int)x.BlockIndex].FileName == null).Select(x => x.Name).ToList();
             result.StormBuffer = typeof(MpqArchive).Assembly.GetType("War3Net.IO.Mpq.StormBuffer").GetField("_stormBuffer", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
             result.StormBufferValue = result.StormBuffer.GetType().GetProperty("Value", BindingFlags.Public | BindingFlags.Instance).GetValue(result.StormBuffer);
             result.Buffer = (uint[])result.StormBufferValue.GetType().GetField("_buffer", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(result.StormBufferValue);
