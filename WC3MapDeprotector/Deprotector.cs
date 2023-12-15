@@ -202,7 +202,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return Path.Combine(SLKRecoverPath, "SilkObjectOptimizer.exe");
+                return Path.Combine(SLKRecoverPath, "Silk Object Optimizer.exe");
             }
         }
 
@@ -552,7 +552,7 @@ namespace WC3MapDeprotector
             {
                 File.WriteAllText(skinPath, "");
             }
-            var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true }));
+            var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
             var ini = parser.ReadFile(skinPath);
             ini.Configuration.AssigmentSpacer = "";
             ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0hJR0g=")] = decode("REVQUk9URUNURUQ=");

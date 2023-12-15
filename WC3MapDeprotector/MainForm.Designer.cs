@@ -258,7 +258,6 @@
             Margin = new Padding(5);
             MinimumSize = new Size(800, 775);
             Name = "MainForm";
-            Text = "WC3MapDeprotector by http://www.youtube.com/@ai-gamer";
             Load += MainForm_Load;
             ResumeLayout(false);
             PerformLayout();

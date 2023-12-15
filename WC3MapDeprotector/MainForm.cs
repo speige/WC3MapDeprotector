@@ -15,6 +15,7 @@ namespace WC3MapDeprotector
         {
             InitializeComponent();
             WindowUITracker.Tracker.Track(this);
+            this.Text = $"WC3MapDeprotector {Assembly.GetEntryAssembly().GetName().Version} by http://www.youtube.com/@ai-gamer";
         }
 
         protected class GitHubReleaseInfo
