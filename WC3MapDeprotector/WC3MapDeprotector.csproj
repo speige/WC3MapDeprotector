@@ -28,6 +28,7 @@
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x86" Version="7.4.4" />
     <PackageReference Include="NLua" Version="1.6.3" />
+    <PackageReference Include="Squalr.Engine.Scanning" Version="2.3.0.1" />
     <PackageReference Include="War3Net.Build" Version="5.7.1" />
     <PackageReference Include="War3Net.Build.Core" Version="5.7.1" />
     <PackageReference Include="War3Net.CodeAnalysis" Version="5.6.1" />

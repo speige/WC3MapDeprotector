@@ -5,6 +5,9 @@ using IniParser.Model.Configuration;
 using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
 using NuGet.Packaging;
+using Squalr.Engine.Memory;
+using Squalr.Engine.OS;
+using Squalr.Engine.Scanning.Scanners;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO.Compression;
@@ -150,6 +153,7 @@ namespace WC3MapDeprotector
         public bool CreateVisualTriggers { get; set; }
         public bool BruteForceUnknowns { get; set; }
         public CancellationTokenSource BruteForceCancellationToken { get; set; }
+        public string WC3ExePath { get; set; }
     }
 
     public class Deprotector
@@ -317,27 +321,33 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected void ExecuteCommand(string exePath, string arguments, TimeSpan? timeout = null)
+        protected void WaitForProcessToExit(Process process, CancellationToken cancellationToken = default)
         {
-            using (var process = new Process())
+            while (!process.HasExited)
             {
-                process.StartInfo.FileName = exePath;
-                process.StartInfo.Arguments = arguments;
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.RedirectStandardOutput = false;
-                process.StartInfo.RedirectStandardError = false;
-                process.StartInfo.RedirectStandardInput = false;
-                process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-                process.StartInfo.CreateNoWindow = false;
-                process.StartInfo.WorkingDirectory = Path.GetDirectoryName(exePath);
-                process.Start();
+                Thread.Sleep(1000);
 
-                if (!process.WaitForExit(timeout ?? TimeSpan.FromDays(1)))
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    _logEvent($"Timeout elapsed, Killing process: {exePath}");
                     process.Kill();
                 }
             }
+        }
+
+        protected Process ExecuteCommand(string exePath, string arguments)
+        {
+            var process = new Process();
+            process.StartInfo.FileName = exePath;
+            process.StartInfo.Arguments = arguments;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardOutput = false;
+            process.StartInfo.RedirectStandardError = false;
+            process.StartInfo.RedirectStandardInput = false;
+            process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            process.StartInfo.CreateNoWindow = false;
+            process.StartInfo.WorkingDirectory = Path.GetDirectoryName(exePath);
+            process.Start();
+            return process;
         }
 
         protected string decode(string encoded)
@@ -638,8 +648,13 @@ namespace WC3MapDeprotector
             ScriptMetaData scriptMetaData = null;
             if (File.Exists(Path.Combine(MapFilesPath, "war3map.j")))
             {
-                jassScript = DeObfuscateJassScript($"// {ATTRIB}{File.ReadAllText(Path.Combine(MapFilesPath, "war3map.j"))}");
-                scriptMetaData = DecompileJassScriptMetaData(jassScript);
+                jassScript = $"// {ATTRIB}{File.ReadAllText(Path.Combine(MapFilesPath, "war3map.j"))}";
+                try
+                {
+                    jassScript = DeObfuscateJassScript(jassScript);
+                    scriptMetaData = DecompileJassScriptMetaData(jassScript);
+                }
+                catch { }
             }
 
             if (File.Exists(Path.Combine(MapFilesPath, "war3map.lua")))
@@ -777,7 +792,8 @@ namespace WC3MapDeprotector
                 var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
                 new DirectoryInfo(slkRecoverOutPath).Delete(true);
                 Directory.CreateDirectory(slkRecoverOutPath);
-                ExecuteCommand(SLKRecoverEXE, "");
+                WaitForProcessToExit(ExecuteCommand(SLKRecoverEXE, ""));
+
                 _logEvent("SilkObjectOptimizer completed");
 
                 var slkRecoveredFiles = new List<string>() { "war3map.w3a", "war3map.w3c", "war3map.w3h", "war3map.w3q", "war3map.w3r", "war3map.w3t", "war3map.w3u" };
@@ -1361,10 +1377,15 @@ namespace WC3MapDeprotector
             inlinedFunctions = outInlinedFunctions;
             return result;
         }
+
+        protected JassCompilationUnitSyntax ParseJassScript(string jassScript)
+        {
+            return JassSyntaxFactory.ParseCompilationUnit(jassScript);
+        }
         
         protected void SplitUserDefinedAndGlobalGeneratedGlobalVariableNames(string jassScript, out List<string> userDefinedGlobals, out List<string> globalGenerateds)
         {
-            var jassParsed = new IndexedJassCompilationUnitSyntax(JassSyntaxFactory.ParseCompilationUnit(jassScript));
+            var jassParsed = new IndexedJassCompilationUnitSyntax(ParseJassScript(jassScript));
             
             var globals = jassParsed.CompilationUnit.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
 
@@ -1592,7 +1613,7 @@ namespace WC3MapDeprotector
                 Could delete instead of _old, since _old won't execute, but it's useful if programmer needs it as reference for bug fixes.
             */
 
-            var jassParsed = new IndexedJassCompilationUnitSyntax(JassSyntaxFactory.ParseCompilationUnit(jassScript));
+            var jassParsed = new IndexedJassCompilationUnitSyntax(ParseJassScript(jassScript));
             var statements = new List<IStatementSyntax>();
             statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
             statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
@@ -2072,7 +2093,7 @@ namespace WC3MapDeprotector
 
             var deObfuscated = DeObfuscateFourCCJass(jassScript);
 
-            var parsed = JassSyntaxFactory.ParseCompilationUnit(deObfuscated);
+            var parsed = ParseJassScript(deObfuscated);
             var formatted = "";
             using (var writer = new StringWriter())
             {
