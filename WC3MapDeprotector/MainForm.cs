@@ -144,7 +144,7 @@ namespace WC3MapDeprotector
                     }
                 });
 
-                var deprotectionResult = await Task.Run(_deprotector.Deprotect);
+                var deprotectionResult = await _deprotector.Deprotect();
 
                 if (deprotectionResult.WarningMessages.Count > 0)
                 {

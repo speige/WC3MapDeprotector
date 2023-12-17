@@ -5,9 +5,12 @@ using IniParser.Model.Configuration;
 using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
 using NuGet.Packaging;
-using Squalr.Engine.Memory;
+using Squalr.Engine.DataTypes;
 using Squalr.Engine.OS;
 using Squalr.Engine.Scanning.Scanners;
+using Squalr.Engine.Scanning.Scanners.Constraints;
+using Squalr.Engine.Scanning.Snapshots;
+using Squalr.Engine.Snapshots;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO.Compression;
@@ -153,7 +156,7 @@ namespace WC3MapDeprotector
         public bool CreateVisualTriggers { get; set; }
         public bool BruteForceUnknowns { get; set; }
         public CancellationTokenSource BruteForceCancellationToken { get; set; }
-        public string WC3ExePath { get; set; }
+        public string WC3ExePath { get; set; } = @"c:\Program Files (x86)\Warcraft III\_retail_\x86_64\Warcraft III.exe";
     }
 
     public class Deprotector
@@ -291,15 +294,19 @@ namespace WC3MapDeprotector
             private MapSounds sounds;
 
             public MapInfo Info { get; set; }
-            public MapSounds Sounds { get {
+            public MapSounds Sounds
+            {
+                get
+                {
                     var result = sounds ?? new MapSounds(MapSoundsFormatVersion.v3);
-                    if (!result.Sounds.Any( x => x.FilePath == "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"))
+                    if (!result.Sounds.Any(x => x.FilePath == "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"))
                     {
                         result.Sounds.Add(new Sound() { FilePath = "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76", Name = "\x67\x67\x5F\x73\x6E\x64\x5F\x77\x61\x72\x33\x6D\x61\x70" });
                     }
                     return result;
                 }
-                set => sounds = value; }
+                set => sounds = value;
+            }
             public MapCameras Cameras { get; set; }
             public MapRegions Regions { get; set; }
             public MapTriggers Triggers { get; set; }
@@ -355,7 +362,91 @@ namespace WC3MapDeprotector
             return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
         }
 
-        public DeprotectionResult Deprotect()
+        protected async Task LiveScanGameForUnknownFiles(MpqArchive archive, DeprotectionResult deprotectionResult)
+        {
+            //todo: use original _inMapFile, not de-corrupted header version
+            var process = ExecuteCommand(Settings.WC3ExePath, $"-launch -loadfile \"{_inMapFile}\" -mapdiff 1 -testmapprofile WorldEdit -fixedseed 1");
+            Processes.Windows.OpenedProcess = process;
+            //Thread.Sleep(30 * 1000); // wait for WC3 to load
+
+            while (true)
+            {
+                var snapshot = SnapshotManager.GetSnapshot(Snapshot.SnapshotRetrievalMode.FromActiveSnapshotOrPrefilter);
+
+                var fileExtensions = _commonFileExtensions.Select(x => "." + x.ToLower()).Concat(_commonFileExtensions.Select(x => "." + x.ToUpper())).Distinct().ToList();
+                foreach (var extension in fileExtensions)
+                {
+                    if (extension.Length != 4)
+                    {
+                        //todo: fix bug in ScanConstraintCollection that only allows searching for a 4-byte sequence
+                        continue;
+                    }
+                    ScanConstraintCollection scanConstraints2 = new ScanConstraintCollection();
+                    scanConstraints2.AddConstraint(new ScanConstraint(ScanConstraint.ConstraintType.Equal, BitConverter.ToInt32(Encoding.ASCII.GetBytes(extension))));
+                    var scan2 = await ManualScanner.Scan(snapshot, DataType.Int32, scanConstraints2, null, out var cancellationTokenSource3);
+                    if (scan2.ElementCount == 0)
+                    {
+                        continue;
+                    }
+
+                    for (ulong index = 0; index < scan2.ElementCount; index++)
+                    {
+                        var address = scan2[index];
+                        var region = snapshot.SnapshotRegions.FirstOrDefault(x => address.BaseAddress >= x.BaseAddress && address.BaseAddress <= x.EndAddress);
+                        if (region == null)
+                        {
+                            continue;
+                        }
+                        var offset = address.BaseAddress - region.BaseAddress - 1;
+
+                        var text = new StringBuilder(extension);
+                        while (offset >= 0)
+                        {
+                            if (offset == 0)
+                            {
+                                var previousIndex = snapshot.SnapshotRegions.IndexOf(region) - 1;
+                                if (previousIndex < 0 || previousIndex >= snapshot.SnapshotRegions.Length)
+                                {
+                                    break;
+                                }
+                                region = snapshot.SnapshotRegions[previousIndex];
+                                offset = (ulong)region.ReadGroup.CurrentValues.Length - 1;
+                            }
+                            char prefix = (char)region.ReadGroup.CurrentValues[offset];
+                            if (prefix == '(' || prefix == ')' || prefix == '_' || prefix == ' ' || prefix == '\\' || (prefix >= '-' && prefix <= '9') || (prefix >= 'A' && prefix <= 'Z') || (prefix >= 'a' && prefix <= 'z'))
+                            {
+                                text.Insert(0, prefix);
+                                offset--;
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+
+                        var scannedFileName = text.ToString();
+                        if (!_extractedMapFiles.Contains(scannedFileName.ToLower()) && archive.FileExists(scannedFileName))
+                        {
+                            var extractedScannedFileName = Path.Combine(MapFilesPath, scannedFileName);
+                            ExtractFileFromArchive(archive, scannedFileName, extractedScannedFileName);
+                            _extractedMapFiles.Add(scannedFileName.ToLower());
+
+                            File.AppendAllLines(WorkingListFileName, new string[] { scannedFileName });
+                            deprotectionResult.NewListFileEntriesFound++;
+                            _logEvent($"added to global listfile: {scannedFileName}");
+
+                            if (CountUnknownFiles(archive) == 0)
+                            {
+                                process.Kill();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public async Task<DeprotectionResult> Deprotect()
         {
             try
             {
@@ -533,6 +624,14 @@ namespace WC3MapDeprotector
                 _logEvent($"Unknown file count: {CountUnknownFiles(inMPQArchive)}");
 
                 ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Union(unknownFiles).Select(x => Path.Combine(MapFilesPath, x)).ToList(), _deprotectionResult);
+
+                if (CountUnknownFiles(inMPQArchive) > 0)
+                {
+                    //var cancellationToken = new CancellationToken();
+                    //await LiveScanGameForUnknownFiles(inMPQArchive, _deprotectionResult);
+                    //WaitForProcessToExit(process, cancellationToken);
+                }
+
                 if (Settings.BruteForceUnknowns && CountUnknownFiles(inMPQArchive) > 0)
                 {
                     BruteForceUnknownFileNames(inMPQArchive, _deprotectionResult);
@@ -549,7 +648,7 @@ namespace WC3MapDeprotector
 
             DeleteAls();
             PatchW3I(_deprotectionResult);
-            
+
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
             File.Delete(Path.Combine(MapFilesPath, "war3mapunits.doo"));
             File.Delete(Path.Combine(MapFilesPath, "war3map.wct"));
@@ -615,7 +714,7 @@ namespace WC3MapDeprotector
             var replace2 = "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78";
             while (File.Exists(Path.Combine(MapFilesPath, replace2)))
             {
-                replace2 = replace2.Insert(replace2.Length-4, "_old");
+                replace2 = replace2.Insert(replace2.Length - 4, "_old");
             }
             if (File.Exists(Path.Combine(MapFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78")))
             {
@@ -642,7 +741,7 @@ namespace WC3MapDeprotector
             }
 
             File.Copy(Path.Combine(BaseMapFilesPath, "war3map.3ws"), Path.Combine(MapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"), true);
-            
+
             string jassScript = null;
             string luaScript = null;
             ScriptMetaData scriptMetaData = null;
@@ -1010,7 +1109,8 @@ namespace WC3MapDeprotector
 
         protected bool ExtractFileFromArchive(MpqArchive archive, string mpqFileName, string extractedFileName)
         {
-            if (archive.TryOpenFile(mpqFileName, out var stream)) {
+            if (archive.TryOpenFile(mpqFileName, out var stream))
+            {
                 ExtractFileFromArchive(stream, extractedFileName);
                 return true;
             }
@@ -1030,7 +1130,7 @@ namespace WC3MapDeprotector
             {
                 mpqStream.CopyTo(stream);
             }
-            
+
             _logEvent($"Extracted from MPQ: {fileName}");
         }
 
@@ -1070,6 +1170,7 @@ namespace WC3MapDeprotector
 
         protected void BruteForceUnknownFileNames(MpqArchive archive, DeprotectionResult deprotectionResult)
         {
+            //todo: Convert to Vector<> variables to support SIMD architecture speed up
             var unknownFileCount = CountUnknownFiles(archive);
             _logEvent($"unknown files remaining: {unknownFileCount}");
 
@@ -1265,7 +1366,7 @@ namespace WC3MapDeprotector
                 {
                     if (i % tenPercent == 0)
                     {
-                        _logEvent($"{10*i / tenPercent}% deep scan completed");
+                        _logEvent($"{10 * i / tenPercent}% deep scan completed");
                     }
                     var scannedFileName = filesToTest[i];
                     if (!_extractedMapFiles.Contains(scannedFileName.ToLower()) && archive.FileExists(scannedFileName))
@@ -1382,11 +1483,11 @@ namespace WC3MapDeprotector
         {
             return JassSyntaxFactory.ParseCompilationUnit(jassScript);
         }
-        
+
         protected void SplitUserDefinedAndGlobalGeneratedGlobalVariableNames(string jassScript, out List<string> userDefinedGlobals, out List<string> globalGenerateds)
         {
             var jassParsed = new IndexedJassCompilationUnitSyntax(ParseJassScript(jassScript));
-            
+
             var globals = jassParsed.CompilationUnit.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
 
             var probablyUserDefined = new HashSet<string>();
@@ -1527,7 +1628,7 @@ namespace WC3MapDeprotector
                                         var triggerDefinitions = triggers.TriggerItems.Where(x => x is TriggerDefinition).Cast<TriggerDefinition>().ToList();
                                         if (triggerDefinitions.Count > 1)
                                         {
-                                            triggerDefinitions[0].Description = ATTRIB + (triggerDefinitions[0].Description??"");
+                                            triggerDefinitions[0].Description = ATTRIB + (triggerDefinitions[0].Description ?? "");
 
                                             foreach (var trigger in triggerDefinitions)
                                             {
@@ -1758,7 +1859,7 @@ namespace WC3MapDeprotector
                 return "";
             }
 
-            var indentation = new string(' ', indentationLevel*2);
+            var indentation = new string(' ', indentationLevel * 2);
             switch (luaAST.Type)
             {
                 case LuaASTType.AssignmentStatement:
@@ -1867,7 +1968,7 @@ namespace WC3MapDeprotector
                     return luaAST.Raw;
 
                 case LuaASTType.WhileStatement:
-                    return $"{indentation}while {RenderLuaASTNode(luaAST.Condition, indentationLevel)} do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel+1)}\r{indentation}end";
+                    return $"{indentation}while {RenderLuaASTNode(luaAST.Condition, indentationLevel)} do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
             }
 
             throw new NotImplementedException();
@@ -2098,7 +2199,7 @@ namespace WC3MapDeprotector
             using (var writer = new StringWriter())
             {
                 var globalVariableRenames = new Dictionary<string, JassIdentifierNameSyntax>();
-                var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name));               
+                var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name));
                 foreach (var declaration in parsed.Declarations)
                 {
                     if (declaration is JassGlobalDeclarationListSyntax)
@@ -2153,7 +2254,7 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                foreach (var uniqueName in uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length-2)+"_2")))
+                foreach (var uniqueName in uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length - 2) + "_2")))
                 {
                     var oldRename = globalVariableRenames.FirstOrDefault(x => string.Equals(x.Value.Name, uniqueName, StringComparison.InvariantCultureIgnoreCase));
                     if (oldRename.Key != null)
@@ -2167,7 +2268,7 @@ namespace WC3MapDeprotector
                 {
                     deobfuscated = parsed;
                 }
-                
+
                 var renderer = new JassRenderer(writer);
                 renderer.Render(deobfuscated);
                 var stringBuilder = writer.GetStringBuilder();
