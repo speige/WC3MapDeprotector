@@ -2706,6 +2706,13 @@ endfunction
                 using (var file = new StreamReader(filename))
                 {
                     var line = file.ReadToEnd();
+
+                    var mdxMatch = Regex.Match(line, @"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)");
+                    if (mdxMatch.Success)
+                    {
+                        result.Add($"{mdxMatch.Groups[1].Value}.mdx");
+                    }
+
                     var fileExtensions = _commonFileExtensions.Aggregate((x, y) => $"{x}|{y}");
                     var matches = Regex.Matches(line, @"([\)\(\\\/a-zA-Z_0-9. -]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase);
                     foreach (Match match in matches)
