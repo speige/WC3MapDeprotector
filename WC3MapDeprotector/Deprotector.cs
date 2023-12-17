@@ -5,12 +5,6 @@ using IniParser.Model.Configuration;
 using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
 using NuGet.Packaging;
-using Squalr.Engine.DataTypes;
-using Squalr.Engine.OS;
-using Squalr.Engine.Scanning.Scanners;
-using Squalr.Engine.Scanning.Scanners.Constraints;
-using Squalr.Engine.Scanning.Snapshots;
-using Squalr.Engine.Snapshots;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO.Compression;
@@ -362,88 +356,55 @@ namespace WC3MapDeprotector
             return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
         }
 
-        protected async Task LiveScanGameForUnknownFiles(MpqArchive archive, DeprotectionResult deprotectionResult)
+        protected async Task LiveGameScanForUnknownFiles(MpqArchive archive, DeprotectionResult deprotectionResult)
         {
             //todo: use original _inMapFile, not de-corrupted header version
             var process = ExecuteCommand(Settings.WC3ExePath, $"-launch -loadfile \"{_inMapFile}\" -mapdiff 1 -testmapprofile WorldEdit -fixedseed 1");
-            Processes.Windows.OpenedProcess = process;
-            //Thread.Sleep(30 * 1000); // wait for WC3 to load
+            //Thread.Sleep(15 * 1000); // wait for WC3 to load
 
-            while (true)
+            var directories = new HashSet<string>();
+            directories.AddRange(_extractedMapFiles.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\"))).Where(x => x != null));
+            var originalDirectories = directories.ToList();
+            foreach (var directory in originalDirectories)
             {
-                var snapshot = SnapshotManager.GetSnapshot(Snapshot.SnapshotRetrievalMode.FromActiveSnapshotOrPrefilter);
-
-                var fileExtensions = _commonFileExtensions.Select(x => "." + x.ToLower()).Concat(_commonFileExtensions.Select(x => "." + x.ToUpper())).Distinct().ToList();
-                foreach (var extension in fileExtensions)
+                var split = directory.Split('\\');
+                for (int i = 1; i <= split.Length; i++)
                 {
-                    if (extension.Length != 4)
+                    directories.Add(split.Take(i).Aggregate((x, y) => $"{x}/{y}"));
+                    directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
+                }
+            }
+
+            var cheatEngineForm = new frmLiveGameScanner(scannedFileName =>
+            {
+                var filesToTest = new List<string>() { scannedFileName };
+                var baseFileName = Path.GetFileName(scannedFileName);
+                foreach (var directory in directories)
+                {
+                    filesToTest.Add(Path.Combine(directory, baseFileName));
+                }
+
+                foreach (var filename in filesToTest)
+                {
+                    if (!_extractedMapFiles.Contains(filename.ToLower()) && archive.FileExists(filename))
                     {
-                        //todo: fix bug in ScanConstraintCollection that only allows searching for a 4-byte sequence
-                        continue;
-                    }
-                    ScanConstraintCollection scanConstraints2 = new ScanConstraintCollection();
-                    scanConstraints2.AddConstraint(new ScanConstraint(ScanConstraint.ConstraintType.Equal, BitConverter.ToInt32(Encoding.ASCII.GetBytes(extension))));
-                    var scan2 = await ManualScanner.Scan(snapshot, DataType.Int32, scanConstraints2, null, out var cancellationTokenSource3);
-                    if (scan2.ElementCount == 0)
-                    {
-                        continue;
-                    }
+                        var extractedScannedFileName = Path.Combine(MapFilesPath, filename);
+                        ExtractFileFromArchive(archive, filename, extractedScannedFileName);
+                        _extractedMapFiles.Add(filename.ToLower());
 
-                    for (ulong index = 0; index < scan2.ElementCount; index++)
-                    {
-                        var address = scan2[index];
-                        var region = snapshot.SnapshotRegions.FirstOrDefault(x => address.BaseAddress >= x.BaseAddress && address.BaseAddress <= x.EndAddress);
-                        if (region == null)
+                        File.AppendAllLines(WorkingListFileName, new string[] { filename });
+                        deprotectionResult.NewListFileEntriesFound++;
+                        _logEvent($"added to global listfile: {filename}");
+
+                        if (CountUnknownFiles(archive) == 0)
                         {
-                            continue;
-                        }
-                        var offset = address.BaseAddress - region.BaseAddress - 1;
-
-                        var text = new StringBuilder(extension);
-                        while (offset >= 0)
-                        {
-                            if (offset == 0)
-                            {
-                                var previousIndex = snapshot.SnapshotRegions.IndexOf(region) - 1;
-                                if (previousIndex < 0 || previousIndex >= snapshot.SnapshotRegions.Length)
-                                {
-                                    break;
-                                }
-                                region = snapshot.SnapshotRegions[previousIndex];
-                                offset = (ulong)region.ReadGroup.CurrentValues.Length - 1;
-                            }
-                            char prefix = (char)region.ReadGroup.CurrentValues[offset];
-                            if (prefix == '(' || prefix == ')' || prefix == '_' || prefix == ' ' || prefix == '\\' || (prefix >= '-' && prefix <= '9') || (prefix >= 'A' && prefix <= 'Z') || (prefix >= 'a' && prefix <= 'z'))
-                            {
-                                text.Insert(0, prefix);
-                                offset--;
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-
-                        var scannedFileName = text.ToString();
-                        if (!_extractedMapFiles.Contains(scannedFileName.ToLower()) && archive.FileExists(scannedFileName))
-                        {
-                            var extractedScannedFileName = Path.Combine(MapFilesPath, scannedFileName);
-                            ExtractFileFromArchive(archive, scannedFileName, extractedScannedFileName);
-                            _extractedMapFiles.Add(scannedFileName.ToLower());
-
-                            File.AppendAllLines(WorkingListFileName, new string[] { scannedFileName });
-                            deprotectionResult.NewListFileEntriesFound++;
-                            _logEvent($"added to global listfile: {scannedFileName}");
-
-                            if (CountUnknownFiles(archive) == 0)
-                            {
-                                process.Kill();
-                                return;
-                            }
+                            process.Kill();
+                            return;
                         }
                     }
                 }
-            }
+            }, process, _commonFileExtensions.Select(x => "." + x).Distinct().ToList());
+            cheatEngineForm.ShowDialog();
         }
 
         public async Task<DeprotectionResult> Deprotect()
@@ -627,8 +588,9 @@ namespace WC3MapDeprotector
 
                 if (CountUnknownFiles(inMPQArchive) > 0)
                 {
+                    //todo: add checkbox to disable this option?
                     //var cancellationToken = new CancellationToken();
-                    //await LiveScanGameForUnknownFiles(inMPQArchive, _deprotectionResult);
+                    //await LiveGameScanForUnknownFiles(inMPQArchive, _deprotectionResult);
                     //WaitForProcessToExit(process, cancellationToken);
                 }
 
@@ -1336,6 +1298,7 @@ namespace WC3MapDeprotector
                 var externalReferencedFiles = ScanFilesForExternalFileReferences(scanList);
 
                 _logEvent("Performing deep scan for unknown files ...");
+                //todo: test for name NuclearExplosion.mdx if file starts with MDLXVERS      MODLt  NuclearExplosion
 
                 var fileNames = new HashSet<string>(externalReferencedFiles.Select(x => Path.GetFileName(x).ToUpperInvariant()));
                 var directories = new HashSet<string>();
