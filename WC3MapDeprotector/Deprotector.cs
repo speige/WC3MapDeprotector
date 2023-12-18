@@ -24,6 +24,7 @@ using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.CodeAnalysis.Transpilers;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
+using System.Numerics;
 
 namespace WC3MapDeprotector
 {
@@ -257,7 +258,7 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected class MpqArchiveRefelctionData
+        protected class MpqArchiveReflectionData
         {
             public object HashTable;
             public object BlockTable;
@@ -405,6 +406,63 @@ namespace WC3MapDeprotector
                 }
             }, process, _commonFileExtensions.Select(x => "." + x).Distinct().ToList());
             cheatEngineForm.ShowDialog();
+        }
+
+        protected string PredictUnknownFileExtension(string fileName)
+        {
+            var text = File.ReadAllText(fileName);
+            if (text.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "blp";
+            }
+            if (text.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "mdx";
+            }
+            if (text.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "dds";
+            }
+            if (text.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "tga";
+            }
+            if (text.Contains("magosx.com", StringComparison.InvariantCultureIgnoreCase) || text.Contains("FormatVersion", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "mdl";
+            }
+            if (text.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || text.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || text.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "mp3";
+            }
+            if (text.StartsWith("RIFF", StringComparison.InvariantCultureIgnoreCase) || text.Contains("WAVEfmt", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return "wav";
+            }
+            if (text.StartsWith("Mz", StringComparison.InvariantCultureIgnoreCase) && text.Contains("This program cannot be run in DOS mode", StringComparison.InvariantCultureIgnoreCase))
+            {
+                //note: could technically also be exe, but unlikely
+                return "dll";
+            }
+
+            var lines = text.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count/2)
+            {
+                return "toc";
+            }
+            var avgSemicolonCount = lines.Average(x => x.Length - x.Replace(";", "").Length);
+            if (avgSemicolonCount >= 1)
+            {
+                return "slk";
+            }
+
+            var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && (x.Length - x.Replace("[", "").Replace("]", "").Length) == 2));
+            if (iniLines >= lines.Count/2)
+            {
+                return "ini";
+            }
+
+            return null;
         }
 
         public async Task<DeprotectionResult> Deprotect()
@@ -568,9 +626,16 @@ namespace WC3MapDeprotector
                 {
                     if (file is MpqUnknownFile unknownFile)
                     {
-                        var fileName = $"unknowns{Path.DirectorySeparatorChar}unknown_{unknownFiles.Count + 1}";
+                        var fileName = $"unknowns{Path.DirectorySeparatorChar}{file.Name}";
                         unknownFiles.Add(fileName);
-                        ExtractFileFromArchive(unknownFile, Path.Combine(MapFilesPath, fileName));
+                        if (ExtractFileFromArchive(unknownFile, Path.Combine(MapFilesPath, fileName)))
+                        {
+                            var extension = PredictUnknownFileExtension(Path.Combine(MapFilesPath, fileName));
+                            if (!string.IsNullOrWhiteSpace(extension))
+                            {
+                                File.Move(Path.Combine(MapFilesPath, fileName), $"{Path.Combine(MapFilesPath, fileName)}.{extension}");
+                            }
+                        }
                     }
 
                     if (file is MpqKnownFile knownFile)
@@ -584,7 +649,10 @@ namespace WC3MapDeprotector
 
                 _logEvent($"Unknown file count: {CountUnknownFiles(inMPQArchive)}");
 
-                ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Union(unknownFiles).Select(x => Path.Combine(MapFilesPath, x)).ToList(), _deprotectionResult);
+                if (CountUnknownFiles(inMPQArchive) > 0)
+                {
+                    ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Union(unknownFiles).Select(x => Path.Combine(MapFilesPath, x)).ToList(), _deprotectionResult);
+                }
 
                 if (CountUnknownFiles(inMPQArchive) > 0)
                 {
@@ -1080,13 +1148,18 @@ namespace WC3MapDeprotector
             return false;
         }
 
-        protected void ExtractFileFromArchive(MpqFile mpqFile, string fileName)
+        protected bool ExtractFileFromArchive(MpqFile mpqFile, string fileName)
         {
-            ExtractFileFromArchive(mpqFile.MpqStream, fileName);
+            return ExtractFileFromArchive(mpqFile.MpqStream, fileName);
         }
 
-        protected void ExtractFileFromArchive(MpqStream mpqStream, string fileName)
+        protected bool ExtractFileFromArchive(MpqStream mpqStream, string fileName)
         {
+            if (mpqStream.FileSize <= 0)
+            {
+                return false;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(fileName));
             using (var stream = new FileStream(fileName, FileMode.OpenOrCreate))
             {
@@ -1094,16 +1167,17 @@ namespace WC3MapDeprotector
             }
 
             _logEvent($"Extracted from MPQ: {fileName}");
+            return true;
         }
 
         protected int CountUnknownFiles(MpqArchive archive)
         {
-            return archive.GetMpqFiles().Where(x => x is MpqUnknownFile).Count();
+            return archive.GetMpqFiles().Where(x => x is MpqUnknownFile unknown && unknown.MpqStream.FileSize > 0).Count();
         }
 
-        protected MpqArchiveRefelctionData GetMpqArchiveInteralData(MpqArchive archive)
+        protected MpqArchiveReflectionData GetMpqArchiveInternalData(MpqArchive archive)
         {
-            var result = new MpqArchiveRefelctionData();
+            var result = new MpqArchiveReflectionData();
             result.HashTable = typeof(MpqArchive).GetField("_hashTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
             result.BlockTable = typeof(MpqArchive).GetField("_blockTable", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(archive);
             result.HashTableSize = (uint)result.HashTable.GetType().GetProperty("Size", BindingFlags.Instance | BindingFlags.Public).GetValue(result.HashTable);
@@ -1119,7 +1193,7 @@ namespace WC3MapDeprotector
 
         protected void RemoveInvalidFiles(MpqArchive archive)
         {
-            var reflectionData = GetMpqArchiveInteralData(archive);
+            var reflectionData = GetMpqArchiveInternalData(archive);
             for (var hashIndex = 0; hashIndex < reflectionData.HashTableSize; hashIndex++)
             {
                 var mpqHash = reflectionData.Hashes[hashIndex];
@@ -1146,13 +1220,14 @@ namespace WC3MapDeprotector
 
             var possibleCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_!&()' .".ToUpperInvariant().ToCharArray();
 
-            var reflectionData = GetMpqArchiveInteralData(archive);
+            var reflectionData = GetMpqArchiveInternalData(archive);
 
             var foundFileLock = new object();
             var foundFileCount = 0;
             Settings.BruteForceCancellationToken = new CancellationTokenSource();
             try
             {
+                var simdLength = Vector<int>.Count;
                 Parallel.ForEach(directories, new ParallelOptions() { CancellationToken = Settings.BruteForceCancellationToken.Token }, directoryName =>
                 {
                     uint leftDirectoryHash = 0x7fed7fed;
