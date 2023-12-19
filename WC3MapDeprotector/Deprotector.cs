@@ -1189,7 +1189,30 @@ namespace WC3MapDeprotector
                 _logEvent("Performing deep scan for unknown files ...");
 
                 var fileNames = new HashSet<string>(externalReferencedFiles.Select(x => Path.GetFileName(x).ToUpperInvariant()));
+
+                foreach (var fileName in fileNames.Where(x => x.EndsWith(".BLP")).ToList())
+                {
+                    fileNames.Add(Path.ChangeExtension(fileName, ".TGA"));
+                    fileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".TGA");
+                }
+                foreach (var fileName in fileNames.Where(x => x.EndsWith(".TGA")).ToList())
+                {
+                    fileNames.Add(Path.ChangeExtension(fileName, ".BLP"));
+                    fileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".BLP");
+                }
+                foreach (var fileName in fileNames.Where(x => x.EndsWith(".MDL")).ToList())
+                {
+                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDX");
+                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDX");
+                }
+                foreach (var fileName in fileNames.Where(x => x.EndsWith(".MDX")).ToList())
+                {
+                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDL");
+                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDL");
+                }
+
                 var directories = new HashSet<string>();
+                directories.Add(@"REPLACEABLETEXTURES\COMMANDBUTTONSDISABLED");
                 directories.AddRange(scanList.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\")).Substring(MapFilesPath.Length).TrimStart('\\')));
                 directories.AddRange(externalReferencedFiles.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\"))).Where(x => x != null));
                 var originalDirectories = directories.ToList();
@@ -2593,20 +2616,20 @@ endfunction
                 {
                     var line = file.ReadToEnd();
 
-                    var mdxMatch = Regex.Match(line, @"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)");
+                    var mdxMatch = Regex.Match(line, @"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                     if (mdxMatch.Success)
                     {
-                        result.Add($"{mdxMatch.Groups[1].Value}.mdx");
+                        result.Add($"{mdxMatch.Groups[1].Value}.mdx".ToUpper());
                     }
 
                     var fileExtensions = _commonFileExtensions.Aggregate((x, y) => $"{x}|{y}");
-                    var matches = Regex.Matches(line, @"([ -~]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase);
+                    var matches = Regex.Matches(line, @"([ -~]{1,1000}?)\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled).Concat(Regex.Matches(line, @"([ -~]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled)).ToList();
                     foreach (Match match in matches)
                     {
                         var path = match.Groups[1].Value;
                         var ext = match.Groups[2].Value.ToLower();
 
-                        var invalidFileNameChars = Regex.Match(match.Value, @".*[""<>:|?*/](.*)\.(" + ext + ")", RegexOptions.IgnoreCase);
+                        var invalidFileNameChars = Regex.Match(match.Value, @".*[""<>:|?*/](.*)\.(" + ext + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                         if (invalidFileNameChars.Success)
                         {
                             path = invalidFileNameChars.Groups[1].Value.Trim();
@@ -2618,22 +2641,28 @@ endfunction
                             }
                         }
 
+                        if (path.Contains("="))
+                        {
+                            result.Add($"{path.Substring(path.IndexOf("=") + 1)}.{ext}".ToUpper());
+                        }
+
                         path = path.Replace("\\\\", "\\").Trim();
+                        result.Add($"{path}.{ext}".ToUpper());
+
                         var basename = path.Substring(path.LastIndexOf("\\") + 1).Trim();
-                        result.Add($"{path}.{ext}");
-                        if (ext == "tga" || ext == "blp")
+                        while (basename.Length > 0 && !((basename[0] >= 'A' && basename[0] <= 'Z') || (basename[0] >= 'a' && basename[0] <= 'z')))
                         {
-                            result.Add($"{path}.blp");
-                            result.Add($"{path}.tga");
-                            result.Add($"ReplaceableTextures\\CommandButtonsDisabled\\DIS{basename}.tga");
-                            result.Add($"ReplaceableTextures\\CommandButtonsDisabled\\DIS{basename}.blp");
+                            basename = basename.Substring(1);
+                            result.Add($"{basename}.{ext}".ToUpper());
                         }
-                        if (ext == "mdl" || ext == "mdx")
-                        {
-                            result.Add($"{path}.mdl");
-                            result.Add($"{path}.mdx");
-                            result.Add($"{path}_Portrait.mdx");
-                        }
+                    }
+                    var matches2 = Regex.Matches(line, @"([\)\(\\\/a-zA-Z_0-9. -]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                    foreach (Match match in matches2)
+                    {
+                        var path = match.Groups[1].Value;
+                        var ext = match.Groups[2].Value.ToLower();
+                        path = path.Replace("\\\\", "\\").Trim();
+                        result.Add($"{path}.{ext}".ToUpper());
                     }
                 }
             }
