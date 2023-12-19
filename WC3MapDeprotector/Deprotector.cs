@@ -2606,10 +2606,10 @@ endfunction
                         var path = match.Groups[1].Value;
                         var ext = match.Groups[2].Value.ToLower();
 
-                        var invalidFileNameChars = Regex.Match(path, @".*[""<>:|?*](.*)(\." + ext + ")", RegexOptions.IgnoreCase);
+                        var invalidFileNameChars = Regex.Match(match.Value, @".*[""<>:|?*/](.*)\.(" + ext + ")", RegexOptions.IgnoreCase);
                         if (invalidFileNameChars.Success)
                         {
-                            path = invalidFileNameChars.Groups[1].Value;
+                            path = invalidFileNameChars.Groups[1].Value.Trim();
                             ext = invalidFileNameChars.Groups[2].Value;
 
                             if (string.IsNullOrWhiteSpace(path))
