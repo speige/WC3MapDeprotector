@@ -1,2 +1,2 @@
-cd v1.0.6.0
+cd v1.0.7.0
 start WC3MapDeprotector.exe
