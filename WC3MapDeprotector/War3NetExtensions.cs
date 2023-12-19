@@ -8,11 +8,22 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
+using War3Net.Build.Extensions;
+using ICSharpCode.Decompiler.TypeSystem;
+using Newtonsoft.Json;
 
 namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static void DiscoverFileNames_New(this MpqArchive archive)
+        {
+            archive.DiscoverFileNames();
+
+            var files = "UpgradeData.slk,UnitWeapons.slk,UnitUI.slk,UnitData.slk,UnitBalance.slk,UnitAbilities.slk,ItemData.slk,AbilityData.slk,AbilityBuffData.slk".Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+            archive.AddFileNames(files);
+        }
+
         private static string PredictImageFileExtension(Stream stream)
         {
             try
@@ -181,6 +192,18 @@ namespace WC3MapDeprotector
         public static List<object> GetAllChildSyntaxNodes_Recursive(object syntaxNode)
         {
             return syntaxNode.DFS_Flatten(GetAllChildSyntaxNodes).ToList();
+        }
+
+        public static string GetAllObjectData_JSON(this Map map)
+        {
+            var objectData = map.GetAllObjectData();
+            return JsonConvert.SerializeObject(objectData, new JsonSerializerSettings() {Error = (sender, errorArgs)=> { errorArgs.ErrorContext.Handled = true; } });
+        }
+
+        public static Dictionary<string, object> GetAllObjectData(this Map map)
+        {
+            var properties = typeof(Map).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.EndsWith("ObjectData", StringComparison.InvariantCultureIgnoreCase));
+            return properties.ToDictionary(x => x.Name, x => x.GetValue(map));
         }
 
         public static List<MpqKnownFile> GetAllFiles(this Map map)

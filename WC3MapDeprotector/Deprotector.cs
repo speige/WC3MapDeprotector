@@ -25,6 +25,7 @@ using War3Net.CodeAnalysis.Transpilers;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
 using System.Numerics;
+using Newtonsoft.Json.Linq;
 
 namespace WC3MapDeprotector
 {
@@ -112,6 +113,7 @@ namespace WC3MapDeprotector
         {
             get
             {
+                //todo: move to different location so it doesn't mess up install
                 return Path.Combine(ExeFolderPath, $"{Path.GetFileName(_inMapFile)}.work");
             }
         }
@@ -407,7 +409,7 @@ namespace WC3MapDeprotector
             {
                 try
                 {
-                    inMPQArchive.DiscoverFileNames();
+                    inMPQArchive.DiscoverFileNames_New();
                     inMPQArchive.AddFileNames(listFile);
                 }
                 catch
@@ -443,7 +445,7 @@ namespace WC3MapDeprotector
 
                 try
                 {
-                    inMPQArchive.DiscoverFileNames();
+                    inMPQArchive.DiscoverFileNames_New();
                     inMPQArchive.AddFileNames(listFile);
                 }
                 catch (Exception e)
@@ -465,9 +467,54 @@ namespace WC3MapDeprotector
 
                 _logEvent($"Unknown file count: {GetUnknownFileNames(inMPQArchive).Count}");
 
+                var slkFiles = Directory.GetFiles(MapFilesPath, "*.slk", SearchOption.AllDirectories);
+                if (slkFiles.Length > 0)
+                {
+                    _logEvent("Generating temporary map for SLK Recover: slk.w3x");
+                    var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
+                    var excludedFileNames = new string[] { "war3map.w3a", "war3map.w3b", "war3map.w3d" }; // can't be in slk.w3x or it will crash
+                    var minimumExtraRequiredFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !excludedFileNames.Contains(Path.GetFileName(x).ToLower())).ToList();
+
+                    BuildW3X(slkMpqArchive, MapFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
+                    _logEvent("slk.w3x generated");
+
+                    _logEvent("Running SilkObjectOptimizer");
+                    var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
+                    new DirectoryInfo(slkRecoverOutPath).Delete(true);
+                    Directory.CreateDirectory(slkRecoverOutPath);
+                    WaitForProcessToExit(ExecuteCommand(SLKRecoverEXE, ""));
+
+                    _logEvent("SilkObjectOptimizer completed");
+
+                    var slkRecoveredFiles = new List<string>() { "war3map.w3a", "war3map.w3c", "war3map.w3h", "war3map.w3q", "war3map.w3r", "war3map.w3t", "war3map.w3u" };
+                    foreach (var fileName in slkRecoveredFiles)
+                    {
+                        _logEvent($"Replacing {fileName} with SLKRecover version");
+                        var recoveredFile = Path.Combine(slkRecoverOutPath, fileName);
+                        if (File.Exists(recoveredFile))
+                        {
+                            if (!File.Exists(Path.Combine(MapFilesPath, fileName)))
+                            {
+                                _deprotectionResult.CountOfProtectionsFound++;
+                            }
+
+                            File.Copy(recoveredFile, Path.Combine(MapFilesPath, fileName), true);
+                        }
+                    }
+                }
+
                 if (GetUnknownFileNames(inMPQArchive).Count > 0)
                 {
-                    ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames(inMPQArchive).Select(x => Path.Combine(UnknownFilesPath, x))).ToList(), _deprotectionResult);
+                    var map = DecompileMap();
+                    var externalReferencedFiles = ScanMapForExternalFileReferences(map, _commonFileExtensions.Select(x => "." + x).Concat(GetUnknownFileNames(inMPQArchive)).Select(x => Path.GetExtension(x)).ToList());
+                    ScanForUnknownFiles(inMPQArchive, externalReferencedFiles.ToList(), _deprotectionResult);
+                }
+
+                if (GetUnknownFileNames(inMPQArchive).Count > 0)
+                {
+                    _logEvent("Scanning for possible filenames...");
+                    var externalReferencedFiles = ScanFilesForExternalFileReferences(_extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames(inMPQArchive).Select(x => Path.Combine(UnknownFilesPath, x))).ToList());
+                    ScanForUnknownFiles(inMPQArchive, externalReferencedFiles.ToList(), _deprotectionResult);
                 }
 
                 if (GetUnknownFileNames(inMPQArchive).Count > 0)
@@ -547,7 +594,6 @@ namespace WC3MapDeprotector
                     }
                 }
             }
-
 
             var replace = "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x74\x67\x61";
             while (File.Exists(Path.Combine(MapFilesPath, replace)))
@@ -721,42 +767,6 @@ namespace WC3MapDeprotector
                     _deprotectionResult.CountOfProtectionsFound++;
                     WriteWtg_PlainText_Jass(jassScript);
                     //CreateJassCustomTextVisualTriggerFile(jassScript); // unfinished & buggy [causing compiler errors]
-                }
-            }
-
-            var slkFiles = Directory.GetFiles(MapFilesPath, "*.slk", SearchOption.AllDirectories);
-            if (slkFiles.Length > 0)
-            {
-                _logEvent("Generating temporary map for SLK Recover: slk.w3x");
-                var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
-                var excludedFileNames = new string[] { "war3map.w3a", "war3map.w3b", "war3map.w3d" }; // can't be in slk.w3x or it will crash
-                var minimumExtraRequiredFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !excludedFileNames.Contains(Path.GetFileName(x).ToLower())).ToList();
-
-                BuildW3X(slkMpqArchive, MapFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
-                _logEvent("slk.w3x generated");
-
-                _logEvent("Running SilkObjectOptimizer");
-                var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
-                new DirectoryInfo(slkRecoverOutPath).Delete(true);
-                Directory.CreateDirectory(slkRecoverOutPath);
-                WaitForProcessToExit(ExecuteCommand(SLKRecoverEXE, ""));
-
-                _logEvent("SilkObjectOptimizer completed");
-
-                var slkRecoveredFiles = new List<string>() { "war3map.w3a", "war3map.w3c", "war3map.w3h", "war3map.w3q", "war3map.w3r", "war3map.w3t", "war3map.w3u" };
-                foreach (var fileName in slkRecoveredFiles)
-                {
-                    _logEvent($"Replacing {fileName} with SLKRecover version");
-                    var recoveredFile = Path.Combine(slkRecoverOutPath, fileName);
-                    if (File.Exists(recoveredFile))
-                    {
-                        if (!File.Exists(Path.Combine(MapFilesPath, fileName)))
-                        {
-                            _deprotectionResult.CountOfProtectionsFound++;
-                        }
-
-                        File.Copy(recoveredFile, Path.Combine(MapFilesPath, fileName), true);
-                    }
                 }
             }
 
@@ -1178,45 +1188,41 @@ namespace WC3MapDeprotector
             _logEvent($"Brute force found {foundFileCount} files");
         }
 
-        protected void ScanForUnknownFiles(MpqArchive archive, List<string> scanList, DeprotectionResult deprotectionResult)
+        protected void ScanForUnknownFiles(MpqArchive archive, List<string> fileNamesToTest, DeprotectionResult deprotectionResult)
         {
             var filesFound = 0;
             try
             {
-                _logEvent("Scanning for possible filenames...");
-                var externalReferencedFiles = ScanFilesForExternalFileReferences(scanList);
-
                 _logEvent("Performing deep scan for unknown files ...");
 
-                var fileNames = new HashSet<string>(externalReferencedFiles.Select(x => Path.GetFileName(x).ToUpperInvariant()));
+                var baseFileNames = new HashSet<string>(fileNamesToTest.Select(x => Path.GetFileName(x).ToUpperInvariant()));
 
-                foreach (var fileName in fileNames.Where(x => x.EndsWith(".BLP")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP")).ToList())
                 {
-                    fileNames.Add(Path.ChangeExtension(fileName, ".TGA"));
-                    fileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".TGA");
+                    baseFileNames.Add(Path.ChangeExtension(fileName, ".TGA"));
+                    baseFileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".TGA");
                 }
-                foreach (var fileName in fileNames.Where(x => x.EndsWith(".TGA")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".TGA")).ToList())
                 {
-                    fileNames.Add(Path.ChangeExtension(fileName, ".BLP"));
-                    fileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".BLP");
+                    baseFileNames.Add(Path.ChangeExtension(fileName, ".BLP"));
+                    baseFileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".BLP");
                 }
-                foreach (var fileName in fileNames.Where(x => x.EndsWith(".MDL")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL")).ToList())
                 {
-                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDX");
-                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDX");
+                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDX");
+                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDX");
                 }
-                foreach (var fileName in fileNames.Where(x => x.EndsWith(".MDX")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDX")).ToList())
                 {
-                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDL");
-                    fileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDL");
+                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDL");
+                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDL");
                 }
 
                 var directories = new HashSet<string>();
                 directories.Add(@"REPLACEABLETEXTURES\COMMANDBUTTONSDISABLED");
-                directories.AddRange(scanList.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\")).Substring(MapFilesPath.Length).TrimStart('\\')));
-                directories.AddRange(externalReferencedFiles.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\"))).Where(x => x != null));
-                var originalDirectories = directories.ToList();
-                foreach (var directory in originalDirectories)
+                directories.AddRange(archive.GetMpqFiles().Where(x => x is MpqKnownFile).Cast<MpqKnownFile>().Select(x => Path.GetDirectoryName(x.FileName).ToUpperInvariant()));
+                directories.AddRange(fileNamesToTest.Select(x => Path.GetDirectoryName(x.ToUpperInvariant().Replace("/", "\\"))).Where(x => x != null));
+                foreach (var directory in directories.ToList())
                 {
                     var split = directory.Split('\\');
                     for (int i = 1; i <= split.Length; i++)
@@ -1225,23 +1231,24 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                var filesToTest = new List<string>();
+                var allFileNamePermutations = new HashSet<string>();
                 foreach (var directory in directories)
                 {
-                    foreach (var fileName in fileNames)
+                    foreach (var fileName in baseFileNames)
                     {
-                        filesToTest.Add((directory + "\\" + fileName).Trim('\\'));
+                        allFileNamePermutations.Add((directory + "\\" + fileName).Trim('\\'));
                     }
                 }
+                var finalFilesToTest = allFileNamePermutations.ToList();
 
-                var tenPercent = filesToTest.Count / 10;
-                for (var i = 0; i < filesToTest.Count; i++)
+                var tenPercent = finalFilesToTest.Count / 10;
+                for (var i = 0; i < finalFilesToTest.Count; i++)
                 {
                     if (i % tenPercent == 0)
                     {
                         _logEvent($"{10 * i / tenPercent}% deep scan completed");
                     }
-                    var scannedFileName = filesToTest[i];
+                    var scannedFileName = finalFilesToTest[i];
                     if (!_extractedMapFiles.Contains(scannedFileName.ToLower()) && archive.FileExists(scannedFileName))
                     {
                         ExtractFileFromArchive(archive, scannedFileName);
@@ -1405,6 +1412,7 @@ namespace WC3MapDeprotector
 
                 var map = DecompileMap();
                 result.Info = map.Info;
+
                 result.TriggerStrings = map.TriggerStrings;
 
                 foreach (var mapInfoFormatVersion in Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderBy(x => x == map?.Info?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
@@ -2600,13 +2608,35 @@ endfunction
             _logEvent($"{newfiles.Count} files added to import list");
         }
 
+        protected HashSet<string> ScanMapForExternalFileReferences(Map map, List<string> fileExtensions)
+        {
+            HashSet<string> result = new HashSet<string>();
+
+            if (map == null)
+            {
+                return result;
+            }
+
+            if (map.ImportedFiles?.Files != null)
+            {
+                result.AddRange(map.ImportedFiles.Files.Select(x => x.FullPath));
+            }
+
+            var objectDataJson = map.GetAllObjectData_JSON();
+            var deserialized = (JObject)JsonConvert.DeserializeObject(objectDataJson);
+            var extensions = new HashSet<string>(fileExtensions.Select(x => x.ToUpper()));
+            result.AddRange(deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).Where(x => extensions.Contains(Path.GetExtension(x).ToUpper())));
+            return result;
+        }
+
         protected HashSet<string> ScanFilesForExternalFileReferences(List<string> filenames)
         {
-            var result = new HashSet<string>();
+            var extensionsToSkip = new HashSet<string>(".mp3,.blp,.mdx,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.ToUpper()));
 
+            var result = new HashSet<string>();
             foreach (var filename in filenames)
             {
-                if (!File.Exists(filename))
+                if (!File.Exists(filename) || extensionsToSkip.Contains(Path.GetExtension(filename).ToUpper()))
                 {
                     continue;
                 }
@@ -2656,6 +2686,7 @@ endfunction
                             result.Add($"{basename}.{ext}".ToUpper());
                         }
                     }
+
                     var matches2 = Regex.Matches(line, @"([\)\(\\\/a-zA-Z_0-9. -]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                     foreach (Match match in matches2)
                     {
