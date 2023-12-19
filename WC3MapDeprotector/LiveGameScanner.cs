@@ -76,11 +76,17 @@ namespace WC3MapDeprotector
 
                             strings.Add(oldValue);
                         }
-                        var result = strings.Distinct().SelectMany(x => Regex.Matches(x, @"[\)\(\\\/a-zA-Z_0-9. -]{1,1000}\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct().Where(x => !scannedFileNames.Contains(x)).ToList();
+                        var result = strings.Distinct().SelectMany(x => Regex.Matches(x, @".*\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct().Where(x => !scannedFileNames.Contains(x)).ToList();
                         foreach (var fileName in result)
                         {
-                            scannedFileNames.Add(fileName);
-                            _fileNameDiscoveredCallback(fileName);
+                            var scannedFileName = fileName;
+                            var invalidFileNameChars = Regex.Match(fileName, @".*[""<>:|?*](.*)\" + suffix, RegexOptions.IgnoreCase);
+                            if (invalidFileNameChars.Success)
+                            {
+                                scannedFileName = invalidFileNameChars.Groups[1].Value;
+                            }
+                            scannedFileNames.Add(scannedFileName);
+                            _fileNameDiscoveredCallback(scannedFileName);
                         }
                     }
                 }

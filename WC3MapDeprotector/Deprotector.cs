@@ -132,7 +132,7 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected string UnkownFilesPath
+        protected string UnknownFilesPath
         {
             get
             {
@@ -258,18 +258,19 @@ namespace WC3MapDeprotector
                 var split = directory.Split('\\');
                 for (int i = 1; i <= split.Length; i++)
                 {
-                    directories.Add(split.Take(i).Aggregate((x, y) => $"{x}/{y}"));
                     directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
                 }
             }
 
+            //var extensions = _commonFileExtensions.Select(x => "." + x).Distinct().ToList();
+            var extensions = GetUnknownFileNames(archive).Select(x => Path.GetExtension(x).ToUpperInvariant()).Distinct().ToList();
             var cheatEngineForm = new frmLiveGameScanner(scannedFileName =>
             {
                 var filesToTest = new List<string>() { scannedFileName };
                 var baseFileName = Path.GetFileName(scannedFileName);
                 foreach (var directory in directories)
                 {
-                    filesToTest.Add(Path.Combine(directory, baseFileName));
+                    filesToTest.Add(directory + "\\" + baseFileName);
                 }
 
                 foreach (var filename in filesToTest)
@@ -290,7 +291,7 @@ namespace WC3MapDeprotector
                         }
                     }
                 }
-            }, process, _commonFileExtensions.Select(x => "." + x).Distinct().ToList());
+            }, process, extensions);
             cheatEngineForm.ShowDialog();
         }
 
@@ -452,20 +453,13 @@ namespace WC3MapDeprotector
                 }
 
                 var initialMpqFiles = inMPQArchive.GetMpqFiles().ToList();
-                var knownFileNames = new HashSet<string>();
                 foreach (var file in initialMpqFiles)
                 {
-                    if (file is MpqUnknownFile unknownFile)
-                    {
-                        ExtractFileFromArchive(unknownFile);
-                    }
+                    var success = ExtractFileFromArchive(file);
 
-                    if (file is MpqKnownFile knownFile)
+                    if (success && file is MpqKnownFile knownFile)
                     {
-                        var fileName = knownFile.FileName;
-                        _extractedMapFiles.Add(fileName.ToLower());
-                        knownFileNames.Add(fileName);
-                        ExtractFileFromArchive(file);
+                        _extractedMapFiles.Add(knownFile.FileName.ToLower());
                     }
                 }
 
@@ -473,7 +467,7 @@ namespace WC3MapDeprotector
 
                 if (GetUnknownFileNames(inMPQArchive).Count > 0)
                 {
-                    ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Union(GetUnknownFileNames(inMPQArchive)).Select(x => Path.Combine(MapFilesPath, x)).ToList(), _deprotectionResult);
+                    ScanForUnknownFiles(inMPQArchive, _extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames(inMPQArchive).Select(x => Path.Combine(UnknownFilesPath, x))).ToList(), _deprotectionResult);
                 }
 
                 if (GetUnknownFileNames(inMPQArchive).Count > 0)
@@ -532,7 +526,7 @@ namespace WC3MapDeprotector
             {
                 foreach (var unknownFile in unknownFiles)
                 {
-                    var text = File.ReadAllText(Path.Combine(UnkownFilesPath, unknownFile));
+                    var text = File.ReadAllText(Path.Combine(UnknownFilesPath, unknownFile));
                     if (Regex.IsMatch(text, "function\\s+config\\s+takes\\s+nothing\\s+returns\\s+nothing", RegexOptions.IgnoreCase))
                     {
                         File.Copy(Path.Combine(MapFilesPath, unknownFile), Path.Combine(MapFilesPath, "war3map.j"), true);
@@ -545,7 +539,7 @@ namespace WC3MapDeprotector
             {
                 foreach (var unknownFile in unknownFiles)
                 {
-                    var text = File.ReadAllText(Path.Combine(UnkownFilesPath, unknownFile));
+                    var text = File.ReadAllText(Path.Combine(UnknownFilesPath, unknownFile));
                     if (Regex.IsMatch(text, "function\\s+config\\s*\\(\\)", RegexOptions.IgnoreCase))
                     {
                         File.Copy(Path.Combine(MapFilesPath, unknownFile), Path.Combine(MapFilesPath, "war3map.lua"), true);
@@ -785,7 +779,7 @@ namespace WC3MapDeprotector
 
             BuildImportList();
 
-            var unknownFilesHash = new HashSet<string>(unknownFiles.Select(x => Path.Combine(UnkownFilesPath, x).Trim().ToLower()));
+            var unknownFilesHash = new HashSet<string>(unknownFiles.Select(x => Path.Combine(UnknownFilesPath, x).Trim().ToLower()));
             var withUnknowns = Directory.GetFiles(MapFilesPath, "*", SearchOption.AllDirectories).ToList();
             var finalFiles = withUnknowns.Where(x => !unknownFilesHash.Contains(x.Trim().ToLower())).ToList();
 
@@ -975,7 +969,7 @@ namespace WC3MapDeprotector
                 return false;
             }
 
-            var unknownName = Path.Combine(UnkownFilesPath, mpqFile.GetUnknownFileName());
+            var unknownName = Path.Combine(UnknownFilesPath, mpqFile.GetUnknownFileName());
             if (File.Exists(unknownName))
             {
                 File.Delete(unknownName);
@@ -1051,8 +1045,7 @@ namespace WC3MapDeprotector
             _logEvent($"unknown files remaining: {unknownFileCount}");
 
             var directories = archive.GetMpqFiles().Where(x => x is MpqKnownFile).Cast<MpqKnownFile>().Select(x => Path.GetDirectoryName(x.FileName).ToUpperInvariant()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct().ToList();
-
-            var extensions = archive.GetMpqFiles().Where(x => x is MpqUnknownFile).Select(x => War3NetExtensions.PredictUnknownFileExtension(x.MpqStream)).Where(x => !String.IsNullOrWhiteSpace(x)).Select(x => x.ToUpperInvariant()).Distinct().ToList();
+            var extensions = GetUnknownFileNames(archive).Select(x => Path.GetExtension(x).ToUpperInvariant()).Distinct().ToList();
 
             const int maxFileNameLength = 75;
             _logEvent($"Brute forcing filenames from length 1 to {maxFileNameLength}");
@@ -1205,7 +1198,6 @@ namespace WC3MapDeprotector
                     var split = directory.Split('\\');
                     for (int i = 1; i <= split.Length; i++)
                     {
-                        directories.Add(split.Take(i).Aggregate((x, y) => $"{x}/{y}"));
                         directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
                     }
                 }
@@ -1215,7 +1207,7 @@ namespace WC3MapDeprotector
                 {
                     foreach (var fileName in fileNames)
                     {
-                        filesToTest.Add(Path.Combine(directory, fileName));
+                        filesToTest.Add((directory + "\\" + fileName).Trim('\\'));
                     }
                 }
 
@@ -2608,11 +2600,24 @@ endfunction
                     }
 
                     var fileExtensions = _commonFileExtensions.Aggregate((x, y) => $"{x}|{y}");
-                    var matches = Regex.Matches(line, @"([\)\(\\\/a-zA-Z_0-9. -]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase);
+                    var matches = Regex.Matches(line, @"([ -~]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase);
                     foreach (Match match in matches)
                     {
                         var path = match.Groups[1].Value;
                         var ext = match.Groups[2].Value.ToLower();
+
+                        var invalidFileNameChars = Regex.Match(path, @".*[""<>:|?*](.*)(\." + ext + ")", RegexOptions.IgnoreCase);
+                        if (invalidFileNameChars.Success)
+                        {
+                            path = invalidFileNameChars.Groups[1].Value;
+                            ext = invalidFileNameChars.Groups[2].Value;
+
+                            if (string.IsNullOrWhiteSpace(path))
+                            {
+                                continue;
+                            }
+                        }
+
                         path = path.Replace("\\\\", "\\").Trim();
                         var basename = path.Substring(path.LastIndexOf("\\") + 1).Trim();
                         result.Add($"{path}.{ext}");

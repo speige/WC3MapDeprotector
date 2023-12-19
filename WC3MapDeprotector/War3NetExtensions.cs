@@ -24,124 +24,129 @@ namespace WC3MapDeprotector
             return null;
         }
 
-        public static string PredictUnknownFileExtension(MpqStream stream)
+        public static string PredictUnknownFileExtension(Stream stream)
         {
-            string fileContents;
-            stream.Position = 0;
-            using (var reader = new BinaryReader(stream))
+            try
             {
-                var bytes = reader.ReadBytes((int)stream.Length);
+                string fileContents;
                 stream.Position = 0;
 
-                var stringBuilder = new StringBuilder();
-                for (var i = 0; i < bytes.Length; i++)
+                using (var reader = new BinaryReader(stream))
                 {
-                    stringBuilder.Append((char)bytes[i]);
+                    var bytes = reader.ReadBytes((int)stream.Length);
+                    stream.Position = 0;
+
+                    var stringBuilder = new StringBuilder();
+                    for (var i = 0; i < bytes.Length; i++)
+                    {
+                        stringBuilder.Append((char)bytes[i]);
+                    }
+                    fileContents = stringBuilder.ToString();
                 }
-                fileContents = stringBuilder.ToString();
-            }
 
-            if (fileContents.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".blp";
-            }
-            if (fileContents.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".mdx";
-            }
-            if (fileContents.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".dds";
-            }
-            if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".tga";
-            }
-            if (fileContents.Contains("magosx.com", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("FormatVersion", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".mdl";
-            }
-            if (fileContents.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".mp3";
-            }
-            if (fileContents.StartsWith("RIFF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("WAVEfmt", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".wav";
-            }
-            if (fileContents.StartsWith("Mz", StringComparison.InvariantCultureIgnoreCase) && fileContents.Contains("This program cannot be run in DOS mode", StringComparison.InvariantCultureIgnoreCase))
-            {
-                //note: could technically also be exe, but unlikely
-                return ".dll";
-            }
+                if (fileContents.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".blp";
+                }
+                if (fileContents.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".mdx";
+                }
+                if (fileContents.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".dds";
+                }
+                if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".tga";
+                }
+                if (fileContents.Contains("magosx.com", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("FormatVersion", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".mdl";
+                }
+                if (fileContents.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".mp3";
+                }
+                if (fileContents.StartsWith("RIFF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("WAVEfmt", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".wav";
+                }
+                if (fileContents.StartsWith("Mz", StringComparison.InvariantCultureIgnoreCase) && fileContents.Contains("This program cannot be run in DOS mode", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    //note: could technically also be exe, but unlikely
+                    return ".dll";
+                }
 
-            var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-            if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 2)
-            {
-                return ".toc";
-            }
-            if (lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 10)
-            {
-                return ".fdf";
-            }
-            var avgSemicolonCount = lines.Average(x => x.Length - x.Replace(";", "").Length);
-            if (avgSemicolonCount >= 1)
-            {
-                return ".slk";
-            }
+                var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 2)
+                {
+                    return ".toc";
+                }
+                if (lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 10)
+                {
+                    return ".fdf";
+                }
+                var avgSemicolonCount = lines.Average(x => x.Length - x.Replace(";", "").Length);
+                if (avgSemicolonCount >= 1)
+                {
+                    return ".slk";
+                }
 
-            if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
-            {
-                return ".mp3";
-            }
+                if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
+                {
+                    return ".mp3";
+                }
 
-            if (fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".jpg";
-            }
+                if (fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".jpg";
+                }
 
-            if (fileContents.StartsWith("\x42\x4D"))
-            {
-                return ".bmp";
-            }
+                if (fileContents.StartsWith("\x42\x4D"))
+                {
+                    return ".bmp";
+                }
 
-            if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return PredictImageFileExtension(stream) ?? ".tga";
-            }
+                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return PredictImageFileExtension(stream) ?? ".tga";
+                }
 
-            /*
-            if (fileContents.StartsWith("SFPK", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ".sfk";
-            }
-            */
+                /*
+                if (fileContents.StartsWith("SFPK", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".sfk";
+                }
+                */
 
-            var isTextFile = fileContents.Count(x => x >= ' ' && x <= '~') >= fileContents.Length / 2;
-            if (isTextFile && lines.Average(x => x.Length - x.Replace("<", "").Replace(">", "").Length) >= 1)
-            {
-                return ".html";
-            }
+                var isTextFile = fileContents.Count(x => x >= ' ' && x <= '~') >= fileContents.Length / 2;
+                if (isTextFile && lines.Average(x => x.Length - x.Replace("<", "").Replace(">", "").Length) >= 1)
+                {
+                    return ".html";
+                }
 
-            var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && (x.Length - x.Replace("[", "").Replace("]", "").Length) == 2));
-            if (isTextFile && iniLines >= lines.Count / 2)
-            {
-                //note: could technically also be ini, but unlikely
-                return ".txt";
-            }
+                var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && (x.Length - x.Replace("[", "").Replace("]", "").Length) == 2));
+                if (isTextFile && iniLines >= lines.Count / 2)
+                {
+                    //note: could technically also be ini, but unlikely
+                    return ".txt";
+                }
 
-            if (fileContents.StartsWith("\x02\x00\0\0") && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
-            {
-                return ".wai";
-            }
+                if (fileContents.StartsWith("\x02\x00\0\0") && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
+                {
+                    return ".wai";
+                }
 
-            var imageFormat = PredictImageFileExtension(stream);
-            if (!string.IsNullOrWhiteSpace(imageFormat))
-            {
-                return imageFormat;
+                var imageFormat = PredictImageFileExtension(stream);
+                if (!string.IsNullOrWhiteSpace(imageFormat))
+                {
+                    return imageFormat;
+                }
             }
+            catch { }
 
-            return "";
+            return null;
         }
 
         private static Dictionary<ulong, string> GetUnknownFileName_Memoized = new Dictionary<ulong, string>();
