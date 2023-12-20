@@ -132,7 +132,7 @@ namespace WC3MapDeprotector
                 EnableControls();
                 _deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked, BruteForceUnknowns = cbBruteForceUnknowns.Checked }, log =>
                 {
-                    Invoke(() =>
+                    BeginInvoke(() =>
                     {
                         tbDebugLog.AppendText(log + Environment.NewLine);
                     });
