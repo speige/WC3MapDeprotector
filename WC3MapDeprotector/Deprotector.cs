@@ -2631,7 +2631,7 @@ endfunction
 
         protected HashSet<string> ScanFilesForExternalFileReferences(List<string> filenames)
         {
-            var extensionsToSkip = new HashSet<string>(".mp3,.blp,.mdx,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.ToUpper()));
+            var extensionsToSkip = new HashSet<string>(".mp3,.blp,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.ToUpper()));
 
             var result = new HashSet<string>();
             foreach (var filename in filenames)
