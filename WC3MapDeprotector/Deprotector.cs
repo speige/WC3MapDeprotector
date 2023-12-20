@@ -1197,24 +1197,29 @@ namespace WC3MapDeprotector
 
                 var baseFileNames = new HashSet<string>(fileNamesToTest.Select(x => Path.GetFileName(x).ToUpperInvariant()));
 
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP") || x.EndsWith(".TGA")).ToList())
+                {
+                    baseFileNames.Add("DIS" + Path.GetFileName(fileName));
+                }
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL") || x.EndsWith(".MDX")).ToList())
+                {
+                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT" + Path.GetExtension(fileName));
+                }
+
                 foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP")).ToList())
                 {
                     baseFileNames.Add(Path.ChangeExtension(fileName, ".TGA"));
-                    baseFileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".TGA");
                 }
                 foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".TGA")).ToList())
                 {
                     baseFileNames.Add(Path.ChangeExtension(fileName, ".BLP"));
-                    baseFileNames.Add("DIS" + Path.GetFileNameWithoutExtension(fileName) + ".BLP");
                 }
                 foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL")).ToList())
                 {
-                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDX");
                     baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDX");
                 }
                 foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDX")).ToList())
                 {
-                    baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + "_PORTRAIT.MDL");
                     baseFileNames.Add(Path.GetFileNameWithoutExtension(fileName) + ".MDL");
                 }
 
