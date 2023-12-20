@@ -9,6 +9,7 @@
     <ApplicationIcon>Icons\grunt.ico</ApplicationIcon>
     <SignAssembly>False</SignAssembly>
     <AssemblyVersion>1.0.9.0</AssemblyVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -79,6 +80,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="SilkObjectOptimizer.zip">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="StormLib_x64.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="StormLib_x86.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="windowsdesktop-runtime-8.0.0-win-x64.exe">

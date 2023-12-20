@@ -367,61 +367,74 @@ namespace WC3MapDeprotector
                 File.WriteAllLines(WorkingListFileName, listFile);
             }
 
+            //StormLibrary.SFileOpenArchive(_inMapFile, 0, SFileOpenArchiveFlags.AccessReadOnly, out var mpqFile)
+
             var headerCorrectionMapFileName = Path.Combine(WorkingFolderPath, "header.w3x");
             Directory.CreateDirectory(Path.GetDirectoryName(headerCorrectionMapFileName));
             File.Delete(headerCorrectionMapFileName);
             using (var reader = File.OpenRead(_inMapFile))
-            using (var writer = File.OpenWrite(headerCorrectionMapFileName))
+            using (var binaryReader = new BinaryReader(reader))
             {
-                var header = new byte[4];
-                reader.Read(header, 0, 4);
-                writer.Write(header, 0, 4);
-                if (header[0] == 'H' && header[1] == 'M' && header[2] == '3' && header[3] == 'W')
-                {
-                    var skipHM3Wheader = new byte[508];
-                    reader.Read(skipHM3Wheader, 0, 508);
-                    writer.Write(skipHM3Wheader, 0, 508);
-                    reader.Read(header, 0, 4);
-                    writer.Write(header, 0, 4);
-                }
+                var parameters = new object[] { reader, null, null };
+                War3NetExtensions.TryLocateMpqHeader_New(reader, out var headerOffset);
+                reader.Seek(headerOffset+12, SeekOrigin.Begin);
 
-                if (header[0] == 'M' && header[1] == 'P' && header[2] == 'Q')
+                var mpqVersion = binaryReader.ReadUInt16();
+                var blockSize = binaryReader.ReadUInt16();
+                var hashTableOffset = binaryReader.ReadUInt32();
+                var blockTableOffset = binaryReader.ReadUInt32();
+                var hashTableSize = binaryReader.ReadUInt32();
+                var blockTableSize = binaryReader.ReadUInt32();
+
+                var expectedHashTableOffset = blockTableOffset - (MpqHash.Size * hashTableSize);
+                var expectedBlockTableOffset = hashTableOffset + (MpqHash.Size * hashTableSize);
+
+                // 0 is ONLY valid format for WC3
+                if (mpqVersion != 0 || hashTableOffset != expectedHashTableOffset || blockTableOffset != expectedBlockTableOffset)
                 {
-                    var skipAhead = new byte[8];
-                    reader.Read(skipAhead, 0, 8);
-                    writer.Write(skipAhead, 0, 8);
-                    var formatVersion = reader.ReadWord();
-                    if (formatVersion != 0)
+                    mpqVersion = 0;
+                    //hashTableOffset = expectedHashTableOffset;
+                    //blockTableOffset = expectedBlockTableOffset;
+
+                    _deprotectionResult.CountOfProtectionsFound++;
+
+                    using (var writer = File.OpenWrite(headerCorrectionMapFileName))
+                    using (var binaryWriter = new BinaryWriter(writer))
                     {
-                        _deprotectionResult.CountOfProtectionsFound++;
+                        reader.Position = 0;
+                        reader.CopyTo(writer, (int)headerOffset + 12, 1);
 
-                        // 0 is ONLY valid format for WC3
-                        writer.WriteByte(0);
-                        writer.WriteByte(0);
-                        _logEvent("Corrected invalid MPQ Header Format Version");
-
+                        binaryWriter.Write(mpqVersion);
+                        binaryWriter.Write(blockSize);
+                        binaryWriter.Write(hashTableOffset);
+                        binaryWriter.Write(blockTableOffset);
+                        binaryWriter.Write(hashTableSize);
+                        binaryWriter.Write(blockTableSize);
+                        reader.Seek(writer.Position, SeekOrigin.Begin);
                         reader.CopyTo(writer);
-                        _inMapFile = headerCorrectionMapFileName; // todo: don't change working directory
+                        _logEvent("Corrected invalid MPQ Header Format Version");
                     }
+
+                    _inMapFile = headerCorrectionMapFileName; // todo: don't change working directory
                 }
             }
 
-            using (var inMPQArchive = MpqArchive.Open(_inMapFile, true))
+            try
             {
-                try
+                using (var inMPQArchive = MpqArchive.Open(_inMapFile, true))
                 {
                     inMPQArchive.DiscoverFileNames_New();
                     inMPQArchive.AddFileNames(listFile);
                 }
-                catch
+            }
+            catch
+            {
+                _logEvent("MPQ Header corrupted. Attempting to repair.");
+                _deprotectionResult.CountOfProtectionsFound++;
+                using (var stream = MpqArchive.Restore(_inMapFile))
                 {
-                    _logEvent("MPQ Header corrupted. Attempting to repair.");
-                    _deprotectionResult.CountOfProtectionsFound++;
-                    using (var stream = MpqArchive.Restore(_inMapFile))
-                    {
-                        _inMapFile = Path.Combine(TempFolderPath, Path.GetFileName(_inMapFile));
-                        stream.CopyToFile(_inMapFile);
-                    }
+                    _inMapFile = Path.Combine(TempFolderPath, Path.GetFileName(_inMapFile));
+                    stream.CopyToFile(_inMapFile);
                 }
             }
 
