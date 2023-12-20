@@ -41,7 +41,7 @@ namespace WC3MapDeprotector
                 var currentVersion = Assembly.GetEntryAssembly().GetName().Version.ToString();
                 var githubVersion = await DownloadGitHubReleaseInfo();
 
-                if (githubVersion.name.Trim().ToLower() != currentVersion.Trim().ToLower())
+                if (!string.Equals(githubVersion.name.Trim(), currentVersion.Trim(), StringComparison.InvariantCultureIgnoreCase))
                 {
                     if (MessageBox.Show("There is a new version of the app available. Would you like to download it?", "Update Available", MessageBoxButtons.YesNo) == DialogResult.Yes)
                     {
