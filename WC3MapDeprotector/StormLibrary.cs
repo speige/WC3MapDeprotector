@@ -49,16 +49,6 @@ namespace WC3MapDeprotector
         //[DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
         //public static extern bool SFileGetFileName(IntPtr hFile, [MarshalAs(UnmanagedType.LPStr)] out string szFileName);
 
-        public static unsafe string MarshalByteArrayAsString(byte* unsafeCString)
-        {
-            return Marshal.PtrToStringUTF8((nint)unsafeCString);
-        }
-
-        public static unsafe string MarshalByteArrayAsString(IntPtr ptr)
-        {
-            return MarshalByteArrayAsString((byte*)ptr.ToPointer());
-        }
-
         public unsafe struct _TFileEntry
         {
             public ulong FileNameHash;

@@ -41,5 +41,16 @@ namespace WC3MapDeprotector
             newRightHash = Buffer[rightOffset + val] ^ (rightHash + rightSeed);
             newRightSeed = (uint)val + newRightHash + rightSeed + (rightSeed << 5) + 3;
         }
+
+        public static ulong HashFileName(string fileName)
+        {
+            fileName = fileName.ToUpper();
+            MPQHashing.StartHash(out var leftHash, out var leftSeed, out var rightHash, out var rightSeed);
+            foreach (var character in fileName)
+            {
+                MPQHashing.AddCharToHash(leftHash, leftSeed, rightHash, rightSeed, character, out leftHash, out leftSeed, out rightHash, out rightSeed);
+            }
+            return MPQHashing.FinalizeHash(leftHash, rightHash);
+        }
     }
 }
