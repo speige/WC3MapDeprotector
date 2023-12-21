@@ -1010,7 +1010,9 @@ namespace WC3MapDeprotector
 
             var possibleCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_!&()' .".ToUpper().ToCharArray();
 
+            //todo: determine list vs HashSet based on # items? (do benchmarked performance tests)
             var unknownHashes = archive.UnknownFileNameHashes;
+            //var unknownHashes = new HashSet<ulong>(archive.UnknownFileNameHashes);
 
             var foundFileLock = new object();
             var foundFileCount = 0;
@@ -1054,26 +1056,23 @@ namespace WC3MapDeprotector
                                 lock (foundFileLock)
                                 {
                                     var fileName = Path.Combine(directoryName, $"{bruteText}{fileExtension}");
-                                    if (!_extractedMapFiles.Contains(fileName) && archive.DiscoverFile(fileName))
+                                    if (!_extractedMapFiles.Contains(fileName) && ExtractFileFromArchive(archive, finalHash))
                                     {
-                                        if (ExtractFileFromArchive(archive, finalHash))
+                                        File.AppendAllLines(WorkingListFileName, new string[] { fileName });
+                                        deprotectionResult.NewListFileEntriesFound++;
+                                        _logEvent($"added to global listfile: {fileName}");
+
+                                        var newUnknownCount = archive.UnknownFileNameHashes.Count;
+                                        if (unknownFileCount != newUnknownCount)
                                         {
-                                            File.AppendAllLines(WorkingListFileName, new string[] { fileName });
-                                            deprotectionResult.NewListFileEntriesFound++;
-                                            _logEvent($"added to global listfile: {fileName}");
+                                            foundFileCount++;
+                                            unknownFileCount = newUnknownCount;
+                                            _logEvent($"unknown files remaining: {unknownFileCount}");
 
-                                            var newUnknownCount = archive.UnknownFileNameHashes.Count;
-                                            if (unknownFileCount != newUnknownCount)
+                                            if (unknownFileCount == 0)
                                             {
-                                                foundFileCount++;
-                                                unknownFileCount = newUnknownCount;
-                                                _logEvent($"unknown files remaining: {unknownFileCount}");
-
-                                                if (unknownFileCount == 0)
-                                                {
-                                                    Settings.BruteForceCancellationToken.Cancel();
-                                                    return;
-                                                }
+                                                Settings.BruteForceCancellationToken.Cancel();
+                                                return;
                                             }
                                         }
                                     }
