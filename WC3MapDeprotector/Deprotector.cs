@@ -828,12 +828,15 @@ namespace WC3MapDeprotector
                 var shortFileName = file.Replace($"{baseFolder}{Path.DirectorySeparatorChar}", "");
                 var mpqFile = MpqFile.New(File.OpenRead(file), shortFileName);
                 mpqFile.CompressionType = MpqCompressionType.ZLib;
-                /* // not supported by War3Net yet
-                if (Path.GetExtension(shortFileName).ToUpper() == ".wav")
+
+                /*
+                // not supported by War3Net yet
+                if (string.Equals(Path.GetExtension(shortFileName), ".wav", StringComparison.InvariantCultureIgnoreCase))
                 {
                     mpqFile.CompressionType = MpqCompressionType.Huffman;
                 }
                 */
+                
                 mpqArchive.AddFile(mpqFile);
 
                 _logEvent($"Added to MPQ: {file}");
@@ -1580,7 +1583,7 @@ namespace WC3MapDeprotector
         {
             //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file multiple times looking for changes
             _logEvent("Analyzing map files");
-            var mapFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => x.ToUpper() == "war3map.w3i" ? 0 : 1).ToList();
+            var mapFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => string.Equals(x, "war3map.w3i", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1).ToList();
 
             var map = new Map();
             for (var retry = 0; retry < 2; ++retry)
