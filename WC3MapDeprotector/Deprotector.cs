@@ -451,7 +451,7 @@ namespace WC3MapDeprotector
                 {
                     _logEvent("Scanning for possible filenames...");
                     var externalReferencedFiles = ScanFilesForExternalFileReferences(_extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames().Select(x => Path.Combine(UnknownFilesPath, x))).ToList());
-                    ScanForUnknownFiles(inMPQArchive, externalReferencedFiles.ToList(), _deprotectionResult);
+                    ScanForUnknownFiles(inMPQArchive, externalReferencedFiles, _deprotectionResult);
                 }
 
                 if (inMPQArchive.UnknownFileNameHashes.Count > 0)
@@ -2583,11 +2583,11 @@ endfunction
         [GeneratedRegex(@"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)", RegexOptions.IgnoreCase)]
         protected static partial Regex RegexScan_MDX();
 
-        protected HashSet<string> ScanFilesForExternalFileReferences(List<string> filenames)
+        protected List<string> ScanFilesForExternalFileReferences(List<string> filenames)
         {
             var extensionsToSkip = new HashSet<string>(".mp3,.blp,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries), StringComparer.InvariantCultureIgnoreCase);
 
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            var result = new ConcurrentHashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             Parallel.ForEach(filenames, filename =>
             {
                 if (!File.Exists(filename) || extensionsToSkip.Contains(Path.GetExtension(filename)))
@@ -2652,7 +2652,7 @@ endfunction
                 }
             });
 
-            return result;
+            return result.ToList();
         }
     }
 }

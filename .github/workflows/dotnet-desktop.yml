@@ -86,7 +86,7 @@ jobs:
 
     - name: Setup publish folder
       run: |
-        ren WC3MapDeprotector\bin\Release\net8.0-windows v1.0.9.0
+        ren WC3MapDeprotector\bin\Release\net8.0-windows v1.1.0.0
         copy windowsdesktop-runtime-8.0.0-win-x64.exe WC3MapDeprotector\bin\Release
         copy Launch_WC3MapDeprotector.bat WC3MapDeprotector\bin\Release
 
