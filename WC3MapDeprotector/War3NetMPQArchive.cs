@@ -87,20 +87,21 @@ namespace WC3MapDeprotector
 
             try
             {
-                _mpqArchive = MpqArchive.Open(mpqFileName, true);
-                _mpqArchive.DiscoverFileNames();
+                using (var testCorruption = MpqArchive.Open(mpqFileName, true))
+                {
+                    testCorruption.DiscoverFileNames();
+                }
             }
             catch
             {
-                _mpqArchive.Dispose();
                 mpqFileName = Path.GetTempFileName();
                 using (var stream = MpqArchive.Restore(mpqFileName))
                 {
                     stream.CopyToFile(mpqFileName);
                 }
-                _mpqArchive = MpqArchive.Open(mpqFileName, true);
             }
 
+            _mpqArchive = MpqArchive.Open(mpqFileName, true);
             RemoveInvalidFiles();
         }
 

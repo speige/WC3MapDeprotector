@@ -65,15 +65,6 @@ namespace WC3MapDeprotector
             public IntPtr szFileName;
         }
 
-        public unsafe struct _TMPQHash
-        {
-            public ulong dwName1;
-            public ulong dwName2;
-            public uint lcLocale;
-            public uint wPlatform;
-            public ulong dwBlockIndex;
-        };
-
         public unsafe struct _SFILE_FIND_DATA
         {
             public fixed byte cFileName[1024];                  // Full name of the found file
