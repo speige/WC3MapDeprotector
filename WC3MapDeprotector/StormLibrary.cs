@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace WC3MapDeprotector
 {
+    //note: Using forked version due to bug fixes (waiting on PR merge & official release) https://github.com/speige/StormLib
+
     public class StormLibrary
     {
         private const string STORMLIB = "StormLib.dll";

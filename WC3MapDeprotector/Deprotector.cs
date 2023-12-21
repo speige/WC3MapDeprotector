@@ -114,8 +114,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                //todo: move to different location so it doesn't mess up install
-                return Path.Combine(ExeFolderPath, $"{Path.GetFileName(_inMapFile)}.work");
+                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work");
             }
         }
 
@@ -268,17 +267,19 @@ namespace WC3MapDeprotector
                 {
                     if (!_extractedMapFiles.Contains(filename.ToUpper()) && archive.DiscoverFile(filename))
                     {
-                        ExtractFileFromArchive(archive, filename);
-                        _extractedMapFiles.Add(filename.ToUpper());
-
-                        File.AppendAllLines(WorkingListFileName, new string[] { filename });
-                        deprotectionResult.NewListFileEntriesFound++;
-                        _logEvent($"added to global listfile: {filename}");
-
-                        if (archive.UnknownFileNameHashes.Count == 0)
+                        if (ExtractFileFromArchive(archive, filename))
                         {
-                            process.Kill();
-                            return;
+                            _extractedMapFiles.Add(filename.ToUpper());
+
+                            File.AppendAllLines(WorkingListFileName, new string[] { filename });
+                            deprotectionResult.NewListFileEntriesFound++;
+                            _logEvent($"added to global listfile: {filename}");
+
+                            if (archive.UnknownFileNameHashes.Count == 0)
+                            {
+                                process.Kill();
+                                return;
+                            }
                         }
                     }
                 }
@@ -354,6 +355,7 @@ namespace WC3MapDeprotector
             {
                 File.WriteAllLines(WorkingListFileName, listFile);
             }
+            var globalListFileRainbowTable = IMPQArchiveExtensions.ConvertListFileToRainbowTable(listFile);
 
             if (!Directory.Exists(WorkingFolderPath))
             {
@@ -368,7 +370,9 @@ namespace WC3MapDeprotector
             {
                 if (ExtractFileFromArchive(inMPQArchive, "(listfile)"))
                 {
-                    inMPQArchive.ProcessListFile(File.ReadAllLines(Path.Combine(MapFilesPath, "(listfile)")).ToList());
+                    //will be slower for small list files, but safer in case of a giant embedded listfile
+                    var rainbowTable = IMPQArchiveExtensions.ConvertListFileToRainbowTable(File.ReadAllLines(Path.Combine(MapFilesPath, "(listfile)")).ToList());
+                    inMPQArchive.ProcessListFile(rainbowTable);
                 }
 
                 if (inMPQArchive.UnknownFileNameHashes.Count > 0)
@@ -379,7 +383,7 @@ namespace WC3MapDeprotector
                 try
                 {
                     inMPQArchive.ProcessDefaultListFile();
-                    inMPQArchive.ProcessListFile(listFile);
+                    inMPQArchive.ProcessListFile(globalListFileRainbowTable); //todo: move to static initializer so it's pre-calculated at app startup
                 }
                 catch (Exception e)
                 {
@@ -943,9 +947,21 @@ namespace WC3MapDeprotector
                 return false;
             }
 
-            if (extractedFileName == tempFileName)
+            bool isEmpty = false;
+            using (var reader = File.OpenRead(extractedFileName))
             {
-                if (!GetUnknownFileName_Memoized.TryGetValue(archiveFileHash, out var unknownName))
+                isEmpty = reader.Length == 0;
+            }
+            if (isEmpty)
+            {
+                File.Delete(extractedFileName);
+                return false;
+            }
+
+            var isUnknown = extractedFileName == tempFileName;
+            if (!GetUnknownFileName_Memoized.TryGetValue(archiveFileHash, out var unknownName))
+            {
+                if (isUnknown)
                 {
                     using (var stream = File.OpenRead(extractedFileName))
                     {
@@ -953,17 +969,24 @@ namespace WC3MapDeprotector
                     }
                     GetUnknownFileName_Memoized[archiveFileHash] = unknownName;
                 }
-
-                var unknownNameWithPath = Path.Combine(UnknownFilesPath, unknownName);
-                if (File.Exists(unknownNameWithPath))
-                {
-                    File.Delete(unknownNameWithPath);
-                }
-                Directory.CreateDirectory(Path.GetDirectoryName(unknownNameWithPath));
-                File.Move(tempFileName, unknownNameWithPath);
             }
 
-            _logEvent($"Extracted from MPQ: {fileName}");
+            if (!string.IsNullOrWhiteSpace(unknownName))
+            {
+                extractedFileName = Path.Combine(UnknownFilesPath, unknownName);
+                if (File.Exists(extractedFileName))
+                {
+                    File.Delete(extractedFileName);
+                }
+
+                if (isUnknown)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(extractedFileName));
+                    File.Move(tempFileName, extractedFileName);
+                }
+            }
+
+            _logEvent($"Extracted from MPQ: {extractedFileName}");
 
             return true;
         }
@@ -1034,22 +1057,24 @@ namespace WC3MapDeprotector
                                     var fileName = Path.Combine(directoryName, $"{bruteText}{fileExtension}");
                                     if (!_extractedMapFiles.Contains(fileName.ToUpper()) && archive.DiscoverFile(fileName))
                                     {
-                                        ExtractFileFromArchive(archive, finalHash);
-                                        File.AppendAllLines(WorkingListFileName, new string[] { fileName });
-                                        deprotectionResult.NewListFileEntriesFound++;
-                                        _logEvent($"added to global listfile: {fileName}");
-
-                                        var newUnknownCount = archive.UnknownFileNameHashes.Count;
-                                        if (unknownFileCount != newUnknownCount)
+                                        if (ExtractFileFromArchive(archive, finalHash))
                                         {
-                                            foundFileCount++;
-                                            unknownFileCount = newUnknownCount;
-                                            _logEvent($"unknown files remaining: {unknownFileCount}");
+                                            File.AppendAllLines(WorkingListFileName, new string[] { fileName });
+                                            deprotectionResult.NewListFileEntriesFound++;
+                                            _logEvent($"added to global listfile: {fileName}");
 
-                                            if (unknownFileCount == 0)
+                                            var newUnknownCount = archive.UnknownFileNameHashes.Count;
+                                            if (unknownFileCount != newUnknownCount)
                                             {
-                                                Settings.BruteForceCancellationToken.Cancel();
-                                                return;
+                                                foundFileCount++;
+                                                unknownFileCount = newUnknownCount;
+                                                _logEvent($"unknown files remaining: {unknownFileCount}");
+
+                                                if (unknownFileCount == 0)
+                                                {
+                                                    Settings.BruteForceCancellationToken.Cancel();
+                                                    return;
+                                                }
                                             }
                                         }
                                     }
@@ -1172,17 +1197,19 @@ namespace WC3MapDeprotector
                         var scannedFileName = directory + "\\" + fileName;
                         if (!_extractedMapFiles.Contains(scannedFileName.ToUpper()) && archive.DiscoverFile(scannedFileName))
                         {
-                            ExtractFileFromArchive(archive, scannedFileName);
-                            _extractedMapFiles.Add(scannedFileName.ToUpper());
-                            filesFound++;
-
-                            File.AppendAllLines(WorkingListFileName, new string[] { scannedFileName });
-                            deprotectionResult.NewListFileEntriesFound++;
-                            _logEvent($"added to global listfile: {scannedFileName}");
-
-                            if (archive.UnknownFileNameHashes.Count == 0)
+                            if (ExtractFileFromArchive(archive, scannedFileName))
                             {
-                                return;
+                                _extractedMapFiles.Add(scannedFileName.ToUpper());
+                                filesFound++;
+
+                                File.AppendAllLines(WorkingListFileName, new string[] { scannedFileName });
+                                deprotectionResult.NewListFileEntriesFound++;
+                                _logEvent($"added to global listfile: {scannedFileName}");
+
+                                if (archive.UnknownFileNameHashes.Count == 0)
+                                {
+                                    return;
+                                }
                             }
                         }
                     }

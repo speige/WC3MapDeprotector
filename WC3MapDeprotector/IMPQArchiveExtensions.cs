@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using CSharpLua;
+using System.Text;
 using War3Net.IO.Mpq;
 
 namespace WC3MapDeprotector
@@ -79,13 +80,33 @@ namespace WC3MapDeprotector
                 "AbilityBuffData.slk",
                 "conversation.json"
         };
+
+        public static Dictionary<ulong, string> ConvertListFileToRainbowTable(List<string> fileNames)
+        {
+            var result = new ConcurrentList<KeyValuePair<ulong, string>>();
+            Parallel.ForEach(fileNames, fileName =>
+            {
+                if (MPQHashing.TryHashFileName(fileName, out var hash))
+                {
+                    result.Add(new KeyValuePair<ulong, string>(hash, fileName));
+                }
+            });
+
+            return result.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value);
+        }
         
         public static void ProcessDefaultListFile(this IMPQArchive archive)
         {
-            archive.ProcessListFile(_defaultListFile);
+            archive.ProcessListFile_Slow(_defaultListFile);
         }
 
-        public static void ProcessListFile(this IMPQArchive archive, List<string> fileNames)
+        public static void ProcessListFile(this IMPQArchive archive, Dictionary<ulong, string> rainbowTable)
+        {
+            var verifiedFileNames = archive.UnknownFileNameHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            ProcessListFile_Slow(archive, verifiedFileNames);
+        }
+
+        public static void ProcessListFile_Slow(this IMPQArchive archive, List<string> fileNames)
         {
             foreach (var file in fileNames)
             {

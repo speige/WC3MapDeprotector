@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Reflection;
+﻿using System.Reflection;
 using War3Net.IO.Mpq;
 using System.Runtime.CompilerServices;
 
@@ -42,15 +41,24 @@ namespace WC3MapDeprotector
             newRightSeed = (uint)val + newRightHash + rightSeed + (rightSeed << 5) + 3;
         }
 
-        public static ulong HashFileName(string fileName)
+        public static bool TryHashFileName(string fileName, out ulong hash)
         {
-            fileName = fileName.ToUpper();
-            MPQHashing.StartHash(out var leftHash, out var leftSeed, out var rightHash, out var rightSeed);
-            foreach (var character in fileName)
+            hash = 0;
+
+            try
             {
-                MPQHashing.AddCharToHash(leftHash, leftSeed, rightHash, rightSeed, character, out leftHash, out leftSeed, out rightHash, out rightSeed);
+                fileName = fileName.ToUpper();
+                MPQHashing.StartHash(out var leftHash, out var leftSeed, out var rightHash, out var rightSeed);
+                foreach (var character in fileName)
+                {
+                    MPQHashing.AddCharToHash(leftHash, leftSeed, rightHash, rightSeed, character, out leftHash, out leftSeed, out rightHash, out rightSeed);
+                }
+                hash = MPQHashing.FinalizeHash(leftHash, rightHash);
+                return true;
             }
-            return MPQHashing.FinalizeHash(leftHash, rightHash);
+            catch { }
+
+            return false;
         }
     }
 }

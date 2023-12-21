@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Security.Policy;
 
 namespace WC3MapDeprotector
 {
@@ -47,7 +48,7 @@ namespace WC3MapDeprotector
             return StormLibrary.SFileExtractFile(_archiveHandle, archiveFileName.FileName, extractedFileName, 0);
         }
 
-        protected bool GetFileNameHash(string fileName, out ulong hash)
+        protected bool TryGetFileNameHash(string fileName, out ulong hash)
         {
             hash = 0;
 
@@ -57,11 +58,6 @@ namespace WC3MapDeprotector
                 IntPtr left = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 try
                 {
-                    if (IsFakeFile(fileName))
-                    {
-                        return false;
-                    }
-
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash1, right, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash2, left, (uint)Marshal.SizeOf(typeof(uint)), out var _);
 
@@ -81,7 +77,7 @@ namespace WC3MapDeprotector
 
         public bool DiscoverFile(string archiveFileName)
         {
-            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && GetFileNameHash(archiveFileName, out var hash))
+            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileNameHash(archiveFileName, out var hash))
             {
                 _hashToFileName[hash] = new FileNameEntry() { FileName = archiveFileName, IsUnknown = false };
                 return true;
@@ -101,17 +97,6 @@ namespace WC3MapDeprotector
         }
 
 
-        protected bool IsFakeFile(string archiveFileName)
-        {
-            // todo: avoid 2nd extraction later by returning TempFileName?
-            var tempFileName = Path.GetTempFileName();
-            StormLibrary.SFileExtractFile(_archiveHandle, archiveFileName, tempFileName, 0);
-            using (var reader = File.OpenRead(tempFileName))
-            {
-                return reader.Length == 0;
-            }
-        }
-
         public unsafe StormMPQArchive(string mpqFileName)
         {
             if (!StormLibrary.SFileOpenArchive(mpqFileName, 0, StormLibrary.SFileOpenArchiveFlags.AccessReadOnly, out _archiveHandle))
@@ -119,36 +104,21 @@ namespace WC3MapDeprotector
                 throw new Exception("Unable to open MPQ Archive");
             }
 
-            var fileNames = new List<string>();
             var findFileHandle = StormLibrary.SFileFindFirstFile(_archiveHandle, "*", out var findData, null);
             try
             {
                 do
                 {
-                    try
+                    var fileName = MarshalByteArrayAsString(findData.cFileName);
+                    if (TryGetFileNameHash(fileName, out var hash))
                     {
-                        var fileName = MarshalByteArrayAsString(findData.cFileName);
-                        fileNames.Add(fileName);
+                        _hashToFileName[hash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
                     }
-                    catch { }
                 } while (StormLibrary.SFileFindNextFile(findFileHandle, out findData));
             }
             finally
             {
                 StormLibrary.SFileFindClose(findFileHandle);
-            }
-
-            foreach (var fileName in fileNames)
-            {
-                if (IsFakeFile(fileName))
-                {
-                    continue;
-                }
-
-                if (GetFileNameHash(fileName, out var hash))
-                {
-                    _hashToFileName[hash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
-                }
             }
         }
 
