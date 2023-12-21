@@ -240,8 +240,8 @@ namespace WC3MapDeprotector
             var process = ExecuteCommand(Settings.WC3ExePath, $"-launch -loadfile \"{_inMapFile}\" -mapdiff 1 -testmapprofile WorldEdit -fixedseed 1");
             //Thread.Sleep(15 * 1000); // wait for WC3 to load
 
-            var directories = new HashSet<string>();
-            directories.AddRange(_extractedMapFiles.Select(x => Path.GetDirectoryName(x.ToUpper().Replace("/", "\\"))).Where(x => x != null));
+            var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            directories.AddRange(_extractedMapFiles.Select(x => Path.GetDirectoryName(x.Replace("/", "\\"))).Where(x => x != null));
             var originalDirectories = directories.ToList();
             foreach (var directory in originalDirectories)
             {
@@ -265,11 +265,11 @@ namespace WC3MapDeprotector
 
                 foreach (var filename in filesToTest)
                 {
-                    if (!_extractedMapFiles.Contains(filename.ToUpper()) && archive.DiscoverFile(filename))
+                    if (!_extractedMapFiles.Contains(filename) && archive.DiscoverFile(filename))
                     {
                         if (ExtractFileFromArchive(archive, filename))
                         {
-                            _extractedMapFiles.Add(filename.ToUpper());
+                            _extractedMapFiles.Add(filename);
 
                             File.AppendAllLines(WorkingListFileName, new string[] { filename });
                             deprotectionResult.NewListFileEntriesFound++;
@@ -299,7 +299,7 @@ namespace WC3MapDeprotector
                 throw new Exception($"Output Map File is locked. Please close any MPQ programs, WC3 Game, & WorldEditor and try again. File: {_outMapFile}");
             }
 
-            _extractedMapFiles = new HashSet<string>();
+            _extractedMapFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             _deprotectionResult = new DeprotectionResult();
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
 
@@ -398,7 +398,7 @@ namespace WC3MapDeprotector
 
                     if (success && inMPQArchive.DiscoveredFileNames.TryGetValue(hash, out var fileName))
                     {
-                        _extractedMapFiles.Add(fileName.ToUpper());
+                        _extractedMapFiles.Add(fileName);
                     }
                 }
 
@@ -410,7 +410,7 @@ namespace WC3MapDeprotector
                     _logEvent("Generating temporary map for SLK Recover: slk.w3x");
                     var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
                     var excludedFileNames = new string[] { "war3map.w3a", "war3map.w3b", "war3map.w3d" }; // can't be in slk.w3x or it will crash
-                    var minimumExtraRequiredFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !excludedFileNames.Contains(Path.GetFileName(x).ToUpper())).ToList();
+                    var minimumExtraRequiredFiles = Directory.GetFiles(MapFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !excludedFileNames.Contains(Path.GetFileName(x))).ToList();
 
                     BuildW3X(slkMpqArchive, MapFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
                     _logEvent("slk.w3x generated");
@@ -555,7 +555,6 @@ namespace WC3MapDeprotector
             var scriptFiles = Directory.GetFiles(MapFilesPath, "war3map.j", SearchOption.AllDirectories).Union(Directory.GetFiles(MapFilesPath, "war3map.lua", SearchOption.AllDirectories)).ToList();
             foreach (var scriptFile in scriptFiles)
             {
-                var baseFilePath = Path.Combine(MapFilesPath, Path.GetFileName(scriptFile).ToUpper());
                 var basePathScriptFileName = Path.Combine(MapFilesPath, Path.GetFileName(scriptFile));
                 if (File.Exists(basePathScriptFileName) && !string.Equals(scriptFile, basePathScriptFileName, StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -567,7 +566,7 @@ namespace WC3MapDeprotector
                     }
                 }
                 File.Move(scriptFile, basePathScriptFileName, true);
-                _logEvent($"Moving '{scriptFile}' to '{baseFilePath}'");
+                _logEvent($"Moving '{scriptFile}' to '{basePathScriptFileName}'");
             }
 
             File.Copy(Path.Combine(BaseMapFilesPath, "war3map.3ws"), Path.Combine(MapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"), true);
@@ -658,8 +657,8 @@ namespace WC3MapDeprotector
                         });
                         var mapFiles = map.GetAllFiles();
 
-                        var fileExtensionsToReplace = new string[] { ".w3i", ".wts", ".wtg", ".wct" };
-                        var filesToReplace = mapFiles.Where(x => fileExtensionsToReplace.Contains(Path.GetExtension(x.FileName).ToUpper())).ToList();
+                        var fileExtensionsToReplace = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".w3i", ".wts", ".wtg", ".wct" };
+                        var filesToReplace = mapFiles.Where(x => fileExtensionsToReplace.Contains(Path.GetExtension(x.FileName))).ToList();
                         foreach (var file in filesToReplace)
                         {
                             SaveDecompiledArchiveFile(file);
@@ -725,9 +724,9 @@ namespace WC3MapDeprotector
 
             BuildImportList();
 
-            var unknownFilesHash = new HashSet<string>(unknownFiles.Select(x => Path.Combine(UnknownFilesPath, x).Trim().ToUpper()));
+            var unknownFilesHash = new HashSet<string>(unknownFiles.Select(x => Path.Combine(UnknownFilesPath, x).Trim()), StringComparer.InvariantCultureIgnoreCase);
             var withUnknowns = Directory.GetFiles(MapFilesPath, "*", SearchOption.AllDirectories).ToList();
-            var finalFiles = withUnknowns.Where(x => !unknownFilesHash.Contains(x.Trim().ToUpper())).ToList();
+            var finalFiles = withUnknowns.Where(x => !unknownFilesHash.Contains(x.Trim())).ToList();
 
             BuildW3X(_outMapFile, MapFilesPath, finalFiles);
 
@@ -1055,7 +1054,7 @@ namespace WC3MapDeprotector
                                 lock (foundFileLock)
                                 {
                                     var fileName = Path.Combine(directoryName, $"{bruteText}{fileExtension}");
-                                    if (!_extractedMapFiles.Contains(fileName.ToUpper()) && archive.DiscoverFile(fileName))
+                                    if (!_extractedMapFiles.Contains(fileName) && archive.DiscoverFile(fileName))
                                     {
                                         if (ExtractFileFromArchive(archive, finalHash))
                                         {
@@ -1146,38 +1145,38 @@ namespace WC3MapDeprotector
             {
                 _logEvent("Performing deep scan for unknown files ...");
 
-                var baseFileNames = new HashSet<string>(fileNamesToTest.Select(x => Path.GetFileName(x).ToUpper().Trim('\\')));
+                var baseFileNames = new HashSet<string>(fileNamesToTest.Select(x => Path.GetFileName(x).Trim('\\')), StringComparer.InvariantCultureIgnoreCase);
 
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP") || x.EndsWith(".TGA")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP", StringComparison.InvariantCultureIgnoreCase) || x.EndsWith(".TGA", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add($"DIS{Path.GetFileName(fileName)}");
                 }
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL") || x.EndsWith(".MDX")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL", StringComparison.InvariantCultureIgnoreCase) || x.EndsWith(".MDX", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add($"{Path.GetFileNameWithoutExtension(fileName)}_PORTRAIT{Path.GetExtension(fileName)}");
                 }
 
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".BLP", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add(Path.ChangeExtension(fileName, ".TGA"));
                 }
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".TGA")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".TGA", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add(Path.ChangeExtension(fileName, ".BLP"));
                 }
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDL", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add($"{Path.GetFileNameWithoutExtension(fileName)}.MDX");
                 }
-                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDX")).ToList())
+                foreach (var fileName in baseFileNames.Where(x => x.EndsWith(".MDX", StringComparison.InvariantCultureIgnoreCase)).ToList())
                 {
                     baseFileNames.Add($"{Path.GetFileNameWithoutExtension(fileName)}.MDL");
                 }
 
-                var directories = new HashSet<string>();
+                var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 directories.Add(@"REPLACEABLETEXTURES\COMMANDBUTTONSDISABLED");
-                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct());
-                directories.AddRange(fileNamesToTest.Select(x => Path.GetDirectoryName(x.ToUpper().Replace("/", "\\").Trim('\\'))).Where(x => x != null));
+                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x)).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct());
+                directories.AddRange(fileNamesToTest.Select(x => Path.GetDirectoryName(x.Replace("/", "\\").Trim('\\'))).Where(x => x != null));
                 foreach (var directory in directories.ToList())
                 {
                     var split = directory.Split('\\');
@@ -1187,30 +1186,35 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                var allFileNamePermutations = new HashSet<string>();
-                foreach (var directory in directories)
+                var rainbowTable = new ConcurrentList<KeyValuePair<ulong, string>>();
+                Parallel.ForEach(directories, directory =>
                 {
                     _logEvent($"Deep scanning - {directory}");
-
                     foreach (var fileName in baseFileNames)
                     {
                         var scannedFileName = directory + "\\" + fileName;
-                        if (!_extractedMapFiles.Contains(scannedFileName.ToUpper()) && archive.DiscoverFile(scannedFileName))
+                        if (MPQHashing.TryHashFileName(scannedFileName, out var hash))
                         {
-                            if (ExtractFileFromArchive(archive, scannedFileName))
-                            {
-                                _extractedMapFiles.Add(scannedFileName.ToUpper());
-                                filesFound++;
+                            rainbowTable.Add(new KeyValuePair<ulong, string>(hash, scannedFileName));
+                        }
+                    }
+                });
 
-                                File.AppendAllLines(WorkingListFileName, new string[] { scannedFileName });
-                                deprotectionResult.NewListFileEntriesFound++;
-                                _logEvent($"added to global listfile: {scannedFileName}");
+                var discoveredFiles = archive.ProcessListFile(rainbowTable.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value));
+                foreach (var discoveredFile in discoveredFiles)
+                {
+                    if (!_extractedMapFiles.Contains(discoveredFile) && ExtractFileFromArchive(archive, discoveredFile))
+                    {
+                        _extractedMapFiles.Add(discoveredFile);
+                        filesFound++;
 
-                                if (archive.UnknownFileNameHashes.Count == 0)
-                                {
-                                    return;
-                                }
-                            }
+                        File.AppendAllLines(WorkingListFileName, new string[] { discoveredFile });
+                        deprotectionResult.NewListFileEntriesFound++;
+                        _logEvent($"added to global listfile: {discoveredFile}");
+
+                        if (archive.UnknownFileNameHashes.Count == 0)
+                        {
+                            return;
                         }
                     }
                 }
@@ -2026,7 +2030,7 @@ namespace WC3MapDeprotector
             using (var writer = new StringWriter())
             {
                 var globalVariableRenames = new Dictionary<string, JassIdentifierNameSyntax>();
-                var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name));
+                var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name), StringComparer.InvariantCultureIgnoreCase);
                 foreach (var declaration in parsed.Declarations)
                 {
                     if (declaration is JassGlobalDeclarationListSyntax)
@@ -2051,11 +2055,11 @@ namespace WC3MapDeprotector
                                 baseName = baseName.Substring(3);
                             }
 
-                            var shortTypes = new Dictionary<string, string> { { "rect", "rct" }, { "sound", "snd" }, { "trigger", "trg" }, { "unit", "unit" }, { "destructable", "dest" }, { "camerasetup", "cam" }, { "item", "item" }, { "integer", "int" }, { "boolean", "bool" } };
+                            var shortTypes = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase) { { "rect", "rct" }, { "sound", "snd" }, { "trigger", "trg" }, { "unit", "unit" }, { "destructable", "dest" }, { "camerasetup", "cam" }, { "item", "item" }, { "integer", "int" }, { "boolean", "bool" } };
                             var shortTypeName = typeName;
-                            if (shortTypes.ContainsKey(typeName.ToUpper()))
+                            if (shortTypes.ContainsKey(typeName))
                             {
-                                shortTypeName = shortTypes[typeName.ToUpper()];
+                                shortTypeName = shortTypes[typeName];
                             }
                             var newName = isGlobalGenerated ? "gg_" : "udg_";
                             if (!baseName.StartsWith(typeName, StringComparison.InvariantCultureIgnoreCase) && !baseName.StartsWith(shortTypeName, StringComparison.InvariantCultureIgnoreCase))
@@ -2075,7 +2079,7 @@ namespace WC3MapDeprotector
                                 counter++;
                             }
                             var uniqueName = $"{newName}_{counter}";
-                            uniqueNames.Add(uniqueName.ToUpper());
+                            uniqueNames.Add(uniqueName);
                             globalVariableRenames[originalName] = new JassIdentifierNameSyntax(uniqueName);
                         }
                     }
@@ -2557,7 +2561,7 @@ endfunction
 
         protected HashSet<string> ScanMapForExternalFileReferences(Map map, List<string> fileExtensions)
         {
-            HashSet<string> result = new HashSet<string>();
+            HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
             if (map == null)
             {
@@ -2571,8 +2575,8 @@ endfunction
 
             var objectDataJson = map.GetAllObjectData_JSON();
             var deserialized = (JObject)JsonConvert.DeserializeObject(objectDataJson);
-            var extensions = new HashSet<string>(fileExtensions.Select(x => x.ToUpper()));
-            result.AddRange(deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).Where(x => extensions.Contains(Path.GetExtension(x).ToUpper())));
+            var extensions = new HashSet<string>(fileExtensions, StringComparer.InvariantCultureIgnoreCase);
+            result.AddRange(deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).Where(x => extensions.Contains(Path.GetExtension(x))));
             return result;
         }
 
@@ -2581,12 +2585,12 @@ endfunction
 
         protected HashSet<string> ScanFilesForExternalFileReferences(List<string> filenames)
         {
-            var extensionsToSkip = new HashSet<string>(".mp3,.blp,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.ToUpper()));
+            var extensionsToSkip = new HashSet<string>(".mp3,.blp,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries), StringComparer.InvariantCultureIgnoreCase);
 
-            var result = new HashSet<string>();
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             Parallel.ForEach(filenames, filename =>
             {
-                if (!File.Exists(filename) || extensionsToSkip.Contains(Path.GetExtension(filename).ToUpper()))
+                if (!File.Exists(filename) || extensionsToSkip.Contains(Path.GetExtension(filename)))
                 {
                     return;
                 }
@@ -2599,7 +2603,7 @@ endfunction
                     var mdxMatch = RegexScan_MDX().Match(line);
                     if (mdxMatch.Success)
                     {
-                        result.Add($"{mdxMatch.Groups[1].Value}.mdx".ToUpper());
+                        result.Add($"{mdxMatch.Groups[1].Value}.mdx");
                     }
 
                     var fileExtensions = _commonFileExtensions.Aggregate((x, y) => $"{x}|{y}");
@@ -2607,7 +2611,7 @@ endfunction
                     foreach (Match match in matches)
                     {
                         var path = match.Groups[1].Value;
-                        var ext = match.Groups[2].Value.ToUpper();
+                        var ext = match.Groups[2].Value;
 
                         var invalidFileNameChars = Regex.Match(match.Value, @".*[""<>:|?*/](.*)\.(" + ext + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled);
                         if (invalidFileNameChars.Success)
@@ -2623,17 +2627,17 @@ endfunction
 
                         if (path.Contains("="))
                         {
-                            result.Add($"{path.Substring(path.IndexOf("=") + 1)}.{ext}".ToUpper());
+                            result.Add($"{path.Substring(path.IndexOf("=") + 1)}.{ext}");
                         }
 
                         path = path.Replace("\\\\", "\\").Trim();
-                        result.Add($"{path}.{ext}".ToUpper());
+                        result.Add($"{path}.{ext}");
 
                         var basename = path.Substring(path.LastIndexOf("\\") + 1).Trim();
                         while (basename.Length > 0 && !((basename[0] >= 'A' && basename[0] <= 'Z') || (basename[0] >= 'a' && basename[0] <= 'z')))
                         {
                             basename = basename.Substring(1);
-                            result.Add($"{basename}.{ext}".ToUpper());
+                            result.Add($"{basename}.{ext}");
                         }
                     }
 
@@ -2641,9 +2645,9 @@ endfunction
                     foreach (Match match in matches2)
                     {
                         var path = match.Groups[1].Value;
-                        var ext = match.Groups[2].Value.ToUpper();
+                        var ext = match.Groups[2].Value;
                         path = path.Replace("\\\\", "\\").Trim();
-                        result.Add($"{path}.{ext}".ToUpper());
+                        result.Add($"{path}.{ext}");
                     }
                 }
             });

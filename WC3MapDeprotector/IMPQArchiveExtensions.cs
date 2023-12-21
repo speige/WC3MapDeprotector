@@ -95,23 +95,29 @@ namespace WC3MapDeprotector
             return result.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value);
         }
         
-        public static void ProcessDefaultListFile(this IMPQArchive archive)
+        public static List<string> ProcessDefaultListFile(this IMPQArchive archive)
         {
-            archive.ProcessListFile_Slow(_defaultListFile);
+            return archive.ProcessListFile_Slow(_defaultListFile);
         }
 
-        public static void ProcessListFile(this IMPQArchive archive, Dictionary<ulong, string> rainbowTable)
+        public static List<string> ProcessListFile(this IMPQArchive archive, Dictionary<ulong, string> rainbowTable)
         {
             var verifiedFileNames = archive.UnknownFileNameHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            ProcessListFile_Slow(archive, verifiedFileNames);
+            return ProcessListFile_Slow(archive, verifiedFileNames);
         }
 
-        public static void ProcessListFile_Slow(this IMPQArchive archive, List<string> fileNames)
+        public static List<string> ProcessListFile_Slow(this IMPQArchive archive, List<string> fileNames)
         {
+            List<string> result = new List<string>();
             foreach (var file in fileNames)
             {
-                archive.DiscoverFile(file);
+                if (archive.DiscoverFile(file))
+                {
+                    result.Add(file);
+                }
             }
+
+            return result;
         }
 
         private static string PredictImageFileExtension(Stream stream)
