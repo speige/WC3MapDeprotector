@@ -105,4 +105,10 @@
     <ProjectReference Include="..\War3Net.CodeAnalysis.Decompilers\War3Net.CodeAnalysis.Decompilers.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Reference Include="FastMDX">
+      <HintPath>FastMDX.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
 </Project>

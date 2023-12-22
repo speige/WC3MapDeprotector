@@ -105,19 +105,20 @@ namespace WC3MapDeprotector
         {
             get
             {
-
                 return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WC3MapDeprotector", "listfile.txt");
             }
         }
 
+        protected string WorkingFolderUniquePath = Path.GetFileNameWithoutExtension(Path.GetTempFileName());
         protected string WorkingFolderPath
         {
             get
             {
-                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work");
+                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work", WorkingFolderUniquePath);
             }
         }
 
+        //todo: Delete folders from here on startup if older than 1 week (created or last accessed?)
         protected string TempFolderPath
         {
             get
@@ -1022,41 +1023,29 @@ namespace WC3MapDeprotector
                 var simdLength = Vector<int>.Count;
                 Parallel.ForEach(directories, new ParallelOptions() { CancellationToken = Settings.BruteForceCancellationToken.Token }, directoryName =>
                 {
-                    MPQHashing.StartHash(out var leftDirectoryHash, out var leftDirectorySeed, out var rightDirectoryHash, out var rightDirectorySeed);
-                    for (var i = 0; i < directoryName.Length; i++)
+                    var directoryHash = new MPQFileNameHash();
+                    if (!directoryHash.TryAddString(directoryName))
                     {
-                        MPQHashing.AddCharToHash(leftDirectoryHash, leftDirectorySeed, rightDirectoryHash, rightDirectorySeed, directoryName[i], out leftDirectoryHash, out leftDirectorySeed, out rightDirectoryHash, out rightDirectorySeed);
+                        return;
                     }
 
                     var testCallback = (string bruteText) =>
                     {
                         //todo: refactor to save file prefix hash so it only needs to update based on the most recent character changed
-                        var leftBruteTextHash = leftDirectoryHash;
-                        var rightBruteTextHash = rightDirectoryHash;
-                        var leftBruteTextSeed = leftDirectorySeed;
-                        var rightBruteTextSeed = rightDirectorySeed;
-                        for (var i = 0; i < bruteText.Length; i++)
-                        {
-                            MPQHashing.AddCharToHash(leftBruteTextHash, leftBruteTextSeed, rightBruteTextHash, rightBruteTextSeed, bruteText[i], out leftBruteTextHash, out leftBruteTextSeed, out rightBruteTextHash, out rightBruteTextSeed);
-                        }
+                        var bruteTextHash = directoryHash;
+                        bruteTextHash.AddString(bruteText);
 
                         foreach (var fileExtension in extensions)
                         {
-                            var leftFileExtensionHash = leftBruteTextHash;
-                            var rightFileExtensionHash = rightBruteTextHash;
-                            var leftFileExtensionSeed = leftBruteTextSeed;
-                            var rightFileExtensionSeed = rightBruteTextSeed;
-                            for (var i = 0; i < fileExtension.Length; i++)
-                            {
-                                MPQHashing.AddCharToHash(leftFileExtensionHash, leftFileExtensionSeed, rightFileExtensionHash, rightFileExtensionSeed, fileExtension[i], out leftFileExtensionHash, out leftFileExtensionSeed, out rightFileExtensionHash, out rightFileExtensionSeed);
-                            }
-                            var finalHash = MPQHashing.FinalizeHash(leftFileExtensionHash, rightFileExtensionHash);
-                            if (unknownHashes.Contains(finalHash))
+                            var fileHash = bruteTextHash;
+                            fileHash.AddString(fileExtension);
+                            var hash = fileHash.GetValue();
+                            if (unknownHashes.Contains(hash))
                             {
                                 lock (foundFileLock)
                                 {
                                     var fileName = Path.Combine(directoryName, $"{bruteText}{fileExtension}");
-                                    if (!_extractedMapFiles.Contains(fileName) && ExtractFileFromArchive(archive, finalHash))
+                                    if (!_extractedMapFiles.Contains(fileName) && ExtractFileFromArchive(archive, hash))
                                     {
                                         File.AppendAllLines(WorkingListFileName, new string[] { fileName });
                                         deprotectionResult.NewListFileEntriesFound++;
@@ -1189,12 +1178,19 @@ namespace WC3MapDeprotector
                 Parallel.ForEach(directories, directory =>
                 {
                     _logEvent($"Deep scanning - {directory}");
+
+                    var directoryHash = new MPQFileNameHash();
+                    if (!directoryHash.TryAddString(directory))
+                    {
+                        return;
+                    }
+
                     foreach (var fileName in baseFileNames)
                     {
-                        var scannedFileName = directory + "\\" + fileName;
-                        if (MPQHashing.TryHashFileName(scannedFileName, out var hash))
+                        var fileHash = directoryHash;
+                        if (fileHash.TryAddString($@"\{fileName}"))
                         {
-                            rainbowTable.Add(new KeyValuePair<ulong, string>(hash, scannedFileName));
+                            rainbowTable.Add(new KeyValuePair<ulong, string>(fileHash.GetValue(), $"{directory}\\{fileName}"));
                         }
                     }
                 });
@@ -2597,6 +2593,27 @@ endfunction
                 _logEvent($"scanning {filename}");
                 using (var file = new StreamReader(filename))
                 {
+                    if (string.Equals(Path.GetExtension(filename), ".mdx", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        try
+                        {
+                            var mdx = new FastMDX.MDX(file.BaseStream);
+                            if (mdx.Textures != null)
+                            {
+                                foreach (var texture in mdx.Textures)
+                                {
+                                    result.Add(texture.Name);
+                                }
+                            }
+                            result.Add(mdx.Info.Name + ".mdx");
+                        }
+                        catch
+                        {
+                            _logEvent($"Error parsing MDX file: {filename}");
+                        }
+                        file.BaseStream.Position = 0;
+                    }
+
                     var line = file.ReadToEnd();
 
                     var mdxMatch = RegexScan_MDX().Match(line);

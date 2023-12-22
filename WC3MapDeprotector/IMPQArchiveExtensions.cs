@@ -86,9 +86,10 @@ namespace WC3MapDeprotector
             var result = new ConcurrentList<KeyValuePair<ulong, string>>();
             Parallel.ForEach(fileNames, fileName =>
             {
-                if (MPQHashing.TryHashFileName(fileName, out var hash))
+                var hash = new MPQFileNameHash();
+                if (hash.TryAddString(fileName))
                 {
-                    result.Add(new KeyValuePair<ulong, string>(hash, fileName));
+                    result.Add(new KeyValuePair<ulong, string>(hash.GetValue(), fileName));
                 }
             });
 
