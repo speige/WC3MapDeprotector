@@ -43,7 +43,7 @@ namespace WC3MapDeprotector
         protected readonly List<string> _nativeEditorFunctions = new List<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile" };
 
         protected const string ATTRIB = "Map deprotected by WC3MapDeprotector https://github.com/speige/WC3MapDeprotector\r\n\r\n";
-        protected readonly List<string> _commonFileExtensions = new List<string>() { "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct().ToList();
+        protected readonly List<string> _commonFileExtensions = new List<string>() { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct().ToList();
 
         protected string _inMapFile;
         protected readonly string _outMapFile;
@@ -80,7 +80,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return Path.Combine(ExeFolderPath, "SilkObjectOptimizer");
+                return Path.Combine(WorkingFolderPath, "SilkObjectOptimizer");
             }
         }
 
@@ -312,12 +312,6 @@ namespace WC3MapDeprotector
                 ZipFile.ExtractToDirectory(baseMapFilesZip, BaseMapFilesPath, true);
             }
 
-            var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
-            if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
-            {
-                ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
-            }
-
             if (!File.Exists(_inMapFile))
             {
                 throw new FileNotFoundException($"Cannot find source map file: {_inMapFile}");
@@ -408,6 +402,12 @@ namespace WC3MapDeprotector
                 var slkFiles = Directory.GetFiles(MapFilesPath, "*.slk", SearchOption.AllDirectories);
                 if (slkFiles.Length > 0)
                 {
+                    var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
+                    if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
+                    {
+                        ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
+                    }
+
                     _logEvent("Generating temporary map for SLK Recover: slk.w3x");
                     var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
                     var excludedFileNames = new string[] { "war3map.w3a", "war3map.w3b", "war3map.w3d" }; // can't be in slk.w3x or it will crash
@@ -834,7 +834,7 @@ namespace WC3MapDeprotector
                 mpqFile.CompressionType = MpqCompressionType.ZLib;
 
                 /*
-                // not supported by War3Net yet
+                // not supported by War3Net yet [use StormLib?]
                 if (string.Equals(Path.GetExtension(shortFileName), ".wav", StringComparison.InvariantCultureIgnoreCase))
                 {
                     mpqFile.CompressionType = MpqCompressionType.Huffman;
