@@ -57,20 +57,28 @@ namespace WC3MapDeprotector
 
         protected void AddToGlobalListFile(string fileName)
         {
+            AddToGlobalListFile(new List<string>() { fileName });
+        }
+
+        protected void AddToGlobalListFile(List<string> fileNames)
+        {
             try
             {
-                File.AppendAllLines(WorkingListFileName, new string[] { fileName });
+                File.AppendAllLines(WorkingListFileName, fileNames);
             }
             catch
             {
                 //can throw due to race condition if multiple instances deprotecting simultaneously
             }
 
-            if (MPQFileNameHash.TryCalculate(fileName, out var hash))
+            foreach (var fileName in fileNames)
             {
-                globalListFileRainbowTable[hash] = fileName;
+                if (MPQFileNameHash.TryCalculate(fileName, out var hash))
+                {
+                    globalListFileRainbowTable[hash] = fileName;
+                }
+                _logEvent($"added to global listfile: {fileName}");
             }
-            _logEvent($"added to global listfile: {fileName}");
         }
 
         protected static Dictionary<ulong, string> globalListFileRainbowTable;
@@ -173,7 +181,8 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work_debugging", WorkingFolderUniquePath);
+                var benchmarkSuffix = benchmarkUnknownRecovery ? "_benchmark" : "";
+                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work{benchmarkSuffix}", WorkingFolderUniquePath);
             }
         }
 
@@ -295,7 +304,7 @@ namespace WC3MapDeprotector
             return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
         }
 
-        protected async Task LiveGameScanForUnknownFiles(IMPQArchive archive, DeprotectionResult deprotectionResult)
+        protected async Task LiveGameScanForUnknownFiles(IMPQArchive archive)
         {
             var process = ExecuteCommand(Settings.WC3ExePath, $"-launch -loadfile \"{_inMapFile}\" -mapdiff 1 -testmapprofile WorldEdit -fixedseed 1");
             //Thread.Sleep(15 * 1000); // wait for WC3 to load
@@ -330,7 +339,7 @@ namespace WC3MapDeprotector
                         {
                             _extractedMapFiles.Add(filename);
 
-                            deprotectionResult.NewListFileEntriesFound++;
+                            _deprotectionResult.NewListFileEntriesFound++;
                             AddToGlobalListFile(filename);
 
                             if (archive.UnknownFileNameHashes.Count == 0)
@@ -484,14 +493,20 @@ namespace WC3MapDeprotector
 
                     var unknownFileHashesBackup = inMPQArchive.UnknownFileNameHashes.ToList();
                     var allExternalReferencedFiles = war3NetExternalFileReferences.SelectMany(x => x.Value).Concat(otherExternalReferencedFiles.SelectMany(x => x.Value)).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-                    DiscoverUnknownFileNames(inMPQArchive, allExternalReferencedFiles, _deprotectionResult);
+                    DiscoverUnknownFileNames(inMPQArchive, allExternalReferencedFiles);
+
+                    var recoveredHashes = new HashSet<ulong>(unknownFileHashesBackup.Except(inMPQArchive.UnknownFileNameHashes));
+                    var recoveredFileNames = inMPQArchive.DiscoveredFileNames.Where(x => recoveredHashes.Contains(x.Key)).Select(x => x.Value).ToList();
+
+                    AddToGlobalListFile(recoveredFileNames);
+                    _deprotectionResult.NewListFileEntriesFound += recoveredFileNames.Count;
+
+
                     if (benchmarkUnknownRecovery)
                     {
-                        var recoveredHashes = new HashSet<ulong>(unknownFileHashesBackup.Except(inMPQArchive.UnknownFileNameHashes));
-                        var recoveredFileNames = inMPQArchive.DiscoveredFileNames.Where(x => recoveredHashes.Contains(x.Key)).Select(x => x.Value).ToList();
                         var scannedFileNameMappedToSources = war3NetExternalFileReferences.Concat(otherExternalReferencedFiles).SelectMany(x => x.Value.Select(y => new KeyValuePair<string, string>(y, x.Key))).GroupBy(x => Path.GetFileName(x.Key), StringComparer.InvariantCultureIgnoreCase).ToDictionary(x => x.Key, x => x.Select(y => y.Value).ToList(), StringComparer.InvariantCultureIgnoreCase);
                         var usefulSources = recoveredFileNames.SelectMany(x => scannedFileNameMappedToSources.TryGetValue(Path.GetFileName(x), out var sources) ? sources : new List<string>()).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-                        var allSources = scannedFileNameMappedToSources.SelectMany(x => x.Value).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+                        var allSources = war3NetExternalFileReferences.Concat(otherExternalReferencedFiles).Select(x => x.Key).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
                         var uselessSources = allSources.Except(usefulSources).ToList();
                         File.WriteAllLines(Path.Combine(WorkingFolderPath, "unknownScanning_usefulSources.log"), usefulSources);
                         File.WriteAllLines(Path.Combine(WorkingFolderPath, "unknownScanning_uselessSources.log"), uselessSources);
@@ -508,7 +523,12 @@ namespace WC3MapDeprotector
 
                 if (Settings.BruteForceUnknowns && inMPQArchive.UnknownFileNameHashes.Count > 0)
                 {
-                    BruteForceUnknownFileNames(inMPQArchive, _deprotectionResult);
+                    BruteForceUnknownFileNames(inMPQArchive);
+                }
+
+                if (benchmarkUnknownRecovery)
+                {
+                    throw new Exception("Done benchmarking. Unknowns left: " + inMPQArchive.UnknownFileNameHashes.Count);
                 }
 
                 _deprotectionResult.UnknownFileCount = inMPQArchive.UnknownFileNameHashes.Count;
@@ -520,13 +540,8 @@ namespace WC3MapDeprotector
                 }
             }
 
-            if (benchmarkUnknownRecovery)
-            {
-                throw new Exception("Done benchmarking");
-            }
-
             DeleteAls();
-            PatchW3I(_deprotectionResult);
+            PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
             File.Delete(Path.Combine(MapFilesPath, "war3mapunits.doo"));
@@ -877,7 +892,7 @@ namespace WC3MapDeprotector
             var mpqArchive = new MpqArchiveBuilder();
             foreach (var file in filesToInclude)
             {
-                var shortFileName = file.Replace($"{baseFolder}{Path.DirectorySeparatorChar}", "");
+                var shortFileName = file.Replace($"{baseFolder}\\", "");
                 var mpqFile = MpqFile.New(File.OpenRead(file), shortFileName);
                 mpqFile.CompressionType = MpqCompressionType.ZLib;
 
@@ -1053,16 +1068,16 @@ namespace WC3MapDeprotector
         protected List<string> GetUnknownFileNames()
         {
             Directory.CreateDirectory(UnknownFilesPath);
-            return Directory.GetFiles(UnknownFilesPath, "*", SearchOption.TopDirectoryOnly).Select(x => x.Replace($"{UnknownFilesPath}{Path.DirectorySeparatorChar}", "")).ToList();
+            return Directory.GetFiles(UnknownFilesPath, "*", SearchOption.TopDirectoryOnly).Select(x => x.Replace($"{UnknownFilesPath}\\", "")).ToList();
         }
 
-        protected void BruteForceUnknownFileNames(IMPQArchive archive, DeprotectionResult deprotectionResult)
+        protected void BruteForceUnknownFileNames(IMPQArchive archive)
         {
             //todo: Convert to Vector<> variables to support SIMD architecture speed up
             var unknownFileCount = archive.UnknownFileNameHashes.Count;
             _logEvent($"unknown files remaining: {unknownFileCount}");
 
-            var directories = archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+            var directories = archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.Trim('\\')).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
             var extensions = GetPossibleUnknownFileNameExtensions();
 
             const int maxFileNameLength = 75;
@@ -1083,7 +1098,7 @@ namespace WC3MapDeprotector
                 Parallel.ForEach(directories, new ParallelOptions() { CancellationToken = Settings.BruteForceCancellationToken.Token }, directoryName =>
                 {
                     var directoryHash = new MPQFileNameHash();
-                    if (!directoryHash.TryAddString(directoryName))
+                    if (!directoryHash.TryAddString(directoryName + "\\"))
                     {
                         return;
                     }
@@ -1106,7 +1121,7 @@ namespace WC3MapDeprotector
                                     var fileName = Path.Combine(directoryName, $"{bruteText}{fileExtension}");
                                     if (!_extractedMapFiles.Contains(fileName) && ExtractFileFromArchive(archive, hash))
                                     {
-                                        deprotectionResult.NewListFileEntriesFound++;
+                                        _deprotectionResult.NewListFileEntriesFound++;
                                         AddToGlobalListFile(fileName);
 
                                         var newUnknownCount = archive.UnknownFileNameHashes.Count;
@@ -1224,7 +1239,7 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        protected void DiscoverUnknownFileNames(IMPQArchive archive, List<string> fileNamesToTest, DeprotectionResult deprotectionResult)
+        protected void DiscoverUnknownFileNames(IMPQArchive archive, List<string> fileNamesToTest)
         {
             var filesFound = 0;
             try
@@ -1235,7 +1250,7 @@ namespace WC3MapDeprotector
 
                 var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 directories.Add(@"REPLACEABLETEXTURES\COMMANDBUTTONSDISABLED");
-                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x)).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct(StringComparer.InvariantCultureIgnoreCase));
+                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x)).Select(x => x.Trim('\\')).Distinct(StringComparer.InvariantCultureIgnoreCase));
                 directories.AddRange(fileNamesToTest.Select(x => Path.GetDirectoryName(x.Replace("/", "\\").Trim('\\'))).Where(x => x != null));
                 foreach (var directory in directories.ToList())
                 {
@@ -1246,44 +1261,43 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                var rainbowTable = new ConcurrentList<KeyValuePair<ulong, string>>();
+                var finishedSearching = false;
+                var unknownHashes = new HashSet<ulong>(archive.UnknownFileNameHashes);
                 Parallel.ForEach(directories, directory =>
                 {
                     _logEvent($"Deep scanning - {directory}");
 
+                    var hashPrefix = !string.IsNullOrWhiteSpace(directory) ? $"{directory}\\" : "";
                     var directoryHash = new MPQFileNameHash();
-                    if (!directoryHash.TryAddString(directory))
+                    if (!directoryHash.TryAddString(hashPrefix))
                     {
                         return;
                     }
 
                     foreach (var fileName in baseFileNames)
                     {
-                        var fileHash = directoryHash;
-                        if (fileHash.TryAddString($@"\{fileName}"))
-                        {
-                            rainbowTable.Add(new KeyValuePair<ulong, string>(fileHash.GetValue(), $"{directory}\\{fileName}"));
-                        }
-                    }
-                });
-
-                var discoveredFiles = archive.ProcessListFile(rainbowTable.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value));
-                foreach (var discoveredFile in discoveredFiles)
-                {
-                    if (!_extractedMapFiles.Contains(discoveredFile) && ExtractFileFromArchive(archive, discoveredFile))
-                    {
-                        _extractedMapFiles.Add(discoveredFile);
-                        filesFound++;
-
-                        deprotectionResult.NewListFileEntriesFound++;
-                        AddToGlobalListFile(discoveredFile);
-
-                        if (archive.UnknownFileNameHashes.Count == 0)
+                        if (finishedSearching)
                         {
                             return;
                         }
+
+                        var fileHash = directoryHash;
+                        if (fileHash.TryAddString(fileName) && unknownHashes.Contains(fileHash.GetValue()))
+                        {
+                            var fullFileName = $"{hashPrefix}{fileName}";
+                            if (ExtractFileFromArchive(archive, fullFileName))
+                            {
+                                _extractedMapFiles.Add(fullFileName);
+                                filesFound++;
+
+                                if (archive.UnknownFileNameHashes.Count == 0)
+                                {
+                                    finishedSearching = true;
+                                }
+                            }
+                        }
                     }
-                }
+                });
             }
             finally
             {
@@ -2572,7 +2586,7 @@ endfunction
             }
         }
 
-        protected void PatchW3I(DeprotectionResult deprotectionResult)
+        protected void PatchW3I()
         {
             var w3ipath = Path.Combine(MapFilesPath, "war3map.w3i");
             _logEvent("Patching war3map.w3i...");
@@ -2583,7 +2597,7 @@ endfunction
                 w3i.Read(c, 0, 1);
                 if (c[0] == 0xFF)
                 {
-                    deprotectionResult.CountOfProtectionsFound++;
+                    _deprotectionResult.CountOfProtectionsFound++;
                     w3i.Seek(-1, SeekOrigin.Current);
                     w3i.Write(new byte[] { 0x00, 0x00, 0x00, 0x00 }, 0, 4);
                     _logEvent("war3map.w3i patched successfully");
@@ -2600,7 +2614,7 @@ endfunction
             _logEvent("Building war3map.imp...");
             var files = Directory.GetFiles(MapFilesPath, "*", SearchOption.AllDirectories).ToList();
             var newfiles = new List<string>();
-            foreach (var file in files.Select(x => x.Replace($"{MapFilesPath}{Path.DirectorySeparatorChar}", "")))
+            foreach (var file in files.Select(x => x.Replace($"{MapFilesPath}\\", "")))
             {
                 if (!Regex.IsMatch(file, @"^war3(map|campaign)(\.(w[a-zA-Z0-9]{2}|doo|shd|mmp|j|imp)|misc\.txt|skin\.txt|map\.blp|units\.doo|extra\.txt)$", RegexOptions.IgnoreCase))
                 {
@@ -2741,11 +2755,13 @@ endfunction
                 if (string.Equals(Path.GetExtension(filename), ".mdx", StringComparison.InvariantCultureIgnoreCase))
                 {
                     result["__MDXSCAN__" + filename] = ScanMDXForExternalFileReferences(filename);
+                    return;
                 }
 
                 if (string.Equals(Path.GetExtension(filename), ".mdl", StringComparison.InvariantCultureIgnoreCase))
                 {
                     result["__MDLSCAN__" + filename] = ScanMDLForExternalFileReferences(filename);
+                    return;
                 }
 
                 _logEvent($"scanning {filename}");
@@ -2754,7 +2770,7 @@ endfunction
                     var line = file.ReadToEnd();
 
                     var regexFoundFiles = new List<string>();
-                    var fileExtensions = unknownFileExtensions.Distinct(StringComparer.InvariantCultureIgnoreCase).Aggregate((x, y) => $"{x}|{y}");
+                    var fileExtensions = unknownFileExtensions.Select(x => x.Trim('.')).Distinct(StringComparer.InvariantCultureIgnoreCase).Aggregate((x, y) => $"{x}|{y}");
                     var matches = Regex.Matches(line, @"([ -~]{1,1000}?)\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled).Concat(Regex.Matches(line, @"([ -~]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled)).ToList();
                     foreach (Match match in matches)
                     {

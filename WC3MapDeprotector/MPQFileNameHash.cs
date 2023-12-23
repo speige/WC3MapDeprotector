@@ -4,6 +4,9 @@ using System.Runtime.CompilerServices;
 
 namespace WC3MapDeprotector
 {
+    //NOTE: Using Struct for performance reasons.
+    //Struct are value types, not reference types.
+    //If you call a method it will mutate the original value, so if you pre-calculate a hash for the prefix of a file (directory name) and then re-use that for multiple filenames with the same prefix, you must copy into a new variable before modifying to "clone" it so the original value stays in tact (whereas reference types don't clone when putting into a variable, they must be re-constructed or call a Clone method)
     public struct MPQFileNameHash
     {
         private static uint[] Buffer;
@@ -79,18 +82,26 @@ namespace WC3MapDeprotector
             return false;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ulong Calculate(string text)
+        {
+            var result = new MPQFileNameHash();
+            result.AddString(text);
+            return result.GetValue();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryCalculate(string text, out ulong hash)
         {
             hash = 0;
-
-            var result = new MPQFileNameHash();
-            if (!result.TryAddString(text))
+            try
             {
-                return false;
+                hash = Calculate(text);
+                return true;
             }
+            catch { }
 
-            hash = result.GetValue();
-            return true;
+            return false;
         }
     }
 }
