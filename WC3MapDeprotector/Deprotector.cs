@@ -45,7 +45,7 @@ namespace WC3MapDeprotector
         protected readonly List<string> _nativeEditorFunctions = new List<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile" };
 
         protected const string ATTRIB = "Map deprotected by WC3MapDeprotector https://github.com/speige/WC3MapDeprotector\r\n\r\n";
-        protected readonly List<string> _commonFileExtensions = new List<string>() { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct().ToList();
+        protected readonly List<string> _commonFileExtensions = new List<string>() { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
 
         protected string _inMapFile;
         protected readonly string _outMapFile;
@@ -96,13 +96,13 @@ namespace WC3MapDeprotector
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(WorkingListFileName));
-                File.WriteAllLines(WorkingListFileName, extractedListFileEntries.Concat(existingListFileEntries).OrderBy(x => x).Distinct());
+                File.WriteAllLines(WorkingListFileName, extractedListFileEntries.Concat(existingListFileEntries).OrderBy(x => x).Distinct(StringComparer.InvariantCultureIgnoreCase));
                 File.Delete(InstallerListFileName);
                 File.Delete(Path.Combine(extractedListFileFolder, "listfile.txt"));
             }
 
             var originalListFile = File.ReadAllLines(WorkingListFileName);
-            var listFile = new List<string>(originalListFile.OrderBy(x => x).Distinct());
+            var listFile = new List<string>(originalListFile.OrderBy(x => x).Distinct(StringComparer.InvariantCultureIgnoreCase));
             if (originalListFile.Length != listFile.Count)
             {
                 File.WriteAllLines(WorkingListFileName, listFile);
@@ -312,8 +312,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            //var extensions = _commonFileExtensions.Select(x => "." + x).Distinct().ToList();
-            var extensions = GetUnknownFileNames().Select(x => Path.GetExtension(x).ToUpper()).Distinct().ToList();
+            var extensions = GetPossibleUnknownFileNameExtensions();
             var cheatEngineForm = new frmLiveGameScanner(scannedFileName =>
             {
                 var filesToTest = new List<string>() { scannedFileName };
@@ -476,22 +475,23 @@ namespace WC3MapDeprotector
                 {
                     _logEvent("Scanning for possible filenames...");
                     var map = DecompileMap();
-                    var war3NetExternalFileReferences = ScanMapForExternalFileReferences(map, _commonFileExtensions.Select(x => "." + x).Concat(GetUnknownFileNames()).Select(x => Path.GetExtension(x)).ToList());
+                    var unknownFileNameExtensions = GetPossibleUnknownFileNameExtensions();
+                    var war3NetExternalFileReferences = ScanMapForExternalFileReferences(map, unknownFileNameExtensions);
                     AddAlternateUnknownRecoveryFileNames(war3NetExternalFileReferences);
 
-                    var otherExternalReferencedFiles = ScanFilesForExternalFileReferences(_extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames().Select(x => Path.Combine(UnknownFilesPath, x))).ToList());
+                    var otherExternalReferencedFiles = ScanFilesForExternalFileReferences(_extractedMapFiles.Select(x => Path.Combine(MapFilesPath, x)).Union(GetUnknownFileNames().Select(x => Path.Combine(UnknownFilesPath, x))).ToList(), unknownFileNameExtensions);
                     AddAlternateUnknownRecoveryFileNames(otherExternalReferencedFiles);
 
                     var unknownFileHashesBackup = inMPQArchive.UnknownFileNameHashes.ToList();
-                    var allExternalReferencedFiles = war3NetExternalFileReferences.SelectMany(x => x.Value).Concat(otherExternalReferencedFiles.SelectMany(x => x.Value)).Distinct().ToList();
+                    var allExternalReferencedFiles = war3NetExternalFileReferences.SelectMany(x => x.Value).Concat(otherExternalReferencedFiles.SelectMany(x => x.Value)).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
                     DiscoverUnknownFileNames(inMPQArchive, allExternalReferencedFiles, _deprotectionResult);
                     if (benchmarkUnknownRecovery)
                     {
                         var recoveredHashes = new HashSet<ulong>(unknownFileHashesBackup.Except(inMPQArchive.UnknownFileNameHashes));
                         var recoveredFileNames = inMPQArchive.DiscoveredFileNames.Where(x => recoveredHashes.Contains(x.Key)).Select(x => x.Value).ToList();
                         var scannedFileNameMappedToSources = war3NetExternalFileReferences.Concat(otherExternalReferencedFiles).SelectMany(x => x.Value.Select(y => new KeyValuePair<string, string>(y, x.Key))).GroupBy(x => Path.GetFileName(x.Key), StringComparer.InvariantCultureIgnoreCase).ToDictionary(x => x.Key, x => x.Select(y => y.Value).ToList(), StringComparer.InvariantCultureIgnoreCase);
-                        var usefulSources = recoveredFileNames.SelectMany(x => scannedFileNameMappedToSources.TryGetValue(Path.GetFileName(x), out var sources) ? sources : new List<string>()).Distinct().ToList();
-                        var allSources = scannedFileNameMappedToSources.SelectMany(x => x.Value).Distinct().ToList();
+                        var usefulSources = recoveredFileNames.SelectMany(x => scannedFileNameMappedToSources.TryGetValue(Path.GetFileName(x), out var sources) ? sources : new List<string>()).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+                        var allSources = scannedFileNameMappedToSources.SelectMany(x => x.Value).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
                         var uselessSources = allSources.Except(usefulSources).ToList();
                         File.WriteAllLines(Path.Combine(WorkingFolderPath, "unknownScanning_usefulSources.log"), usefulSources);
                         File.WriteAllLines(Path.Combine(WorkingFolderPath, "unknownScanning_uselessSources.log"), uselessSources);
@@ -1039,6 +1039,17 @@ namespace WC3MapDeprotector
             return true;
         }
 
+        protected List<string> GetPossibleUnknownFileNameExtensions()
+        {
+            var extensions = GetUnknownFileNames().Select(x => Path.GetExtension(x)).ToList();
+            if (extensions.Contains(""))
+            {
+                extensions.Remove("");
+                extensions.AddRange(_commonFileExtensions.Select(x => "." + x));
+            }
+            return extensions.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+        }
+
         protected List<string> GetUnknownFileNames()
         {
             Directory.CreateDirectory(UnknownFilesPath);
@@ -1051,8 +1062,8 @@ namespace WC3MapDeprotector
             var unknownFileCount = archive.UnknownFileNameHashes.Count;
             _logEvent($"unknown files remaining: {unknownFileCount}");
 
-            var directories = archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct().ToList();
-            var extensions = GetUnknownFileNames().Select(x => Path.GetExtension(x).ToUpper()).Distinct().ToList();
+            var directories = archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+            var extensions = GetPossibleUnknownFileNameExtensions();
 
             const int maxFileNameLength = 75;
             _logEvent($"Brute forcing filenames from length 1 to {maxFileNameLength}");
@@ -1185,30 +1196,30 @@ namespace WC3MapDeprotector
         protected List<string> GetAlternateUnknownRecoveryFileNames(string potentialFileName)
         {
             var result = new List<string>();
-            if (potentialFileName.EndsWith(".BLP", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".TGA", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"DIS{Path.GetFileName(potentialFileName)}");
             }
-            if (potentialFileName.EndsWith(".MDL", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".MDX", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}_PORTRAIT{Path.GetExtension(potentialFileName)}");
             }
 
-            if (potentialFileName.EndsWith(".BLP", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add(Path.ChangeExtension(potentialFileName, ".TGA"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".tga"));
             }
-            if (potentialFileName.EndsWith(".TGA", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add(Path.ChangeExtension(potentialFileName, ".BLP"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".blp"));
             }
-            if (potentialFileName.EndsWith(".MDL", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.MDX");
+                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdx");
             }
-            if (potentialFileName.EndsWith(".MDX", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.MDL");
+                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdl");
             }
             return result;
         }
@@ -1224,7 +1235,7 @@ namespace WC3MapDeprotector
 
                 var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 directories.Add(@"REPLACEABLETEXTURES\COMMANDBUTTONSDISABLED");
-                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x)).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct());
+                directories.AddRange(archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x)).Select(x => x.EndsWith(Path.DirectorySeparatorChar) ? x : x + Path.DirectorySeparatorChar).Select(x => x.TrimStart(Path.DirectorySeparatorChar)).Distinct(StringComparer.InvariantCultureIgnoreCase));
                 directories.AddRange(fileNamesToTest.Select(x => Path.GetDirectoryName(x.Replace("/", "\\").Trim('\\'))).Where(x => x != null));
                 foreach (var directory in directories.ToList())
                 {
@@ -2597,7 +2608,7 @@ endfunction
                 }
             }
             newfiles.Add("\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76\x00");
-            newfiles = newfiles.Distinct().ToList();
+            newfiles = newfiles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
             using (var stream = new FileStream(Path.Combine(MapFilesPath, "war3map.imp"), FileMode.OpenOrCreate))
             using (var writer = new BinaryWriter(stream))
             {
@@ -2614,7 +2625,7 @@ endfunction
             _logEvent($"{newfiles.Count} files added to import list");
         }
 
-        protected Dictionary<string, List<string>> ScanMapForExternalFileReferences(Map map, List<string> fileExtensions)
+        protected Dictionary<string, List<string>> ScanMapForExternalFileReferences(Map map, List<string> unknownFileExtensions)
         {
             var result = new Dictionary<string, List<string>>(StringComparer.InvariantCultureIgnoreCase);
 
@@ -2631,15 +2642,86 @@ endfunction
             // todo: Refactor this to not use NewtonSoft JSON for speed (also, if "Just My Code" is disabled while debugging, this practically freezes up)
             var objectDataJson = map.GetAllObjectData_JSON();
             var deserialized = (JObject)JsonConvert.DeserializeObject(objectDataJson);
-            var extensions = new HashSet<string>(fileExtensions, StringComparer.InvariantCultureIgnoreCase);
-            result["__decompiledMap.ObjectData__"] = deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).Where(x => extensions.Contains(Path.GetExtension(x))).ToList();
+            result["__decompiledMap.ObjectData__"] = deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).SelectMany(x => ScanStringForPotentialUnknownFileNames(x, unknownFileExtensions)).ToList();
+            return result;
+        }
+
+        protected List<string> ScanStringForPotentialUnknownFileNames(string text, List<string> unknownFileExtensions)
+        {
+            var result = new List<string>();
+            // weird example filenames
+            /*
+            .mdl_v1.mdl
+            .mdl.mdl
+            */
+            //todo: split by any non-A-Z0-9, get each permutation of multiple-fileExtensions
+            if (unknownFileExtensions.Contains(Path.GetExtension(text), StringComparer.InvariantCultureIgnoreCase))
+            {
+                result.Add(text);
+            }
+
             return result;
         }
 
         [GeneratedRegex(@"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)", RegexOptions.IgnoreCase)]
         protected static partial Regex RegexScan_MDX();
 
-        protected ConcurrentDictionary<string, List<string>> ScanFilesForExternalFileReferences(List<string> filenames)
+        protected List<string> ScanMDLForExternalFileReferences(string mdlFileName)
+        {
+            var result = new List<string>();
+            try
+            {
+                using (var stream = File.OpenRead(mdlFileName))
+                {
+                    var model = new MdxLib.Model.CModel();
+                    var loader = new MdxLib.ModelFormats.CMdl();
+                    loader.Load(mdlFileName, stream, model);
+                    if (model.Textures != null)
+                    {
+                        result.AddRange(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)));
+                    }
+                    result.Add(model.Name + ".mdl");
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        //todo: Replace FastMDX with MdxLib (test to ensure speed & accuracy is similar)
+        protected List<string> ScanMDXForExternalFileReferences(string mdxFileName)
+        {
+            var result = new List<string>();
+            if (!string.Equals(Path.GetExtension(mdxFileName), ".mdx", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return result;
+            }
+
+            try
+            {
+                var mdx = new MDX(mdxFileName);
+                if (mdx.Textures != null)
+                {
+                    result.AddRange(mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
+                result.Add(mdx.Info.Name + ".mdx");
+            }
+            catch
+            {
+                _logEvent($"Error parsing MDX file: {mdxFileName}");
+
+                var line = File.ReadAllText(mdxFileName);
+
+                var mdxMatch = RegexScan_MDX().Match(line);
+                if (mdxMatch.Success)
+                {
+                    result.Add($"{mdxMatch.Groups[1].Value}.mdx");
+                }
+            }
+
+            return result;
+        }
+
+        protected ConcurrentDictionary<string, List<string>> ScanFilesForExternalFileReferences(List<string> filenames, List<string> unknownFileExtensions)
         {
             var extensionsToSkip = new HashSet<string>(".mp3,.blp,.tga,.bmp,.jpg,.dds,.wav".Split(',', StringSplitOptions.RemoveEmptyEntries), StringComparer.InvariantCultureIgnoreCase);
 
@@ -2656,39 +2738,23 @@ endfunction
                     return;
                 }
 
+                if (string.Equals(Path.GetExtension(filename), ".mdx", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    result["__MDXSCAN__" + filename] = ScanMDXForExternalFileReferences(filename);
+                }
+
+                if (string.Equals(Path.GetExtension(filename), ".mdl", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    result["__MDLSCAN__" + filename] = ScanMDLForExternalFileReferences(filename);
+                }
+
                 _logEvent($"scanning {filename}");
                 using (var file = new StreamReader(filename))
                 {
-                    if (string.Equals(Path.GetExtension(filename), ".mdx", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        try
-                        {
-                            var mdx = new MDX(file.BaseStream);
-                            var fastMDXFoundFiles = new List<string>();
-                            if (mdx.Textures != null)
-                            {
-                                fastMDXFoundFiles.AddRange(mdx.Textures.Select(x => x.Name));
-                            }
-                            fastMDXFoundFiles.Add(mdx.Info.Name + ".mdx");
-                            result["__FastMDXParsing__ " + filename] = fastMDXFoundFiles.ToList();
-                        }
-                        catch
-                        {
-                            _logEvent($"Error parsing MDX file: {filename}");
-                        }
-                        file.BaseStream.Position = 0;
-                    }
-
                     var line = file.ReadToEnd();
 
-                    var mdxMatch = RegexScan_MDX().Match(line);
-                    if (mdxMatch.Success)
-                    {
-                        result["__RegexScan_MDX__"] = new List<string>() { $"{mdxMatch.Groups[1].Value}.mdx" };
-                    }
-
                     var regexFoundFiles = new List<string>();
-                    var fileExtensions = _commonFileExtensions.Aggregate((x, y) => $"{x}|{y}");
+                    var fileExtensions = unknownFileExtensions.Distinct(StringComparer.InvariantCultureIgnoreCase).Aggregate((x, y) => $"{x}|{y}");
                     var matches = Regex.Matches(line, @"([ -~]{1,1000}?)\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled).Concat(Regex.Matches(line, @"([ -~]{1,1000})\.(" + fileExtensions + ")", RegexOptions.IgnoreCase | RegexOptions.Compiled)).ToList();
                     foreach (Match match in matches)
                     {

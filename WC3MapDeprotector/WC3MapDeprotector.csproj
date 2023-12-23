@@ -109,6 +109,9 @@
     <Reference Include="FastMDX">
       <HintPath>FastMDX.dll</HintPath>
     </Reference>
+    <Reference Include="MdxLib">
+      <HintPath>MdxLib.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

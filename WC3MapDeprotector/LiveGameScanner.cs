@@ -32,7 +32,7 @@ namespace WC3MapDeprotector
 
             var thread = new Thread(() =>
             {
-                var scannedFileNames = new HashSet<string>();
+                var scannedFileNames = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 while (true)
                 {
                     foreach (var suffix in searchSuffixes)
@@ -76,7 +76,7 @@ namespace WC3MapDeprotector
 
                             strings.Add(oldValue);
                         }
-                        var result = strings.Distinct().SelectMany(x => Regex.Matches(x, @".*\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct().Where(x => !scannedFileNames.Contains(x)).ToList();
+                        var result = strings.Distinct().SelectMany(x => Regex.Matches(x, @".*\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct(StringComparer.InvariantCultureIgnoreCase).Where(x => !scannedFileNames.Contains(x)).ToList();
                         foreach (var fileName in result)
                         {
                             var scannedFileName = fileName;
