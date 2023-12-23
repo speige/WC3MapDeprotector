@@ -1,85 +1,46 @@
 ﻿using CSharpLua;
+using NAudio.Wave;
+using NuGet.Packaging;
 using System.Text;
-using War3Net.IO.Mpq;
+using System.Text.RegularExpressions;
 
 namespace WC3MapDeprotector
 {
     public static class IMPQArchiveExtensions
     {
-        private static readonly List<string> _defaultListFile = new List<string>()
+        private static readonly Dictionary<ulong, string> _defaultListFileRainbowTable;
+        static IMPQArchiveExtensions()
         {
+            var defaultListFile = new ConcurrentHashSet<string>() {
                 "(attributes)",
                 "(listfile)",
                 "(signature)",
-                "(user data)",
-                "war3map.w3s",
-                "war3map.w3c",
-                "war3map.w3e",
-                "war3map.wpm",
-                "war3map.mmp",
-                "war3map.w3r",
-                "war3map.shd",
-                "war3campaign.w3f",
-                "war3map.w3i",
-                "war3campaign.w3a",
-                "war3campaign.w3h",
-                "war3campaign.w3b",
-                "war3campaign.w3d",
-                "war3campaign.w3t",
-                "war3campaign.w3u",
-                "war3campaign.w3q",
-                "war3campaignSkin.w3a",
-                "war3campaignSkin.w3h",
-                "war3campaignSkin.w3b",
-                "war3campaignSkin.w3d",
-                "war3campaignSkin.w3t",
-                "war3campaignSkin.w3u",
-                "war3campaignSkin.w3q",
-                "war3map.w3a",
-                "war3map.w3h",
-                "war3map.w3b",
-                "war3map.w3d",
-                "war3map.w3t",
-                "war3map.w3u",
-                "war3map.w3q",
-                "war3mapSkin.w3a",
-                "war3mapSkin.w3h",
-                "war3mapSkin.w3b",
-                "war3mapSkin.w3d",
-                "war3mapSkin.w3t",
-                "war3mapSkin.w3u",
-                "war3mapSkin.w3q",
-                "war3campaign.wts",
-                "war3map.wct",
-                "war3map.wtg",
-                "war3map.wts",
-                "war3map.j",
-                @"scripts\war3map.j",
-                "war3map.lua",
-                @"scripts\war3map.lua",
-                "war3map.doo",
-                "war3mapUnits.doo",
-                "war3campaign.imp",
-                "war3map.imp",
-                "war3mapPreview.tga",
-                "war3mapPreview.blp",
-                "war3mapPath.tga",
-                "war3mapMap.tga",
-                "war3mapMap.blp",
-                "war3mapSkin.txt",
-                "war3mapMisc.txt",
-                "war3mapExtra.txt",
-                "UpgradeData.slk",
-                "UnitWeapons.slk",
-                "UnitUI.slk",
-                "UnitData.slk",
-                "UnitBalance.slk",
-                "UnitAbilities.slk",
-                "ItemData.slk",
-                "AbilityData.slk",
-                "AbilityBuffData.slk",
-                "conversation.json"
-        };
+                "(user data)"
+            };
+
+            var extensions = new List<string>() { "blp", "doo", "imp", "j", "json", "lua", "mmp", "shd", "slk", "tga", "txt", "w3a", "w3b", "w3c", "w3d", "w3e", "w3f", "w3h", "w3i", "w3q", "w3r", "w3s", "w3t", "w3u", "wai", "wct", "wpm", "wtg", "wts" };
+            var filePrefixes = new List<string>() { "AbilityBuffData", "AbilityBuffMetaData", "AbilityData", "AbilityMetaData", "conversation", "DestructableData", "DestructableMetaData", "DoodadMetaData", "Doodads", "ItemData", "ItemMetaData", "UnitAbilities", "UnitBalance", "UnitData", "UnitMetaData", "UnitUI", "UnitWeapons", "UpgradeData", "war3campaign", "war3campaignSkin", "war3map", "war3mapExtra", "war3mapMap", "war3mapMisc", "war3mapPath", "war3mapPreview", "war3mapSkin", "war3mapUnits" };
+            var folders = new List<string>() { "", "scripts", "units", "doodads" };
+
+            Parallel.ForEach(folders.Select(x => x.Trim('\\')), folder =>
+            {
+                foreach (var filePrefix in filePrefixes)
+                {
+                    foreach (var extension in extensions.Select(x => x.Trim('.')))
+                    {
+                        var directoryPrefix = string.IsNullOrWhiteSpace(folder) ? "" : $"{folder}\\";
+                        defaultListFile.Add($"{directoryPrefix}{filePrefix}.{extension}");
+                    }
+                }
+            });
+
+            _defaultListFileRainbowTable = ConvertListFileToRainbowTable(defaultListFile.ToList());
+        }
+
+        public static bool IsInDefaultListFile(string fileName)
+        {
+            return MPQFileNameHash.TryCalculate(fileName, out var hash) && _defaultListFileRainbowTable.ContainsKey(hash);
+        }
 
         public static Dictionary<ulong, string> ConvertListFileToRainbowTable(List<string> fileNames)
         {
@@ -97,7 +58,7 @@ namespace WC3MapDeprotector
         
         public static List<string> ProcessDefaultListFile(this IMPQArchive archive)
         {
-            return archive.ProcessListFile_Slow(_defaultListFile);
+            return archive.ProcessListFile(_defaultListFileRainbowTable);
         }
 
         public static List<string> ProcessListFile(this IMPQArchive archive, Dictionary<ulong, string> rainbowTable)
@@ -131,6 +92,46 @@ namespace WC3MapDeprotector
             return null;
         }
 
+        private static string PredictAudioFileExtension(Stream stream)
+        {
+            try
+            {
+                /*
+                //todo: test if WC3 supports this file format, if not can delete code
+                try
+                {
+                    stream.Position = 0;
+                    new AiffFileReader(stream);
+                    return ".aiff";
+                }
+                catch { }
+                */
+
+                try
+                {
+                    stream.Position = 0;
+                    new Mp3FileReader(stream);
+                    return ".mp3";
+                }
+                catch { }
+
+                try
+                {
+                    stream.Position = 0;
+                    new WaveFileReader(stream);
+                    return ".wav";
+                }
+                catch { }
+            }
+            finally
+            {
+                stream.Position = 0;
+            }
+
+            stream.Position = 0;
+            return null;
+        }
+
         public static string PredictUnknownFileExtension(Stream stream)
         {
             try
@@ -151,73 +152,58 @@ namespace WC3MapDeprotector
                     fileContents = stringBuilder.ToString();
                 }
 
-                if (fileContents.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
+                //todo: detect w3m & w3x for nested campaign maps (test if StormLib can parse)
+
+                //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
+
+                var isTextFile = fileContents.Count(x => x >= ' ' && x <= '~') >= fileContents.Length * .75;
+                var isBinaryFile = !isTextFile;
+
+                if (isBinaryFile && fileContents.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
                 {
                     return ".blp";
                 }
-                if (fileContents.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".mdx";
-                }
-                if (fileContents.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
+                if (isBinaryFile && fileContents.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
                 {
                     return ".dds";
                 }
-                if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
+                if (isBinaryFile && fileContents.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    return ".tga";
+                    return ".mdx";
                 }
-                if (fileContents.Contains("magosx.com", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("FormatVersion", StringComparison.InvariantCultureIgnoreCase))
+                if (isTextFile && fileContents.Contains("magosx.com", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("FormatVersion", StringComparison.InvariantCultureIgnoreCase))
                 {
                     return ".mdl";
                 }
-                if (fileContents.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".mp3";
-                }
-                if (fileContents.StartsWith("RIFF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("WAVEfmt", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".wav";
-                }
-                if (fileContents.StartsWith("Mz", StringComparison.InvariantCultureIgnoreCase) && fileContents.Contains("This program cannot be run in DOS mode", StringComparison.InvariantCultureIgnoreCase))
+                if (isBinaryFile && fileContents.StartsWith("Mz", StringComparison.InvariantCultureIgnoreCase) && fileContents.Contains("This program cannot be run in DOS mode", StringComparison.InvariantCultureIgnoreCase))
                 {
                     //note: could technically also be exe, but unlikely
                     return ".dll";
                 }
 
+                if (isTextFile && Regex.IsMatch(fileContents, "function\\s+config\\s+takes\\s+nothing\\s+returns\\s+nothing", RegexOptions.IgnoreCase))
+                {
+                    return ".j";
+                }
+
+                if (isTextFile && Regex.IsMatch(fileContents, "function\\s+config\\s*\\(\\)", RegexOptions.IgnoreCase))
+                {
+                    return ".lua";
+                }
+
                 var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 2)
+                if (isTextFile && lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 2)
                 {
                     return ".toc";
                 }
-                if (lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 10)
+                if (isTextFile && lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 10)
                 {
                     return ".fdf";
                 }
                 var avgSemicolonCount = lines.Average(x => x.Length - x.Replace(";", "").Length);
-                if (avgSemicolonCount >= 1)
+                if (isTextFile && avgSemicolonCount >= 1)
                 {
                     return ".slk";
-                }
-
-                if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
-                {
-                    return ".mp3";
-                }
-
-                if (fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".jpg";
-                }
-
-                if (fileContents.StartsWith("\x42\x4D"))
-                {
-                    return ".bmp";
-                }
-
-                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return PredictImageFileExtension(stream) ?? ".tga";
                 }
 
                 /*
@@ -227,7 +213,6 @@ namespace WC3MapDeprotector
                 }
                 */
 
-                var isTextFile = fileContents.Count(x => x >= ' ' && x <= '~') >= fileContents.Length / 2;
                 if (isTextFile && lines.Average(x => x.Length - x.Replace("<", "").Replace(">", "").Length) >= 1)
                 {
                     return ".html";
@@ -240,16 +225,77 @@ namespace WC3MapDeprotector
                     return ".txt";
                 }
 
-                if (fileContents.StartsWith("\x02\x00\0\0") && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
+                if (isBinaryFile && fileContents.StartsWith("\x02\x00\0\0") && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
                 {
                     return ".wai";
                 }
 
-                var imageFormat = PredictImageFileExtension(stream);
-                if (!string.IsNullOrWhiteSpace(imageFormat))
+                if (isBinaryFile)
                 {
-                    return imageFormat;
+                    //todo: [LowPriority since regex already covers it] test against mdx parser
                 }
+
+                if (isTextFile)
+                {
+                    //todo: [LowPriority since regex already covers it] test against mdl parser
+                }
+
+                if (isBinaryFile)
+                {
+                    var imageFormat = PredictImageFileExtension(stream);
+                    if (!string.IsNullOrWhiteSpace(imageFormat))
+                    {
+                        return $".{imageFormat}";
+                    }
+                }
+
+                if (isBinaryFile)
+                {
+                    var audioFormat = PredictAudioFileExtension(stream);
+                    if (!string.IsNullOrWhiteSpace(audioFormat))
+                    {
+                        return audioFormat;
+                    }
+                }
+
+                if (isBinaryFile && fileContents.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".mp3";
+                }
+                if (isBinaryFile && fileContents.StartsWith("RIFF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("WAVEfmt", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".wav";
+                }
+                if (isBinaryFile && fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".mp3";
+                }
+                if (isBinaryFile && fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".tga";
+                }
+                if (isBinaryFile && fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".jpg";
+                }
+                if (isBinaryFile && fileContents.StartsWith("\x42\x4D"))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".bmp";
+                }
+                if (isBinaryFile && fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return PredictImageFileExtension(stream) ?? ".tga";
+                }
+
+                //todo: [LowPriority since DefaultListFile will handle it usually] detect common wc3 formats (test against War3Net SetFile command)
+
             }
             catch { }
             finally
