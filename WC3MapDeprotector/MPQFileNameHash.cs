@@ -78,5 +78,19 @@ namespace WC3MapDeprotector
 
             return false;
         }
+
+        public static bool TryCalculate(string text, out ulong hash)
+        {
+            hash = 0;
+
+            var result = new MPQFileNameHash();
+            if (!result.TryAddString(text))
+            {
+                return false;
+            }
+
+            hash = result.GetValue();
+            return true;
+        }
     }
 }
