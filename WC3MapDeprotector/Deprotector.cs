@@ -2758,7 +2758,13 @@ endfunction
                 return result.ToList();
             }
 
-            var separators = new char[] { '\'', ';', ',', '|', '=', '[', ']', '{', '}', '(', ')', ' ', '\t', '\r', '\n', '"' };
+            /*
+            var nonVisibleCharacters = Enumerable.Range((int)'\0', (int)' ' - (int)'\0').Concat(Enumerable.Range(127, 256 - 127)).Select(x => (char)x).ToList();
+            var separators = (new char[] { '\'', ';', ',', '|', '=', '[', ']', '{', '}', '(', ')', ' ', '\t', '\r', '\n', '"' }).Concat(nonVisibleCharacters).Distinct().ToArray();
+            */
+
+            var separators = Enumerable.Range(0, 256).Select(x => (char)x).Where(x => !(x >= 'a' && x <= 'z') && !(x >= 'A' && x <= 'Z') && !(x >= '0' && x <= '9')).ToArray();
+
             var strings = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { text };
             int oldCount;
             do
@@ -2795,11 +2801,6 @@ endfunction
             {
                 if (unknownFileExtensions.Contains(Path.GetExtension(entry), StringComparer.InvariantCultureIgnoreCase))
                 {
-                    if (Regex.IsMatch(text, @"[^a-zA-Z0-9._&!';,|=\[\]{}() \t\r\n\\""-]"))
-                    {
-                        Console.WriteLine("Code a regex for this?");
-                    }
-
                     result.Add(entry);
                 }
             }
@@ -2811,6 +2812,8 @@ endfunction
             return result.ToList();
         }
 
+        protected HashSet<string> _modelAndTextureFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".mdx", ".mdl", ".tga", ".blp", ".jpg", ".bmp", ".dds" };
+
         protected List<string> ScanMDLForPossibleFileNames(string mdlFileName)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -2821,7 +2824,7 @@ endfunction
                     var lines = stream.ReadToEnd().Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).ToList();
                     stream.BaseStream.Position = 0;
                     var commentLines = lines.Where(x => x.Trim().StartsWith("//")).Select(x => x.Trim().TrimStart('/')).ToList();
-                    result.AddRange(commentLines.SelectMany(x => ScanTextForPotentialUnknownFileNames(x, new List<string>() { ".mdl", ".mdx", ".tga", ".blp", ".dds", ".jpg" })));
+                    result.AddRange(commentLines.SelectMany(x => ScanTextForPotentialUnknownFileNames(x, _modelAndTextureFileExtensions.ToList())));
 
                     var model = new MdxLib.Model.CModel();
                     var loader = new MdxLib.ModelFormats.CMdl();
@@ -2830,64 +2833,111 @@ endfunction
                     {
                         var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                         result.AddRange(textures);
-                        result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdl")));
-                        result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdx")));
+                        result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
                     }
-                    result.Add($"{model.Name}.mdl");
-                    result.Add($"{model.Name}.tga");
-                    result.Add($"{model.Name}.blp");
-                    result.Add($"{model.Name}.dds");
-                    result.Add($"{model.Name}.jpg");
+                    result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
                 }
             }
             catch { }
             return result.ToList();
         }
 
-        [GeneratedRegex(@"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)", RegexOptions.IgnoreCase)]
-        protected static partial Regex RegexScan_MDX();
-
-        //todo: Replace FastMDX with MdxLib (test to ensure speed & accuracy is similar)
-        protected List<string> ScanMDXForPossibleFileNames(string mdxFileName)
+        protected List<string> ScanMDXForPossibleFileNames_FastMDX(string mdxFileName)
         {
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            if (!string.Equals(Path.GetExtension(mdxFileName), ".mdx", StringComparison.InvariantCultureIgnoreCase))
+            //todo: fix bug when parsing Glow.mdx from ZombieVillager (crashes rather than just returning the data it found) [low priority since we probably delete this library and only use MDXLib]
+            try
             {
-                return result.ToList();
+                using (var stream = new StreamReader(File.OpenRead(mdxFileName)))
+                {
+                    var model = new MdxLib.Model.CModel();
+                    var loader = new MdxLib.ModelFormats.CMdx();
+                    loader.Load(mdxFileName, stream.BaseStream, model);
+                    var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+                    if (model.Textures != null)
+                    {
+                        var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        result.AddRange(textures);
+                        result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
+                    }
+                    result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
+                    return result.ToList();
+                }
             }
+            catch { }
 
+            return null;
+        }
+
+        protected List<string> ScanMDXForPossibleFileNames_MDXLib(string mdxFileName)
+        {
+            //todo: fix bug when parsing Glow.mdx from ZombieVillager (crashes rather than just returning the data it found)
             try
             {
                 var mdx = new MDX(mdxFileName);
+                var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 if (mdx.Textures != null)
                 {
                     var textures = mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
                     result.AddRange(textures);
-                    result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdx")));
-                    result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdl")));
+                    result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
                 }
-                result.Add($"{mdx.Info.Name}.tga");
-                result.Add($"{mdx.Info.Name}.jpg");
-                result.Add($"{mdx.Info.Name}.blp");
-                result.Add($"{mdx.Info.Name}.dds");
-                result.Add($"{mdx.Info.Name}.mdx");
-                result.Add($"{mdx.Info.Name}.mdl");
+                result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{mdx.Info.Name}{ext}"));
+                return result.ToList();
             }
             catch
             {
-                _logEvent($"Error parsing MDX file: {mdxFileName}");
-
-                var line = File.ReadAllText(mdxFileName);
-
-                var mdxMatch = RegexScan_MDX().Match(line);
-                if (mdxMatch.Success)
-                {
-                    Console.WriteLine("dont delete regex");
-                    result.Add($"{mdxMatch.Groups[1].Value}.mdx");
-                }
             }
 
-            return result.ToList();
+            return null;
+        }
+
+        [GeneratedRegex(@"^MDLXVERS.*?MODLt.*?([a-zA-Z0-9 _-]+)", RegexOptions.IgnoreCase)]
+        protected static partial Regex RegexScan_MDX();
+        protected List<string> ScanMDXForPossibleFileNames_Regex(string mdxFileName)
+        {
+            var line = File.ReadAllText(mdxFileName);
+            var mdxMatch = RegexScan_MDX().Match(line);
+            if (mdxMatch.Success)
+            {
+                return _modelAndTextureFileExtensions.Select(ext => $"{mdxMatch.Groups[1].Value}{ext}").ToList();
+            }
+
+            return null;
+        }
+
+        //todo: Remove FastMDX after testing MdxLib for equal or better accuracy
+        protected List<string> ScanMDXForPossibleFileNames(string mdxFileName)
+        {
+            if (!string.Equals(Path.GetExtension(mdxFileName), ".mdx", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return new List<string>();
+            }
+
+            var fastMdx = ScanMDXForPossibleFileNames_FastMDX(mdxFileName);
+            var mdxLib = ScanMDXForPossibleFileNames_MDXLib(mdxFileName);
+
+            if ((fastMdx == null || mdxLib == null) && fastMdx != mdxLib)
+            {
+                Console.WriteLine("Can't delete FastMDX");
+            }
+
+            if (mdxLib != null && fastMdx != null && fastMdx.Count > mdxLib.Count)
+            {
+                Console.WriteLine("Can't delete FastMDX");
+            }
+
+            if (fastMdx == null && mdxLib == null)
+            {
+                _logEvent($"Error parsing MDX file: {mdxFileName}");
+
+                var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+                result.AddRange(ScanMDXForPossibleFileNames_Regex(mdxFileName));
+                var scanTextResults = ScanTextForPotentialUnknownFileNames(File.ReadAllText(mdxFileName), _modelAndTextureFileExtensions.ToList());
+                result.AddRange(scanTextResults.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
+                return result.ToList();
+            }
+
+            return new List<string>();
         }
 
         protected List<string> ScanINIForPossibleFileNames(string fileName, List<string> unknownFileExtensions)

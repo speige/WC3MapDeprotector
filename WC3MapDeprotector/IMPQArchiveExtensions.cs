@@ -94,7 +94,7 @@ namespace WC3MapDeprotector
         private static string PredictImageFileExtension(Stream stream)
         {
             try
-            {
+            {                
                 return SixLabors.ImageSharp.Image.DetectFormat(stream)?.FileExtensions?.FirstOrDefault();
             }
             catch { }
@@ -226,11 +226,6 @@ namespace WC3MapDeprotector
 
                 //todo: [LowPriority since regex already covers it] test against mdx parser
 
-                if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    Console.WriteLine("Don't DELETE!");
-                    return ".tga";
-                }
                 if (fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
                 {
                     Console.WriteLine("Don't DELETE!");
@@ -240,11 +235,6 @@ namespace WC3MapDeprotector
                 {
                     Console.WriteLine("Don't DELETE!");
                     return ".bmp";
-                }
-                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    Console.WriteLine("Don't DELETE!");
-                    return PredictImageFileExtension(stream) ?? ".tga";
                 }
 
                 //todo: [LowPriority since DefaultListFile will handle it usually] detect common wc3 formats (test against War3Net SetFile command)
@@ -272,7 +262,7 @@ namespace WC3MapDeprotector
                 }
 
                 //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
-                if (lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 10)
+                if (lines.Count(x => x.Contains("frame", StringComparison.InvariantCultureIgnoreCase) || x.Contains("WithChildren", StringComparison.InvariantCultureIgnoreCase) || x.Contains("IncludeFile", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Template", StringComparison.InvariantCultureIgnoreCase) || x.Contains("Control", StringComparison.InvariantCultureIgnoreCase) || x.Contains("INHERITS", StringComparison.InvariantCultureIgnoreCase)) >= Math.Max(lines.Count / 10, 1))
                 {
                     return ".fdf";
                 }
@@ -318,6 +308,26 @@ namespace WC3MapDeprotector
                     Console.WriteLine("Don't DELETE!");
                     return ".mp3";
                 }
+
+                if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".tga";
+                }
+                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Console.WriteLine("Don't DELETE!");
+                    return ".tga";
+                }
+
+                try
+                {
+                    var imageIdentity = SixLabors.ImageSharp.Image.Identify(stream);
+                    if (imageIdentity != null && imageIdentity.Width > 0 && imageIdentity.Height > 0)
+                    {
+                        return ".tga";
+                    }
+                }
+                catch { }
             }
             catch { }
             finally
