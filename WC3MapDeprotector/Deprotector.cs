@@ -75,14 +75,13 @@ namespace WC3MapDeprotector
             {
                 if (MPQFileNameHash.TryCalculate(fileName, out var hash))
                 {
-                    globalListFileRainbowTable[hash] = fileName;
+                    globalListFileRainbowTable.Value[hash] = fileName;
                 }
                 _logEvent($"added to global listfile: {fileName}");
             }
         }
 
-        protected static Dictionary<ulong, string> globalListFileRainbowTable;
-        static Deprotector()
+        protected static Lazy<Dictionary<ulong, string>> globalListFileRainbowTable = new Lazy<Dictionary<ulong, string>>(() =>
         {
             if (File.Exists(InstallerListFileName))
             {
@@ -115,8 +114,9 @@ namespace WC3MapDeprotector
             {
                 File.WriteAllLines(WorkingListFileName, listFile);
             }
-            globalListFileRainbowTable = IMPQArchiveExtensions.ConvertListFileToRainbowTable(listFile);
-        }
+
+            return IMPQArchiveExtensions.ConvertListFileToRainbowTable(listFile);
+        });
 
         public Deprotector(string inMapFile, string outMapFile, DeprotectionSettings settings, Action<string> logEvent)
         {
@@ -321,7 +321,8 @@ namespace WC3MapDeprotector
                 }
             }
 
-            var extensions = GetPossibleUnknownFileExtensions();
+            //todo: if we can hook the FileAccess API from WC3 & enable LocalFiles, we can just search every file it accesses, regardless of extension
+            var extensions = GetPredictedUnknownFileExtensions();
             var cheatEngineForm = new frmLiveGameScanner(scannedFileName =>
             {
                 var filesToTest = new List<string>() { scannedFileName };
@@ -416,7 +417,7 @@ namespace WC3MapDeprotector
                     inMPQArchive.ProcessDefaultListFile();
                     if (!benchmarkUnknownRecovery)
                     {
-                        inMPQArchive.ProcessListFile(globalListFileRainbowTable); //todo: move to static initializer so it's pre-calculated at app startup
+                        inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
                     }
                 }
                 catch (Exception e)
@@ -520,7 +521,7 @@ namespace WC3MapDeprotector
 
                     _logEvent("Scanning for possible filenames...");
                     var map = DecompileMap();
-                    var unknownFileExtensions = GetPossibleUnknownFileExtensions();
+                    var unknownFileExtensions = _commonFileExtensions.Select(x => "." + x).ToList();
                     var possibleFileNames_parsed = ParseFilesToDetectPossibleFileNames(map, unknownFileExtensions);
                     AddAlternateUnknownRecoveryFileNames(possibleFileNames_parsed);
                     DiscoverUnknownFileNames(inMPQArchive, possibleFileNames_parsed.SelectMany(x => x.Value).ToList());
@@ -579,7 +580,20 @@ namespace WC3MapDeprotector
 
                 if (benchmarkUnknownRecovery)
                 {
-                    throw new Exception("Done benchmarking. Unknowns left: " + inMPQArchive.UnknownFileNameHashes.Count);
+                    var beforeGlobalListFileCount = inMPQArchive.UnknownFileNameHashes.Count;
+                    string globalListFileBenchmarkMessage = "";
+                    if (inMPQArchive.UnknownFileNameHashes.Count > 0)
+                    {
+                        var oldUnknownCount = inMPQArchive.UnknownFileNameHashes.Count;
+                        inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
+                        var knownInGlobalListFile = oldUnknownCount - inMPQArchive.UnknownFileNameHashes.Count;
+                        if (knownInGlobalListFile > 0)
+                        {
+                            globalListFileBenchmarkMessage = $" KnownInGlobalListFile: {knownInGlobalListFile}";
+                        }
+                    }
+
+                    throw new Exception("Done benchmarking. Unknowns left: " + beforeGlobalListFileCount + globalListFileBenchmarkMessage);
                 }
 
                 _deprotectionResult.UnknownFileCount = inMPQArchive.UnknownFileNameHashes.Count;
@@ -1083,7 +1097,7 @@ namespace WC3MapDeprotector
             return true;
         }
 
-        protected List<string> GetPossibleUnknownFileExtensions()
+        protected List<string> GetPredictedUnknownFileExtensions()
         {
             var extensions = new HashSet<string>(GetUnknownFileNames().Select(x => Path.GetExtension(x)), StringComparer.InvariantCultureIgnoreCase);
             if (extensions.Contains(""))
@@ -1107,7 +1121,7 @@ namespace WC3MapDeprotector
             _logEvent($"unknown files remaining: {unknownFileCount}");
 
             var directories = archive.DiscoveredFileNames.Values.Select(x => Path.GetDirectoryName(x).ToUpper()).Select(x => x.Trim('\\')).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-            var extensions = GetPossibleUnknownFileExtensions();
+            var extensions = GetPredictedUnknownFileExtensions();
 
             const int maxFileNameLength = 75;
             _logEvent($"Brute forcing filenames from length 1 to {maxFileNameLength}");
@@ -1239,7 +1253,7 @@ namespace WC3MapDeprotector
 
         protected List<string> GetAlternateUnknownRecoveryFileNames(string potentialFileName)
         {
-            var result = new List<string>();
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"DIS{Path.GetFileName(potentialFileName)}");
@@ -1249,39 +1263,28 @@ namespace WC3MapDeprotector
                 result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}_PORTRAIT{Path.GetExtension(potentialFileName)}");
             }
 
-            if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase))
+            if (potentialFileName.EndsWith(".ttf", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".otf", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".woff", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add(Path.ChangeExtension(potentialFileName, ".tga"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".jpg"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".dds"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".ttf"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".otf"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".woff"));
             }
-            else if (potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.Add(Path.ChangeExtension(potentialFileName, ".blp"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".jpg"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".dds"));
-            }
-            else if (potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.Add(Path.ChangeExtension(potentialFileName, ".blp"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".tga"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".dds"));
-            }
-            else if (potentialFileName.EndsWith(".dds", StringComparison.InvariantCultureIgnoreCase))
+
+            if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".dds", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add(Path.ChangeExtension(potentialFileName, ".blp"));
                 result.Add(Path.ChangeExtension(potentialFileName, ".tga"));
                 result.Add(Path.ChangeExtension(potentialFileName, ".jpg"));
+                result.Add(Path.ChangeExtension(potentialFileName, ".dds"));
             }
-            else if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdx");
-            }
-            else if (potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
+
+            if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdl");
+                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdx");
             }
-            return result;
+
+            return result.ToList();
         }
 
         protected void DiscoverUnknownFileNames(IMPQArchive archive, List<string> fileNamesToTest)
@@ -2749,19 +2752,13 @@ endfunction
         protected List<string> ScanTextForPotentialUnknownFileNames(string text, List<string> unknownFileExtensions)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            // weird example filenames
-            /*
-            .mdl_v1.mdl
-            .mdl.mdl
-            */
-            //todo: split by any non-A-Z0-9, get each permutation of multiple-fileExtensions
 
             if (string.IsNullOrWhiteSpace(text))
             {
                 return result.ToList();
             }
 
-            var separators = new char[] { '\'', ';', ',', '|', '=', '[', ']', '{', '}', ' ', '\t', '\r', '\n', '"' };
+            var separators = new char[] { '\'', ';', ',', '|', '=', '[', ']', '{', '}', '(', ')', ' ', '\t', '\r', '\n', '"' };
             var strings = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { text };
             int oldCount;
             do
@@ -2781,18 +2778,26 @@ endfunction
                 }
             }
 
+            foreach (var entry in strings.ToList())
+            {
+                var directory = Path.GetDirectoryName(entry) ?? "";
+                string multipleExtensions = entry;
+                string lastValue;
+                do
+                {
+                    lastValue = multipleExtensions;
+                    multipleExtensions = Path.Combine(directory, Path.GetFileNameWithoutExtension(lastValue));
+                    strings.Add(multipleExtensions);
+                } while (multipleExtensions != lastValue);
+            }
+
             foreach (var entry in strings)
             {
                 if (unknownFileExtensions.Contains(Path.GetExtension(entry), StringComparer.InvariantCultureIgnoreCase))
                 {
-                    if (Regex.IsMatch(text, @"[^a-zA-Z0-9._&!';,|=\[\]{} \t\r\n\\""-]"))
+                    if (Regex.IsMatch(text, @"[^a-zA-Z0-9._&!';,|=\[\]{}() \t\r\n\\""-]"))
                     {
                         Console.WriteLine("Code a regex for this?");
-                    }
-
-                    if (text.Length - text.Replace(".", "").Length > 1 && !text.Contains(","))
-                    {
-                        Console.WriteLine("Code a regex for this");
                     }
 
                     result.Add(entry);
@@ -2857,9 +2862,14 @@ endfunction
                 if (mdx.Textures != null)
                 {
                     var textures = mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-                    result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdl")));
+                    result.AddRange(textures);
                     result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdx")));
+                    result.AddRange(textures.Select(x => Path.ChangeExtension(x, ".mdl")));
                 }
+                result.Add($"{mdx.Info.Name}.tga");
+                result.Add($"{mdx.Info.Name}.jpg");
+                result.Add($"{mdx.Info.Name}.blp");
+                result.Add($"{mdx.Info.Name}.dds");
                 result.Add($"{mdx.Info.Name}.mdx");
                 result.Add($"{mdx.Info.Name}.mdl");
             }
