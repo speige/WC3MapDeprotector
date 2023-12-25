@@ -83,10 +83,15 @@ namespace WC3MapDeprotector
         {
             try
             {
+                stream.Position = 0;
                 var font = SixLabors.Fonts.FontDescription.LoadDescription(stream);
                 return "ttf";
             }
             catch { }
+            finally
+            {
+                stream.Position = 0;
+            }
 
             return null;
         }
@@ -94,10 +99,20 @@ namespace WC3MapDeprotector
         private static string PredictImageFileExtension(Stream stream)
         {
             try
-            {                
-                return SixLabors.ImageSharp.Image.DetectFormat(stream)?.FileExtensions?.FirstOrDefault();
+            {
+                stream.Position = 0;
+                var imageIdentity = SixLabors.ImageSharp.Image.Identify(stream);
+                stream.Position = 0;
+                if (imageIdentity != null && imageIdentity.Width > 0 && imageIdentity.Height > 0)
+                {
+                    return SixLabors.ImageSharp.Image.DetectFormat(stream)?.FileExtensions.FirstOrDefault() ?? ".tga";
+                }
             }
             catch { }
+            finally
+            {
+                stream.Position = 0;
+            }
 
             return null;
         }
@@ -166,6 +181,8 @@ namespace WC3MapDeprotector
                     return null;
                 }
 
+                //NOTE: When comparing binary files with String.StartsWith/etc, you need to use Ordinal if you don't want extra non-visible characters like \0 to skew the results
+                stream.Position = 0;
                 byte[] bytes;
                 using (var memoryStream = new MemoryStream())
                 {
@@ -183,12 +200,14 @@ namespace WC3MapDeprotector
                 var fileContents = stringBuilder.ToString();
 
                 //todo: detect w3m & w3x for nested campaign maps (test if StormLib can parse)
+
+                //todo: [LowPriority since regex already covers it] test against mdx parser
                 if (fileContents.StartsWith("MDLXVERS", StringComparison.InvariantCultureIgnoreCase))
                 {
                     return ".mdx";
                 }
 
-                if (fileContents.StartsWith("blp", StringComparison.InvariantCultureIgnoreCase))
+                if (fileContents.StartsWith("blp", StringComparison.OrdinalIgnoreCase))
                 {
                     return ".blp";
                 }
@@ -210,7 +229,7 @@ namespace WC3MapDeprotector
                     return ".wav";
                 }
 
-                if (fileContents.StartsWith("DDS", StringComparison.InvariantCultureIgnoreCase))
+                if (fileContents.StartsWith("DDS", StringComparison.OrdinalIgnoreCase))
                 {
                     return ".dds";
                 }
@@ -219,21 +238,16 @@ namespace WC3MapDeprotector
                     //note: could technically also be exe, but unlikely
                     return ".dll";
                 }
-                if (fileContents.StartsWith("\x02\x00\0\0") && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
+                if (fileContents.StartsWith("\x02\x00\0\0", StringComparison.Ordinal) && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
                 {
+                    //todo: does War3Net have a parser to test this?
                     return ".wai";
                 }
 
-                //todo: [LowPriority since regex already covers it] test against mdx parser
-
-                if (fileContents.StartsWith("\xFF\xD8") || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
+                if (fileContents.StartsWith("\x42\x4D", StringComparison.Ordinal))
                 {
-                    Console.WriteLine("Don't DELETE!");
-                    return ".jpg";
-                }
-                if (fileContents.StartsWith("\x42\x4D"))
-                {
-                    Console.WriteLine("Don't DELETE!");
+                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
+                    DebugSettings.Warn("Don't DELETE!");
                     return ".bmp";
                 }
 
@@ -250,7 +264,7 @@ namespace WC3MapDeprotector
                 }
 
                 var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= lines.Count / 2)
+                if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= Math.Max(lines.Count / 2, 1))
                 {
                     return ".toc";
                 }
@@ -267,15 +281,15 @@ namespace WC3MapDeprotector
                     return ".fdf";
                 }
 
-                var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && (x.Length - x.Replace("[", "").Replace("]", "").Length) == 2));
-                if (iniLines >= lines.Count / 2)
+                var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && x.Trim().StartsWith("[") && x.Trim().EndsWith("]")));
+                if (iniLines >= Math.Max(lines.Count / 2, 1))
                 {
                     //note: could technically also be ini, but unlikely
                     return ".txt";
                 }
 
-                var avgSemicolonCount = lines.Average(x => x.Length - x.Replace(";", "").Length);
-                if (avgSemicolonCount >= 1)
+                var slkLines = lines.Count(x => x.Length >= 2 && ((x[0] >= 'a' && x[0] <= 'z') || (x[0] >= 'A' && x[0] <= 'Z')) && x[1] == ';');
+                if (lines.Count > 1 && lines[0].StartsWith("ID;", StringComparison.OrdinalIgnoreCase) && slkLines >= Math.Max(lines.Count / 2, 2))
                 {
                     return ".slk";
                 }
@@ -292,20 +306,8 @@ namespace WC3MapDeprotector
                     return ".html";
                 }
 
-                if (IsMp3AudioFile(stream))
+                if (fileContents.StartsWith("ID3", StringComparison.Ordinal) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    //NOTE: mp3 gets false positives sometimes & also misses valid ones, so this should be last. Replace with different library instead of NAudio?
-                    return ".mp3";
-                }
-
-                if (fileContents.Contains("ID3", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".mp3";
-                }
-
-                if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
-                {
-                    Console.WriteLine("Don't DELETE!");
                     return ".mp3";
                 }
 
@@ -313,21 +315,33 @@ namespace WC3MapDeprotector
                 {
                     return ".tga";
                 }
-                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
+
+                if (IsMp3AudioFile(stream))
                 {
-                    Console.WriteLine("Don't DELETE!");
-                    return ".tga";
+                    //NOTE: mp3 gets false positives sometimes & also misses valid ones, so this should be last. Replace with different library instead of NAudio?
+                    return ".mp3";
                 }
 
-                try
+                if (fileContents.StartsWith("\xFF\xD8", StringComparison.Ordinal) || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    var imageIdentity = SixLabors.ImageSharp.Image.Identify(stream);
-                    if (imageIdentity != null && imageIdentity.Width > 0 && imageIdentity.Height > 0)
-                    {
-                        return ".tga";
-                    }
+                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
+                    DebugSettings.Warn("Don't DELETE!");
+                    return ".jpg";
                 }
-                catch { }
+
+                if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
+                {
+                    //todo: delete if testing shows it's unnecessary because PredictAudioFileExtension already finds it
+                    DebugSettings.Warn("Don't DELETE!");
+                    return ".mp3";
+                }
+
+                if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
+                    DebugSettings.Warn("Don't DELETE!");
+                    return ".tga";
+                }
             }
             catch { }
             finally

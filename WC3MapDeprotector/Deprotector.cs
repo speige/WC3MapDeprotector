@@ -40,12 +40,12 @@ namespace WC3MapDeprotector
     // https://867380699.github.io/blog/2019/05/09/W3X_Files_Format
     // https://world-editor-tutorials.thehelper.net/cat_usersubmit.php?view=42787
 
-    public partial class Deprotector
+    public partial class Deprotector : IDisposable
     {
         protected readonly List<string> _nativeEditorFunctions = new List<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile" };
 
         protected const string ATTRIB = "Map deprotected by WC3MapDeprotector https://github.com/speige/WC3MapDeprotector\r\n\r\n";
-        protected readonly List<string> _commonFileExtensions = new List<string>() { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3f", "w3v", "w3z", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+        protected readonly List<string> _commonFileExtensions = new List<string>() { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "otf", "woff", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3f", "w3v", "w3z", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts" }.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
 
         protected string _inMapFile;
         protected readonly string _outMapFile;
@@ -175,23 +175,22 @@ namespace WC3MapDeprotector
                 return Path.Combine(SLKRecoverPath, "Silk Object Optimizer.exe");
             }
         }
-
-        protected string WorkingFolderUniquePath = Path.GetFileNameWithoutExtension(Path.GetTempFileName()); //todo: remove this because its only purpose is to allow running 2 instances simultaneously (TextTriggers & GUI triggers. Instead, remove setting & checkbox from form & always run from same instance & output 2 files _TextTriggers & _GUITriggers - Don't call Deprotect() 2x, actually output both versions from same method call to avoid duplicate processing)
+        
+        protected string WorkingFolderUniquePath = Path.GetFileNameWithoutExtension(Path.GetTempFileName());
         protected string WorkingFolderPath
         {
             get
             {
-                var benchmarkSuffix = benchmarkUnknownRecovery ? "_benchmark" : "";
-                return Path.Combine(TempFolderPath, $"{Path.GetFileName(_inMapFile)}.work{benchmarkSuffix}", WorkingFolderUniquePath);
+                return Path.Combine(TempFolderPath, WorkingFolderUniquePath);
             }
         }
 
-        //todo: Delete folders from here on startup if older than 1 week (created or last accessed?)
-        protected static string TempFolderPath
+        protected string TempFolderPath
         {
             get
             {
-                return Path.Combine(Path.GetTempPath(), "WC3MapDeprotector");
+                var benchmarkSuffix = DebugSettings.BenchmarkUnknownRecovery ? "_benchmark" : "";
+                return Path.Combine(Path.GetTempPath(), "WC3MapDeprotector", $"{Path.GetFileName(_inMapFile)}.work{benchmarkSuffix}");
             }
         }
 
@@ -355,10 +354,33 @@ namespace WC3MapDeprotector
             cheatEngineForm.ShowDialog();
         }
 
-        bool benchmarkUnknownRecovery = false;
+        protected void CleanTemp()
+        {
+            if (DebugSettings.DontCleanTemp)
+            {
+                return;
+            }
+
+            var tempDir = TempFolderPath;
+            if (Directory.Exists(tempDir))
+            {
+                _logEvent("Deleting temporary files...");
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch (Exception e)
+                {
+                    _logEvent($"Unable to delete temporary files: {e.Message}");
+                }
+            }
+        }
+
         public async Task<DeprotectionResult> Deprotect()
         {
             _logEvent($"Processing map: {MapBaseName}");
+
+            CleanTemp();
 
             try
             {
@@ -400,7 +422,7 @@ namespace WC3MapDeprotector
 
             using (var inMPQArchive = new MPQArchiveWrapper(_inMapFile))
             {
-                if (!benchmarkUnknownRecovery && ExtractFileFromArchive(inMPQArchive, "(listfile)"))
+                if (!DebugSettings.BenchmarkUnknownRecovery && ExtractFileFromArchive(inMPQArchive, "(listfile)"))
                 {
                     //will be slower for small list files, but safer in case of a giant embedded listfile
                     var rainbowTable = IMPQArchiveExtensions.ConvertListFileToRainbowTable(File.ReadAllLines(Path.Combine(MapFilesPath, "(listfile)")).ToList());
@@ -415,7 +437,7 @@ namespace WC3MapDeprotector
                 try
                 {
                     inMPQArchive.ProcessDefaultListFile();
-                    if (!benchmarkUnknownRecovery)
+                    if (!DebugSettings.BenchmarkUnknownRecovery)
                     {
                         inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
                     }
@@ -436,6 +458,8 @@ namespace WC3MapDeprotector
                         _extractedMapFiles.Add(fileName);
                     }
                 }
+
+                DeleteAls();
 
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileNameHashes.Count}");
 
@@ -529,6 +553,7 @@ namespace WC3MapDeprotector
                     var possibleFileNames_regex = new ConcurrentDictionary<string, List<string>>();
                     if (inMPQArchive.UnknownFileNameHashes.Count > 0)
                     {
+                        //todo: delete this section of code if testing shows that it never finds anything additional
                         var unknownFileHashesBackup_regex = inMPQArchive.UnknownFileNameHashes.ToList();
 
                         var oldUnknownCount = inMPQArchive.UnknownFileNameHashes.Count;
@@ -543,7 +568,7 @@ namespace WC3MapDeprotector
                             var recoveredHashes_regex = new HashSet<ulong>(unknownFileHashesBackup_regex.Except(inMPQArchive.UnknownFileNameHashes));
                             var recoveredFileNames_regex = inMPQArchive.DiscoveredFileNames.Where(x => recoveredHashes_regex.Contains(x.Key)).Select(x => x.Value).ToList();
 
-                            Console.WriteLine("Dont delete regexes");
+                            DebugSettings.Warn("Dont delete regexes");
                         }
                     }
 
@@ -554,7 +579,7 @@ namespace WC3MapDeprotector
                     _deprotectionResult.NewListFileEntriesFound += recoveredFileNames.Count;
 
 
-                    if (benchmarkUnknownRecovery)
+                    if (DebugSettings.BenchmarkUnknownRecovery)
                     {
                         var scannedFileNameMappedToSources = possibleFileNames_parsed.Concat(possibleFileNames_regex).SelectMany(x => x.Value.Select(y => new KeyValuePair<string, string>(y, x.Key))).GroupBy(x => Path.GetFileName(x.Key), StringComparer.InvariantCultureIgnoreCase).ToDictionary(x => x.Key, x => x.Select(y => y.Value).ToList(), StringComparer.InvariantCultureIgnoreCase);
                         var usefulSources = recoveredFileNames.SelectMany(x => scannedFileNameMappedToSources.TryGetValue(Path.GetFileName(x), out var sources) ? sources : new List<string>()).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
@@ -578,7 +603,7 @@ namespace WC3MapDeprotector
                     BruteForceUnknownFileNames(inMPQArchive);
                 }
 
-                if (benchmarkUnknownRecovery)
+                if (DebugSettings.BenchmarkUnknownRecovery)
                 {
                     var beforeGlobalListFileCount = inMPQArchive.UnknownFileNameHashes.Count;
                     string globalListFileBenchmarkMessage = "";
@@ -590,6 +615,8 @@ namespace WC3MapDeprotector
                         if (knownInGlobalListFile > 0)
                         {
                             globalListFileBenchmarkMessage = $" KnownInGlobalListFile: {knownInGlobalListFile}";
+
+                            DebugSettings.Warn("Research how to get these files!");
                         }
                     }
 
@@ -605,7 +632,6 @@ namespace WC3MapDeprotector
                 }
             }
 
-            DeleteAls();
             PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
@@ -720,7 +746,7 @@ namespace WC3MapDeprotector
                     SaveDecompiledArchiveFile(file);
                 }
 
-                if (Settings.CreateVisualTriggers)
+                if (Settings.CreateVisualTriggers) //todo: Remove setting & checkbox from form & always run from same instance & output 2 files _TextTriggers & _GUITriggers - Don't call Deprotect() 2x, actually output both versions from same method call to avoid duplicate processing)
                 {
                     if (File.Exists(Path.Combine(MapFilesPath, "war3map.wtg")))
                     {
@@ -1062,7 +1088,7 @@ namespace WC3MapDeprotector
             var isUnknown = extractedFileName == tempFileName;
             if (!GetUnknownFileName_Memoized.TryGetValue(archiveFileHash, out var unknownName))
             {
-                if (isUnknown || benchmarkUnknownRecovery)
+                if (isUnknown || DebugSettings.BenchmarkUnknownRecovery)
                 {
                     using (var stream = File.OpenRead(extractedFileName))
                     {
@@ -1074,9 +1100,12 @@ namespace WC3MapDeprotector
 
             if (!string.IsNullOrWhiteSpace(unknownName))
             {
-                if (benchmarkUnknownRecovery && !isUnknown && !Path.GetExtension(extractedFileName).Equals(Path.GetExtension(unknownName), StringComparison.InvariantCultureIgnoreCase) && !IMPQArchiveExtensions.IsInDefaultListFile(extractedFileName.Replace($"{MapFilesPath}\\", "")))
+                if (DebugSettings.BenchmarkUnknownRecovery && !isUnknown && !Path.GetExtension(extractedFileName).Equals(Path.GetExtension(unknownName), StringComparison.InvariantCultureIgnoreCase) && !IMPQArchiveExtensions.IsInDefaultListFile(extractedFileName.Replace($"{MapFilesPath}\\", "")))
                 {
-                    Console.WriteLine("Bug in PredictUnknownFileExtension");
+                    if ((!string.Equals(Path.GetExtension(extractedFileName), ".ini") && !string.Equals(Path.GetExtension(extractedFileName), ".txt")) || (!string.Equals(Path.GetExtension(unknownName), ".ini") && !string.Equals(Path.GetExtension(unknownName), ".txt")))
+                    {
+                        DebugSettings.Warn("Bug in PredictUnknownFileExtension");
+                    }
                 }
 
                 extractedFileName = Path.Combine(UnknownFilesPath, unknownName);
@@ -1134,7 +1163,6 @@ namespace WC3MapDeprotector
 
             var foundFileLock = new object();
             var foundFileCount = 0;
-            Settings.BruteForceCancellationToken = new CancellationTokenSource();
             try
             {
                 var simdLength = Vector<int>.Count;
@@ -1253,36 +1281,47 @@ namespace WC3MapDeprotector
 
         protected List<string> GetAlternateUnknownRecoveryFileNames(string potentialFileName)
         {
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { potentialFileName };
             if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"DIS{Path.GetFileName(potentialFileName)}");
             }
             if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}_PORTRAIT{Path.GetExtension(potentialFileName)}");
+                var directory = Path.GetDirectoryName(potentialFileName) ?? "";
+                result.Add($"{Path.Combine(directory, Path.GetFileNameWithoutExtension(potentialFileName))}_PORTRAIT{Path.GetExtension(potentialFileName)}");
             }
 
-            if (potentialFileName.EndsWith(".ttf", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".otf", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".woff", StringComparison.InvariantCultureIgnoreCase))
+            var oldCount = result.Count;
+            do
             {
-                result.Add(Path.ChangeExtension(potentialFileName, ".ttf"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".otf"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".woff"));
-            }
+                oldCount = result.Count;
+                foreach (var fileName in result.ToList())
+                {
+                    if (fileName.EndsWith(".txt", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".ini", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        result.Add(Path.ChangeExtension(fileName, ".txt"));
+                        result.Add(Path.ChangeExtension(fileName, ".ini"));
+                    }
 
-            if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".dds", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.Add(Path.ChangeExtension(potentialFileName, ".blp"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".tga"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".jpg"));
-                result.Add(Path.ChangeExtension(potentialFileName, ".dds"));
-            }
+                    if (fileName.EndsWith(".ttf", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".otf", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".woff", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        result.Add(Path.ChangeExtension(fileName, ".ttf"));
+                        result.Add(Path.ChangeExtension(fileName, ".otf"));
+                        result.Add(Path.ChangeExtension(fileName, ".woff"));
+                    }
 
-            if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdl");
-                result.Add($"{Path.GetFileNameWithoutExtension(potentialFileName)}.mdx");
-            }
+                    if (fileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase) || fileName.EndsWith(".dds", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        result.Add(Path.ChangeExtension(fileName, ".mdl"));
+                        result.Add(Path.ChangeExtension(fileName, ".mdx"));
+                        result.Add(Path.ChangeExtension(fileName, ".blp"));
+                        result.Add(Path.ChangeExtension(fileName, ".tga"));
+                        result.Add(Path.ChangeExtension(fileName, ".jpg"));
+                        result.Add(Path.ChangeExtension(fileName, ".dds"));
+                    }
+                }
+            } while (oldCount != result.Count);
 
             return result.ToList();
         }
@@ -1308,6 +1347,9 @@ namespace WC3MapDeprotector
                         directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
                     }
                 }
+
+                //todo: Disable deep scanning of directories unless Benchmark is enabled. Add separate deep scan of File Extensions if Benchmark is enabled. Delete each one if they don't produce any better results than when it's disabled.
+                //todo: If directory name is blank, do check for each shorter version of file.ext (ile.ext le.ext l.ext e.ext .ext)
 
                 var finishedSearching = false;
                 var unknownHashes = new HashSet<ulong>(archive.UnknownFileNameHashes);
@@ -2605,16 +2647,6 @@ endfunction
             }
         }
 
-        protected void CleanTemp()
-        {
-            var tempDir = WorkingFolderPath;
-            if (Directory.Exists(tempDir))
-            {
-                _logEvent("Deleting temporary files...");
-                Directory.Delete(tempDir, true);
-            }
-        }
-
         protected void DeleteAls()
         {
             if (File.Exists(Path.Combine(MapFilesPath, "(attributes)")))
@@ -2704,27 +2736,41 @@ endfunction
             result["__decompiledMap__"] = new List<string>() { map.Info.LoadingScreenPath };
 
             // todo: Refactor this to not use NewtonSoft JSON for speed (also, if "Just My Code" is disabled while debugging, this practically freezes up)
+            _logEvent("Extracting all object data from map files");
             var objectDataJson = map.GetAllObjectData_JSON();
+            _logEvent("Parsing map object data into strings");
             var deserialized = (JObject)JsonConvert.DeserializeObject(objectDataJson);
+            _logEvent("Searching map data strings for unknown files");
             result["__decompiledMap.ObjectData__"] = deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).SelectMany(x => ScanTextForPotentialUnknownFileNames(x, unknownFileExtensions)).ToList();
 
             var allExtractedFiles = Directory.GetFiles(MapFilesPath, "*", SearchOption.AllDirectories).ToList();
 
+            _logEvent("Searching inside files for unknown names ...");
+
+            _logEvent("Searching SLK files");
             result["__SLK__"] = allExtractedFiles.Where(x => Path.GetExtension(x).Equals(".slk", StringComparison.InvariantCultureIgnoreCase)).SelectMany(x => File.ReadAllLines(x).SelectMany(y => ScanTextForPotentialUnknownFileNames(y, unknownFileExtensions))).ToList();
+
+            _logEvent("Searching TXT files");
             result["__TXT__"] = allExtractedFiles.Where(x => Path.GetExtension(x).Equals(".txt", StringComparison.InvariantCultureIgnoreCase)).SelectMany(x => File.ReadAllLines(x).SelectMany(y => ScanTextForPotentialUnknownFileNames(y, unknownFileExtensions))).ToList();
 
+            _logEvent("Searching TOC files");
+            result["__TOC__"] = allExtractedFiles.Where(x => Path.GetExtension(x).Equals(".toc", StringComparison.InvariantCultureIgnoreCase)).SelectMany(x => File.ReadLines(x)).ToList();
+
+            _logEvent("Searching MDL & MDX files");
+            result.AddRange(ScanModelFilesForPossibleFileNames(allExtractedFiles));
+
+            _logEvent("Searching INI files");
+            result.AddRange(ScanINIFilesForPossibleFileNames(allExtractedFiles, unknownFileExtensions));
+
+            _logEvent("Searching FDF, TXT, & Script files");
             var extensionsToParseStrings = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".fdf", ".txt", ".j", ".lua" };
             var strings = allExtractedFiles.Where(x => extensionsToParseStrings.Contains(Path.GetExtension(x))).SelectMany(x => ParseStringsFromCodeInAnyLanguage(File.ReadAllText(x))).ToList();
             result["__AllStrings__"] = strings;
             result["__ParsedStrings__"] = strings.SelectMany(y => ScanTextForPotentialUnknownFileNames(y, unknownFileExtensions)).ToList();
 
-            result["__TOC__"] = allExtractedFiles.Where(x => Path.GetExtension(x).Equals(".toc", StringComparison.InvariantCultureIgnoreCase)).SelectMany(x => File.ReadLines(x)).ToList();
-            
             //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
 
-            result.AddRange(ScanModelFilesForPossibleFileNames(allExtractedFiles));
-            result.AddRange(ScanINIFilesForPossibleFileNames(allExtractedFiles, unknownFileExtensions));
-
+            _logEvent("Deep Searching Script files");
             var deepScanExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".j", ".lua", ".txt" };
             result.AddRange(DeepScanFilesForPossibleFileNames_Regex(allExtractedFiles.Where(x => deepScanExtensions.Contains(Path.GetExtension(x))).ToList(), unknownFileExtensions));
             return result;
@@ -2751,40 +2797,42 @@ endfunction
 
         protected List<string> ScanTextForPotentialUnknownFileNames(string text, List<string> unknownFileExtensions)
         {
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-
             if (string.IsNullOrWhiteSpace(text))
             {
-                return result.ToList();
+                return new List<string>();
+            }
+
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { text };
+            void AddPotentialStrings(List<string> strings)
+            {
+                result.AddRange(strings.Where(x => unknownFileExtensions.Any(y => x.Contains(y, StringComparison.InvariantCultureIgnoreCase))).Select(x => x.Trim()));
             }
 
             /*
-            var nonVisibleCharacters = Enumerable.Range((int)'\0', (int)' ' - (int)'\0').Concat(Enumerable.Range(127, 256 - 127)).Select(x => (char)x).ToList();
             var separators = (new char[] { '\'', ';', ',', '|', '=', '[', ']', '{', '}', '(', ')', ' ', '\t', '\r', '\n', '"' }).Concat(nonVisibleCharacters).Distinct().ToArray();
             */
 
-            var separators = Enumerable.Range(0, 256).Select(x => (char)x).Where(x => !(x >= 'a' && x <= 'z') && !(x >= 'A' && x <= 'Z') && !(x >= '0' && x <= '9')).ToArray();
+            var nonVisibleSeparators = Enumerable.Range((int)'\0', (int)' ' - (int)'\0').Concat(Enumerable.Range(127, 256 - 127)).Select(x => (char)x).ToArray();
+            var visibleSeparators = Enumerable.Range(0, 256).Select(x => (char)x).Where(x => !(x >= 'a' && x <= 'z') && !(x >= 'A' && x <= 'Z') && !(x >= '0' && x <= '9')).Except(nonVisibleSeparators).ToList();
 
-            var strings = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { text };
+            AddPotentialStrings(text.Split(nonVisibleSeparators, StringSplitOptions.RemoveEmptyEntries).ToList());
+
             int oldCount;
             do
             {
-                oldCount = strings.Count;
-                foreach (var separator in separators)
+                oldCount = result.Count;
+                foreach (var separator in visibleSeparators)
                 {
                     //note: split function allows all chars simultaneously, but that would produce fewer potential combinations of strings to search for filenames
-                    strings.AddRange(strings.SelectMany(x => x.Split(separator, StringSplitOptions.RemoveEmptyEntries)).ToList());
+                    AddPotentialStrings(result.SelectMany(x => x.Split(separator, StringSplitOptions.RemoveEmptyEntries)).ToList());
                 }
-            } while (strings.Count != oldCount);
-            foreach (var entry in strings.ToList())
+            } while (result.Count != oldCount);
+            foreach (var entry in result.ToList())
             {
-                foreach (var separator in separators)
-                {
-                    strings.Add(entry.Trim(separator));
-                }
+                AddPotentialStrings(visibleSeparators.Select(x => entry.Trim(x)).ToList());
             }
 
-            foreach (var entry in strings.ToList())
+            foreach (var entry in result.ToList())
             {
                 var directory = Path.GetDirectoryName(entry) ?? "";
                 string multipleExtensions = entry;
@@ -2793,23 +2841,12 @@ endfunction
                 {
                     lastValue = multipleExtensions;
                     multipleExtensions = Path.Combine(directory, Path.GetFileNameWithoutExtension(lastValue));
-                    strings.Add(multipleExtensions);
+                    result.Add(multipleExtensions);
                 } while (multipleExtensions != lastValue);
             }
 
-            foreach (var entry in strings)
-            {
-                if (unknownFileExtensions.Contains(Path.GetExtension(entry), StringComparer.InvariantCultureIgnoreCase))
-                {
-                    result.Add(entry);
-                }
-            }
-            foreach (var entry in result.ToList())
-            {
-                result.Add(entry.Trim());
-            }
-
-            return result.ToList();
+            var unknownFileExtensionsHash = new HashSet<string>(unknownFileExtensions, StringComparer.InvariantCultureIgnoreCase);
+            return result.Where(x => unknownFileExtensionsHash.Contains(Path.GetExtension(x))).ToList();
         }
 
         protected HashSet<string> _modelAndTextureFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".mdx", ".mdl", ".tga", ".blp", ".jpg", ".bmp", ".dds" };
@@ -2905,7 +2942,6 @@ endfunction
             return null;
         }
 
-        //todo: Remove FastMDX after testing MdxLib for equal or better accuracy
         protected List<string> ScanMDXForPossibleFileNames(string mdxFileName)
         {
             if (!string.Equals(Path.GetExtension(mdxFileName), ".mdx", StringComparison.InvariantCultureIgnoreCase))
@@ -2918,26 +2954,28 @@ endfunction
 
             if ((fastMdx == null || mdxLib == null) && fastMdx != mdxLib)
             {
-                Console.WriteLine("Can't delete FastMDX");
+                //todo: Remove FastMDX after testing MdxLib for equal or better accuracy
+                DebugSettings.Warn("Can't delete FastMDX");
             }
 
-            if (mdxLib != null && fastMdx != null && fastMdx.Count > mdxLib.Count)
+            if (mdxLib != null && fastMdx != null && fastMdx.Concat(mdxLib).Distinct(StringComparer.InvariantCultureIgnoreCase).Count() != mdxLib.Count)
             {
-                Console.WriteLine("Can't delete FastMDX");
+                //todo: Remove FastMDX after testing MdxLib for equal or better accuracy
+                DebugSettings.Warn("Can't delete FastMDX");
             }
 
-            if (fastMdx == null && mdxLib == null)
+            if (mdxLib != null)
             {
-                _logEvent($"Error parsing MDX file: {mdxFileName}");
-
-                var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-                result.AddRange(ScanMDXForPossibleFileNames_Regex(mdxFileName));
-                var scanTextResults = ScanTextForPotentialUnknownFileNames(File.ReadAllText(mdxFileName), _modelAndTextureFileExtensions.ToList());
-                result.AddRange(scanTextResults.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
-                return result.ToList();
+                return mdxLib;
             }
 
-            return new List<string>();
+            _logEvent($"Error parsing MDX file: {mdxFileName}");
+
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            result.AddRange(ScanMDXForPossibleFileNames_Regex(mdxFileName));
+            var scanTextResults = ScanTextForPotentialUnknownFileNames(File.ReadAllText(mdxFileName), _modelAndTextureFileExtensions.ToList());
+            result.AddRange(scanTextResults.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
+            return result.ToList();
         }
 
         protected List<string> ScanINIForPossibleFileNames(string fileName, List<string> unknownFileExtensions)
@@ -2958,7 +2996,7 @@ endfunction
             }
             catch
             {
-                Console.WriteLine("Fix this!");
+                DebugSettings.Warn("Fix this!");
             }
 
             return result;
@@ -2971,12 +3009,13 @@ endfunction
             {
                 if (!File.Exists(fileName))
                 {
+                    DebugSettings.Warn("Fix This!");
                     return;
                 }
 
                 if (string.Equals(Path.GetExtension(fileName), ".txt", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    result["__MDXSCAN__" + fileName] = ScanINIForPossibleFileNames(fileName, unknownFileExtensions);
+                    result["__INISCAN__" + fileName] = ScanINIForPossibleFileNames(fileName, unknownFileExtensions);
                 }
             });
 
@@ -2990,6 +3029,7 @@ endfunction
             {
                 if (!File.Exists(fileName))
                 {
+                    DebugSettings.Warn("Fix This!");
                     return;
                 }
 
@@ -3016,10 +3056,11 @@ endfunction
             {
                 if (!File.Exists(fileName))
                 {
+                    DebugSettings.Warn("Fix This!");
                     return;
                 }
 
-                if (!benchmarkUnknownRecovery && extensionsToSkip.Contains(Path.GetExtension(fileName)))
+                if (!DebugSettings.BenchmarkUnknownRecovery && extensionsToSkip.Contains(Path.GetExtension(fileName)))
                 {
                     return;
                 }
@@ -3083,6 +3124,11 @@ endfunction
             });
 
             return result;
+        }
+
+        public void Dispose()
+        {
+            CleanTemp();
         }
     }
 }

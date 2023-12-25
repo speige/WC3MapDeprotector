@@ -9,10 +9,11 @@ namespace WC3MapDeprotector
         protected bool _running = false;
         protected bool _cancel = false;
         protected bool _disclaimerApproved = false;
-        private Deprotector _deprotector;
+        private CancellationTokenSource _bruteForceCancellationToken;
 
         public MainForm()
         {
+            //todo: add gear icon for advanced settings?
             InitializeComponent();
             WindowUITracker.Tracker.Track(this);
             this.Text = $"WC3MapDeprotector {Assembly.GetEntryAssembly().GetName().Version} by http://www.youtube.com/@ai-gamer";
@@ -107,9 +108,9 @@ namespace WC3MapDeprotector
             {
                 _cancel = true;
                 btnRebuildMap.Enabled = false;
-                if (_deprotector.Settings.BruteForceCancellationToken != null)
+                if (_bruteForceCancellationToken != null)
                 {
-                    _deprotector.Settings.BruteForceCancellationToken.Cancel();
+                    _bruteForceCancellationToken.Cancel();
                 }
                 return;
             }
@@ -130,7 +131,7 @@ namespace WC3MapDeprotector
                 _cancel = false;
                 _running = true;
                 EnableControls();
-                _deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked, BruteForceUnknowns = cbBruteForceUnknowns.Checked }, log =>
+                using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked, BruteForceUnknowns = cbBruteForceUnknowns.Checked }, log =>
                 {
                     BeginInvoke(() =>
                     {
@@ -142,42 +143,44 @@ namespace WC3MapDeprotector
                     {
                         throw new Exception("User Cancelled");
                     }
-                });
-
-                var deprotectionResult = await _deprotector.Deprotect();
-
-                if (deprotectionResult.WarningMessages.Count > 0)
+                }))
                 {
-                    tbWarningMessages.Lines = deprotectionResult.WarningMessages.ToArray();
-                }
-                else
-                {
-                    tbWarningMessages.Text = "None";
-                }
+                    _bruteForceCancellationToken = deprotector.Settings.BruteForceCancellationToken;
+                    var deprotectionResult = await deprotector.Deprotect();
 
-                var statusMessage = "";
-                if (deprotectionResult.CriticalWarningCount == 0)
-                {
-                    statusMessage = "Success!";
-                }
-                else
-                {
-                    statusMessage = "Partial Success: Please read warnings log.";
-                }
+                    if (deprotectionResult.WarningMessages.Count > 0)
+                    {
+                        tbWarningMessages.Lines = deprotectionResult.WarningMessages.ToArray();
+                    }
+                    else
+                    {
+                        tbWarningMessages.Text = "None";
+                    }
 
-                if (deprotectionResult.UnknownFileCount > 0)
-                {
-                    statusMessage += " (" + deprotectionResult.UnknownFileCount + " unknown files could not be recovered)";
-                }
+                    var statusMessage = "";
+                    if (deprotectionResult.CriticalWarningCount == 0)
+                    {
+                        statusMessage = "Success!";
+                    }
+                    else
+                    {
+                        statusMessage = "Partial Success: Please read warnings log.";
+                    }
 
-                if (deprotectionResult.CountOfProtectionsFound == 0)
-                {
-                    statusMessage += " (Original file may not have been protected)";
-                }
+                    if (deprotectionResult.UnknownFileCount > 0)
+                    {
+                        statusMessage += " (" + deprotectionResult.UnknownFileCount + " unknown files could not be recovered)";
+                    }
 
-                ForceWindowToFront();
-                System.Media.SystemSounds.Hand.Play();
-                MessageBox.Show(statusMessage);
+                    if (deprotectionResult.CountOfProtectionsFound == 0)
+                    {
+                        statusMessage += " (Original file may not have been protected)";
+                    }
+
+                    ForceWindowToFront();
+                    System.Media.SystemSounds.Hand.Play();
+                    MessageBox.Show(statusMessage);
+                }
             }
             catch (Exception ex)
             {
