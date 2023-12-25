@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace WC3MapDeprotector
 {
-    public static partial class IMPQArchiveExtensions
+    public static partial class StormMPQArchiveExtensions
     {
         private static Lazy<Dictionary<ulong, string>> _defaultListFileRainbowTable = new Lazy<Dictionary<ulong, string>>(() =>
         {
@@ -37,7 +37,7 @@ namespace WC3MapDeprotector
 
         public static bool IsInDefaultListFile(string fileName)
         {
-            return MPQFileNameHash.TryCalculate(fileName, out var hash) && _defaultListFileRainbowTable.Value.ContainsKey(hash);
+            return MPQFullHash.TryCalculate(fileName, out var hash) && _defaultListFileRainbowTable.Value.ContainsKey(hash);
         }
 
         public static Dictionary<ulong, string> ConvertListFileToRainbowTable(List<string> fileNames)
@@ -45,7 +45,7 @@ namespace WC3MapDeprotector
             var result = new ConcurrentList<KeyValuePair<ulong, string>>();
             Parallel.ForEach(fileNames, fileName =>
             {
-                if (MPQFileNameHash.TryCalculate(fileName, out var hash))
+                if (MPQFullHash.TryCalculate(fileName, out var hash))
                 {
                     result.Add(new KeyValuePair<ulong, string>(hash, fileName));
                 }
@@ -54,18 +54,18 @@ namespace WC3MapDeprotector
             return result.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value);
         }
         
-        public static List<string> ProcessDefaultListFile(this IMPQArchive archive)
+        public static List<string> ProcessDefaultListFile(this StormMPQArchive archive)
         {
             return archive.ProcessListFile(_defaultListFileRainbowTable.Value);
         }
 
-        public static List<string> ProcessListFile(this IMPQArchive archive, Dictionary<ulong, string> rainbowTable)
+        public static List<string> ProcessListFile(this StormMPQArchive archive, Dictionary<ulong, string> rainbowTable)
         {
-            var verifiedFileNames = archive.UnknownFileNameHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var verifiedFileNames = archive.UnknownFileNameFullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
             return ProcessListFile_Slow(archive, verifiedFileNames);
         }
 
-        public static List<string> ProcessListFile_Slow(this IMPQArchive archive, List<string> fileNames)
+        public static List<string> ProcessListFile_Slow(this StormMPQArchive archive, List<string> fileNames)
         {
             List<string> result = new List<string>();
             foreach (var file in fileNames)

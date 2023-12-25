@@ -3,7 +3,7 @@ using System.Security.Policy;
 
 namespace WC3MapDeprotector
 {
-    public class StormMPQArchive : IMPQArchive
+    public class StormMPQArchive : IDisposable
     {
         protected class FileNameEntry
         {
@@ -12,20 +12,55 @@ namespace WC3MapDeprotector
         }
 
         protected IntPtr _archiveHandle;
-        protected Dictionary<ulong, FileNameEntry> _hashToFileName = new Dictionary<ulong, FileNameEntry>();
+        protected Dictionary<uint, FileNameEntry> _leftHashToFileName = new Dictionary<uint, FileNameEntry>();
+        protected Dictionary<uint, FileNameEntry> _rightHashToFileName = new Dictionary<uint, FileNameEntry>();
+        protected Dictionary<ulong, FileNameEntry> _fullHashToFileName = new Dictionary<ulong, FileNameEntry>();
 
-        public List<ulong> AllFileNameHashes
+        public List<uint> AllLeftFileNameHashes
         {
             get
             {
-                return _hashToFileName.Keys.ToList();
+                return _leftHashToFileName.Keys.ToList();
             }
         }
-        public List<ulong> UnknownFileNameHashes
+
+        public List<uint> AllRightFileNameHashes
         {
             get
             {
-                return _hashToFileName.Where(x => x.Value.IsUnknown).Select(x => x.Key).ToList();
+                return _rightHashToFileName.Keys.ToList();
+            }
+        }
+
+        public List<ulong> AllFullFileNameHashes
+        {
+            get
+            {
+                return _fullHashToFileName.Keys.ToList();
+            }
+        }
+
+        public List<uint> UnknownFileNameLeftHashes
+        {
+            get
+            {
+                return _leftHashToFileName.Where(x => x.Value.IsUnknown).Select(x => x.Key).ToList();
+            }
+        }
+
+        public List<uint> UnknownFileNameRightHashes
+        {
+            get
+            {
+                return _rightHashToFileName.Where(x => x.Value.IsUnknown).Select(x => x.Key).ToList();
+            }
+        }
+
+        public List<ulong> UnknownFileNameFullHashes
+        {
+            get
+            {
+                return _fullHashToFileName.Where(x => x.Value.IsUnknown).Select(x => x.Key).ToList();
             }
         }
 
@@ -33,13 +68,13 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return _hashToFileName.Where(x => !x.Value.IsUnknown).ToDictionary(x => x.Key, x => x.Value.FileName);
+                return _fullHashToFileName.Where(x => !x.Value.IsUnknown).ToDictionary(x => x.Key, x => x.Value.FileName);
             }
         }
 
         public bool ExtractFile(ulong archiveFileHash, string extractedFileName)
         {
-            if (!_hashToFileName.TryGetValue(archiveFileHash, out var archiveFileName))
+            if (!_fullHashToFileName.TryGetValue(archiveFileHash, out var archiveFileName))
             {
                 return false;
             }
@@ -48,9 +83,11 @@ namespace WC3MapDeprotector
             return StormLibrary.SFileExtractFile(_archiveHandle, archiveFileName.FileName, extractedFileName, 0);
         }
 
-        protected bool TryGetFileNameHash(string fileName, out ulong hash)
+        protected bool TryGetFileNameHash(string fileName, out uint leftHash, out uint rightHash, out ulong fullHash)
         {
-            hash = 0;
+            leftHash = 0;
+            rightHash = 0;
+            fullHash = 0;
 
             if (StormLibrary.SFileOpenFileEx(_archiveHandle, fileName, 0, out var fileHandle))
             {
@@ -61,7 +98,9 @@ namespace WC3MapDeprotector
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash1, right, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash2, left, (uint)Marshal.SizeOf(typeof(uint)), out var _);
 
-                    hash = (((ulong)Marshal.ReadInt32(left)) << 32) | ((uint)Marshal.ReadInt32(right));
+                    leftHash = (uint)Marshal.ReadInt32(left);
+                    rightHash = (uint)Marshal.ReadInt32(right);
+                    fullHash = ((ulong)leftHash << 32) | rightHash;
                     return true;
                 }
                 finally
@@ -77,9 +116,11 @@ namespace WC3MapDeprotector
 
         public bool DiscoverFile(string archiveFileName)
         {
-            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileNameHash(archiveFileName, out var hash))
+            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileNameHash(archiveFileName, out var leftHash, out var rightHash, out var fullHash))
             {
-                _hashToFileName[hash] = new FileNameEntry() { FileName = archiveFileName, IsUnknown = false };
+                _leftHashToFileName[leftHash] = new FileNameEntry() { FileName = archiveFileName, IsUnknown = false };
+                _rightHashToFileName[rightHash] = new FileNameEntry() { FileName = archiveFileName, IsUnknown = false };
+                _fullHashToFileName[fullHash] = new FileNameEntry() { FileName = archiveFileName, IsUnknown = false };
                 return true;
             }
 
@@ -110,9 +151,11 @@ namespace WC3MapDeprotector
                 do
                 {
                     var fileName = MarshalByteArrayAsString(findData.cFileName);
-                    if (TryGetFileNameHash(fileName, out var hash))
+                    if (TryGetFileNameHash(fileName, out var leftHash, out var rightHash, out var fullHash))
                     {
-                        _hashToFileName[hash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
+                        _leftHashToFileName[leftHash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
+                        _rightHashToFileName[rightHash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
+                        _fullHashToFileName[fullHash] = new FileNameEntry() { FileName = fileName, IsUnknown = true };
                     }
                 } while (StormLibrary.SFileFindNextFile(findFileHandle, out findData));
             }
