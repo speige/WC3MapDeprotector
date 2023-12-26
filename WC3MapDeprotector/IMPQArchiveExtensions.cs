@@ -105,7 +105,14 @@ namespace WC3MapDeprotector
                 stream.Position = 0;
                 if (imageIdentity != null && imageIdentity.Width > 0 && imageIdentity.Height > 0)
                 {
-                    return SixLabors.ImageSharp.Image.DetectFormat(stream)?.FileExtensions.FirstOrDefault() ?? ".tga";
+                    var format = SixLabors.ImageSharp.Image.DetectFormat(stream);
+                    if ("BMP".Equals(format?.Name, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        //NOTE: ImageSharp returns .bm instead of .bmp
+                        return ".bmp";
+                    }
+
+                    return format?.FileExtensions.FirstOrDefault() ?? ".tga";
                 }
             }
             catch { }
@@ -281,6 +288,11 @@ namespace WC3MapDeprotector
                     return ".fdf";
                 }
 
+                if (fileContents.StartsWith("ID3", StringComparison.Ordinal) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return ".mp3";
+                }
+
                 var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && x.Trim().StartsWith("[") && x.Trim().EndsWith("]")));
                 if (iniLines >= Math.Max(lines.Count / 2, 1))
                 {
@@ -304,11 +316,6 @@ namespace WC3MapDeprotector
                 if (HtmlTags().Matches(fileContents).Count >= lines.Count)
                 {
                     return ".html";
-                }
-
-                if (fileContents.StartsWith("ID3", StringComparison.Ordinal) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    return ".mp3";
                 }
 
                 if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
