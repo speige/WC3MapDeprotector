@@ -1,5 +1,6 @@
 ﻿using CSharpLua;
 using NAudio.Wave;
+using Newtonsoft.Json.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -198,13 +199,19 @@ namespace WC3MapDeprotector
                     stream.Position = 0;
                 }
 
+                var nonReadableAsciiCount = 0;
                 var stringBuilder = new StringBuilder();
                 for (var i = 0; i < bytes.Length; i++)
                 {
                     var character = (char)bytes[i];
+                    if (character >= 127 || (character >= '\0' && character < (byte)' '))
+                    {
+                        nonReadableAsciiCount++;
+                    }
                     stringBuilder.Append(character);
                 }
                 var fileContents = stringBuilder.ToString();
+                var isProbablyBinaryOrUnicode = nonReadableAsciiCount >= Math.Max(bytes.Length / 2, 1);
 
                 //todo: detect w3m & w3x for nested campaign maps (test if StormLib can parse)
 
@@ -288,7 +295,7 @@ namespace WC3MapDeprotector
                     return ".fdf";
                 }
 
-                if (fileContents.StartsWith("ID3", StringComparison.Ordinal) || fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("ID3", StringComparison.Ordinal) && (fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase)))
                 {
                     return ".mp3";
                 }
@@ -329,7 +336,7 @@ namespace WC3MapDeprotector
                     return ".mp3";
                 }
 
-                if (fileContents.StartsWith("\xFF\xD8", StringComparison.Ordinal) || fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase))
+                if (isProbablyBinaryOrUnicode && (fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase)))
                 {
                     //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
                     DebugSettings.Warn("Don't DELETE!");

@@ -76,6 +76,14 @@ namespace WC3MapDeprotector
         protected void tbInputFile_TextChanged(object sender, EventArgs e)
         {
             EnableControls();
+            try
+            {
+                tbOutputFile.Text = File.Exists(tbInputFile.Text) ? Path.Combine(Path.GetDirectoryName(tbInputFile.Text), "deprotected", Path.GetFileNameWithoutExtension(tbInputFile.Text) + "_deprotected" + Path.GetExtension(tbInputFile.Text)) : "";
+            }
+            catch
+            {
+                tbOutputFile.Text = "";
+            }
         }
 
         protected void tbOutputFile_TextChanged(object sender, EventArgs e)
@@ -88,7 +96,6 @@ namespace WC3MapDeprotector
             if (fdInputFile.ShowDialog() == DialogResult.OK)
             {
                 tbInputFile.Text = fdInputFile.FileName;
-                tbOutputFile.Text = Path.Combine(Path.GetDirectoryName(tbInputFile.Text), "deprotected", Path.GetFileNameWithoutExtension(tbInputFile.Text) + "_deprotected" + Path.GetExtension(tbInputFile.Text));
                 EnableControls();
             }
         }
