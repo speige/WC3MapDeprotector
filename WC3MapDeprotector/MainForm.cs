@@ -65,6 +65,12 @@ namespace WC3MapDeprotector
             cbTranspileToLua.Enabled = !_running;
             cbBruteForceUnknowns.Enabled = !_running;
             cbVisualTriggers.Enabled = !_running;
+            btnRebuildMap.TabStop = !_running;
+
+            if (_running)
+            {
+                btnDonate.Focus();
+            }
         }
 
         protected void MainForm_Load(object sender, EventArgs e)

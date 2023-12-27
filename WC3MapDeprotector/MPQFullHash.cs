@@ -35,5 +35,11 @@ namespace WC3MapDeprotector
         {
             return ((ulong)leftHash << 32) | rightHash;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Tuple<uint, uint> SplitValue(ulong fullHash)
+        {
+            return new Tuple<uint, uint>((uint)((fullHash & 0xFFFFFFFF00000000) >> 32), (uint)(fullHash & 0x00000000FFFFFFFF));
+        }
     }
 }

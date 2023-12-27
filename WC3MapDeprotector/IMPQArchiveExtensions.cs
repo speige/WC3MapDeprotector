@@ -71,7 +71,7 @@ namespace WC3MapDeprotector
             List<string> result = new List<string>();
             foreach (var file in fileNames)
             {
-                if (archive.DiscoverFile(file))
+                if (archive.DiscoverFile(file, out var _))
                 {
                     result.Add(file);
                 }
@@ -334,13 +334,6 @@ namespace WC3MapDeprotector
                 {
                     //NOTE: mp3 gets false positives sometimes & also misses valid ones, so this should be last. Replace with different library instead of NAudio?
                     return ".mp3";
-                }
-
-                if (isProbablyBinaryOrUnicode && (fileContents.Contains("JFIF", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("Exif", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
-                    DebugSettings.Warn("Don't DELETE!");
-                    return ".jpg";
                 }
 
                 if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
