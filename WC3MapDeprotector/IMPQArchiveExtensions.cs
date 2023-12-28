@@ -1,6 +1,5 @@
 ﻿using CSharpLua;
 using NAudio.Wave;
-using Newtonsoft.Json.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -62,7 +61,7 @@ namespace WC3MapDeprotector
 
         public static List<string> ProcessListFile(this StormMPQArchive archive, Dictionary<ulong, string> rainbowTable)
         {
-            var verifiedFileNames = archive.UnknownFileNameFullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            var verifiedFileNames = archive.MPQFileNameFullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
             return ProcessListFile_Slow(archive, verifiedFileNames);
         }
 
@@ -178,7 +177,16 @@ namespace WC3MapDeprotector
         }
 
         [GeneratedRegex(@"<[^>]+>")]
-        private static partial Regex HtmlTags();
+        private static partial Regex Regex_HtmlTags();
+
+        [GeneratedRegex(@"\s*function\s+config\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
+        private static partial Regex Regex_JassScript();
+
+        [GeneratedRegex(@"\s*function\s+config\s*\(\)", RegexOptions.IgnoreCase)]
+        private static partial Regex Regex_LuaScript();
+        
+        [GeneratedRegex(@"\s*function\s+preloadfiles\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
+        private static partial Regex Regex_PreloadFile_Jass();
 
         public static string PredictUnknownFileExtension(Stream stream)
         {
@@ -243,7 +251,7 @@ namespace WC3MapDeprotector
                     return ".wav";
                 }
 
-                if (fileContents.StartsWith("DDS", StringComparison.OrdinalIgnoreCase))
+                if (fileContents.StartsWith("DDS\x20", StringComparison.OrdinalIgnoreCase))
                 {
                     return ".dds";
                 }
@@ -252,27 +260,26 @@ namespace WC3MapDeprotector
                     //note: could technically also be exe, but unlikely
                     return ".dll";
                 }
-                if (fileContents.StartsWith("\x02\x00\0\0", StringComparison.Ordinal) && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
+                if (fileContents.StartsWith("\x02\0\0\0", StringComparison.Ordinal) && (fileContents.Contains(".w3m", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains(".w3x", StringComparison.InvariantCultureIgnoreCase)))
                 {
                     //todo: does War3Net have a parser to test this?
                     return ".wai";
                 }
 
-                if (fileContents.StartsWith("\x42\x4D", StringComparison.Ordinal))
+                if (fileContents.StartsWith("BM", StringComparison.Ordinal))
                 {
-                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
-                    DebugSettings.Warn("Don't DELETE!");
+                    DebugSettings.Warn("Delete this file detection if breakpoint is never hit");
                     return ".bmp";
                 }
 
                 //todo: [LowPriority since DefaultListFile will handle it usually] detect common wc3 formats (test against War3Net SetFile command)
 
-                if (Regex.IsMatch(fileContents, "function\\s+config\\s+takes\\s+nothing\\s+returns\\s+nothing", RegexOptions.IgnoreCase))
+                if (Regex_JassScript().IsMatch(fileContents))
                 {
                     return ".j";
                 }
 
-                if (Regex.IsMatch(fileContents, "function\\s+config\\s*\\(\\)", RegexOptions.IgnoreCase))
+                if (Regex_LuaScript().IsMatch(fileContents))
                 {
                     return ".lua";
                 }
@@ -281,6 +288,11 @@ namespace WC3MapDeprotector
                 if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= Math.Max(lines.Count / 2, 1))
                 {
                     return ".toc";
+                }
+
+                if (Regex_PreloadFile_Jass().IsMatch(lines.FirstOrDefault() ?? ""))
+                {
+                    return ".pld";
                 }
 
                 //todo: [LowPriority since regex already covers it] test against mdl parser
@@ -320,7 +332,7 @@ namespace WC3MapDeprotector
                 }
                 */
 
-                if (HtmlTags().Matches(fileContents).Count >= lines.Count)
+                if (Regex_HtmlTags().Matches(fileContents).Count >= lines.Count)
                 {
                     return ".html";
                 }
@@ -332,21 +344,87 @@ namespace WC3MapDeprotector
 
                 if (IsMp3AudioFile(stream))
                 {
-                    //NOTE: mp3 gets false positives sometimes & also misses valid ones, so this should be last. Replace with different library instead of NAudio?
+                    //NOTE: mp3 gets false positives sometimes, so this should be below any higher-priority file extensions. Replace with different library instead of NAudio?
+                    //todo: move up higher to see if I fixed it by resetting stream position to 0 before reading
                     return ".mp3";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("MPQ\x1A", StringComparison.Ordinal))
+                {
+                    return ".mpq";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("SMK2", StringComparison.Ordinal))
+                {
+                    return ".smk";
+                }
+
+                if (fileContents.StartsWith("TYPE", StringComparison.Ordinal))
+                {
+                    return ".pud";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("GIF8", StringComparison.Ordinal))
+                {
+                    return ".gif";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("\x1Blua", StringComparison.Ordinal))
+                {
+                    return ".lua";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("ÿØÿà", StringComparison.Ordinal))
+                {
+                    return ".jpg";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("fLaC", StringComparison.Ordinal))
+                {
+                    return ".flac";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("HM3W", StringComparison.Ordinal))
+                {
+                    //could also be w3m
+                    return ".w3x";
+                }
+
+                if (fileContents.StartsWith("W3do", StringComparison.Ordinal))
+                {
+                    return ".doo";
+                }
+
+                if (fileContents.StartsWith("W3E!", StringComparison.Ordinal))
+                {
+                    return ".w3e";
+                }
+
+                if (fileContents.StartsWith("MP3W", StringComparison.Ordinal))
+                {
+                    return ".wpm";
+                }
+
+                if (fileContents.StartsWith("WTG!", StringComparison.Ordinal))
+                {
+                    return ".wtg";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("MM", StringComparison.Ordinal))
+                {
+                    //todo: add parser to look for textures?
+                    return ".3ds";
                 }
 
                 if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
                 {
-                    //todo: delete if testing shows it's unnecessary because PredictAudioFileExtension already finds it
-                    DebugSettings.Warn("Don't DELETE!");
+                    DebugSettings.Warn("Delete this file detection if breakpoint is never hit");
                     return ".mp3";
                 }
 
                 if (fileContents.Contains("Saved by D3DX", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    //todo: delete if testing shows it's unnecessary because PredictImageFileExtension already finds it
-                    DebugSettings.Warn("Don't DELETE!");
+                    DebugSettings.Warn("Delete this file detection if breakpoint is never hit");
                     return ".tga";
                 }
             }

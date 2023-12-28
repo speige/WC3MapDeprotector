@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
 using War3Net.IO.Mpq;
 using System.Runtime.CompilerServices;
-using System.Security.Policy;
 
 namespace WC3MapDeprotector
 {
@@ -35,10 +34,9 @@ namespace WC3MapDeprotector
             }
         }
 
-        //NOTE: Won't compile without a parameterless constructor, but we don't want it
         public MPQPartialHash()
         {
-            DebugSettings.Warn("MUST SET HASH OFFSET!");
+            DebugSettings.Warn("MUST SET HASH OFFSET! This Constructor should not be used, but program won't compile without a parameterless constructor.");
             throw new NotImplementedException();
         }
 

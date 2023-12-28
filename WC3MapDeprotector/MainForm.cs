@@ -180,6 +180,11 @@ namespace WC3MapDeprotector
                         statusMessage = "Partial Success: Please read warnings log.";
                     }
 
+                    if (DebugSettings.BenchmarkUnknownRecovery)
+                    {
+                        statusMessage = "Benchmark-only mode. No output map created.";
+                    }
+
                     if (deprotectionResult.UnknownFileCount > 0)
                     {
                         statusMessage += " (" + deprotectionResult.UnknownFileCount + " unknown files could not be recovered)";
