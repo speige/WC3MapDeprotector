@@ -51,7 +51,7 @@ namespace WC3MapDeprotector
         protected readonly string _outMapFile;
         public DeprotectionSettings Settings { get; private set; }
         protected readonly Action<string> _logEvent;
-        protected ConcurrentHashSet<string> _extractedMapFiles;
+        protected HashSet<string> _extractedMapFiles;
         protected DeprotectionResult _deprotectionResult;
 
 
@@ -400,7 +400,7 @@ namespace WC3MapDeprotector
 
             Directory.CreateDirectory(Path.GetDirectoryName(_outMapFile));
 
-            _extractedMapFiles = new ConcurrentHashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            _extractedMapFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             _deprotectionResult = new DeprotectionResult();
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
 
@@ -1070,12 +1070,20 @@ namespace WC3MapDeprotector
             return true;
         }
 
+        protected HashSet<string> _verifyActualAndPredictedExtensionsMatchAlreadyDone = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         protected void VerifyActualAndPredictedExtensionsMatch(StormMPQArchive archive, string archiveFileName)
         {
             if (!archive.HasFakeFiles && !DebugSettings.BenchmarkUnknownRecovery)
             {
                 return;
             }
+
+            if (_verifyActualAndPredictedExtensionsMatchAlreadyDone.Contains(archiveFileName))
+            {
+                return;
+            }
+
+            _verifyActualAndPredictedExtensionsMatchAlreadyDone.Add(archiveFileName);
 
             if (!archive.DiscoverFile(archiveFileName, out var md5Hash))
             {
@@ -1337,7 +1345,7 @@ namespace WC3MapDeprotector
 
                 //todo: Disable deep scanning of directories unless Benchmark is enabled. Add separate deep scan of File Extensions if Benchmark is enabled. Delete each one if they don't produce any better results than when it's disabled.
                 //todo: If directory name is blank, do check for each shorter version of file.ext (ile.ext le.ext l.ext e.ext .ext)
-
+                var foundFileLock = new object();
                 var finishedSearching = false;
                 var leftHashes = new HashSet<uint>(archive.MPQFileNameLeftHashes);
                 var rightHashes = new HashSet<uint>(archive.MPQFileNameRightHashes);
@@ -1366,15 +1374,18 @@ namespace WC3MapDeprotector
 
                             if (MPQPartialHash.TryCalculate(fullFileName, MPQPartialHash.RIGHT_OFFSET, out var rightHash) && rightHashes.Contains(rightHash))
                             {
-                                if (ExtractFileFromArchive(archive, fullFileName))
+                                lock (foundFileLock)
                                 {
-                                    _extractedMapFiles.Add(fullFileName);
-                                    filesFound++;
-
-                                    //NOTE: If it has fake files, we keep scanning until entire file list is exhausted, because we may find a better name for an already resolved file
-                                    if (!archive.HasFakeFiles && !archive.HasUnknownHashes)
+                                    if (ExtractFileFromArchive(archive, fullFileName))
                                     {
-                                        finishedSearching = true;
+                                        _extractedMapFiles.Add(fullFileName);
+                                        filesFound++;
+
+                                        //NOTE: If it has fake files, we keep scanning until entire file list is exhausted, because we may find a better name for an already resolved file
+                                        if (!archive.HasFakeFiles && !archive.HasUnknownHashes)
+                                        {
+                                            finishedSearching = true;
+                                        }
                                     }
                                 }
                             }

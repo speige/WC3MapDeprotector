@@ -109,10 +109,10 @@ namespace WC3MapDeprotector
                     if ("BMP".Equals(format?.Name, StringComparison.InvariantCultureIgnoreCase))
                     {
                         //NOTE: ImageSharp returns .bm instead of .bmp
-                        return ".bmp";
+                        return "bmp";
                     }
 
-                    return format?.FileExtensions.FirstOrDefault() ?? ".tga";
+                    return format?.FileExtensions.FirstOrDefault() ?? "tga";
                 }
             }
             catch { }
@@ -416,9 +416,13 @@ namespace WC3MapDeprotector
                     return ".3ds";
                 }
 
+                if (fileContents.StartsWith("RIFF", StringComparison.Ordinal) && fileContents.Contains("WAVEfmt", StringComparison.Ordinal))
+                {
+                    return ".wav";
+                }
+
                 if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
                 {
-                    DebugSettings.Warn("Delete this file detection if breakpoint is never hit");
                     return ".mp3";
                 }
 

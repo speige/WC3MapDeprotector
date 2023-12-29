@@ -39,7 +39,7 @@ namespace WC3MapDeprotector
             if (string.IsNullOrWhiteSpace(Path.GetDirectoryName(pseudoFileName)))
             {
                 var match = Regex_PseudoFileName().Match(Path.GetFileNameWithoutExtension(pseudoFileName));
-                if (match.Success && uint.TryParse(match.Groups[1].Value, out fileIndex) && _fileIndexToMd5.ContainsKey(fileIndex))
+                if (match.Success && uint.TryParse(match.Groups[1].Value, out fileIndex))
                 {
                     return true;
                 }
@@ -135,11 +135,12 @@ namespace WC3MapDeprotector
                         if (!isEmpty)
                         {
                             md5Hash = CalculateMD5(stream);
+                            _md5ToLocalDiskFileName[md5Hash] = localDiskFileName;
                             if (!_md5ToPredictedExtension.TryGetValue(md5Hash, out predictedExtension))
                             {
                                 stream.Position = 0;
                                 predictedExtension = StormMPQArchiveExtensions.PredictUnknownFileExtension(stream) ?? "";
-                                if (string.IsNullOrWhiteSpace(predictedExtension) && !IsPseudoFileName(archiveFileName))
+                                if (string.IsNullOrWhiteSpace(predictedExtension) && !TryParseFileIndexFromPseudoFileName(archiveFileName, out var _))
                                 {
                                     predictedExtension = Path.GetExtension(archiveFileName);
                                 }
@@ -150,6 +151,11 @@ namespace WC3MapDeprotector
                                     {
                                         DebugSettings.Warn("Delete code which uses StormLib extension if this breakpoint is never hit");
                                     }
+                                }
+
+                                if (!string.IsNullOrWhiteSpace(predictedExtension) && (predictedExtension.Length - predictedExtension.Replace(".", "").Length) > 1)
+                                {
+                                    DebugSettings.Warn("Bug in PredictUnknownFileExtension");
                                 }
 
                                 _md5ToPredictedExtension[md5Hash] = predictedExtension;
@@ -268,9 +274,9 @@ namespace WC3MapDeprotector
                 return true;
             }
 
-            if (TryParseFileIndexFromPseudoFileName(archiveFileName, out var fileIndex))
+            if (TryParseFileIndexFromPseudoFileName(archiveFileName, out var fileIndex) && _fileIndexToMd5.TryGetValue(fileIndex, out md5Hash))
             {
-                return _fileIndexToMd5.TryGetValue(fileIndex, out md5Hash);
+                return true;
             }
 
             if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileIndexFilename(archiveFileName, out fileIndex))
@@ -461,8 +467,6 @@ namespace WC3MapDeprotector
                         var extractedFileName = Path.Combine(isUnknown ? UNKNOWN_FOLDER : DISCOVERED_FOLDER, realFileName ?? pseudoFileName);
                         if (TryExtractFile(fileName, extractedFileName, out var fileContentsMD5Hash))
                         {
-                            _md5ToLocalDiskFileName[fileContentsMD5Hash] = extractedFileName;
-
                             if (!isUnknown)
                             {
                                 mpqFullHash = MPQFullHash.Calculate(realFileName);
