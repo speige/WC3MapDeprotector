@@ -398,8 +398,6 @@ namespace WC3MapDeprotector
                 throw new Exception($"Output Map File is locked. Please close any MPQ programs, WC3 Game, & WorldEditor and try again. File: {_outMapFile}");
             }
 
-            CleanTemp();
-
             Directory.CreateDirectory(Path.GetDirectoryName(_outMapFile));
 
             _extractedMapFiles = new ConcurrentHashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -453,21 +451,12 @@ namespace WC3MapDeprotector
                     }
                 }
 
+                DeleteAttributeListSignatureFiles();
+
                 if (inMPQArchive.HasUnknownHashes || inMPQArchive.HasFakeFiles)
                 {
                     inMPQArchive.ProcessDefaultListFile();
                 }
-
-                if ((inMPQArchive.HasUnknownHashes || inMPQArchive.HasFakeFiles) && !DebugSettings.BenchmarkUnknownRecovery)
-                {
-                    var discoveredFiles = inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
-                    foreach (var file in discoveredFiles)
-                    {
-                        VerifyActualAndPredictedExtensionsMatch(inMPQArchive, file);
-                    }
-                }
-
-                DeleteAttributeListSignatureFiles();
 
                 foreach (var fileName in inMPQArchive.DiscoveredFileNames)
                 {
@@ -601,18 +590,20 @@ namespace WC3MapDeprotector
                     }
                 }
 
+                //NOTE: GlobalListFile is processed after deep scan, because maps with fake files will cause warnings, but deep scan is more likely to find real files (todo: don't generate warnings til end of processing so order of operations doesn't matter)
                 var beforeGlobalListFileCount = inMPQArchive.UnknownFileCount;
-                if (DebugSettings.BenchmarkUnknownRecovery)
+                string globalListFileBenchmarkMessage = "";
+                if (inMPQArchive.HasUnknownHashes || inMPQArchive.HasFakeFiles || DebugSettings.BenchmarkUnknownRecovery)
                 {
-                    string globalListFileBenchmarkMessage = "";
-                    if (inMPQArchive.HasUnknownHashes || inMPQArchive.HasFakeFiles)
+                    var discoveredFileNamesBackup_globalListFile = inMPQArchive.DiscoveredFileNames.ToList();
+                    var discoveredFiles = inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
+                    foreach (var file in discoveredFiles)
                     {
-                        var discoveredFileNamesBackup_globalListFile = inMPQArchive.DiscoveredFileNames.ToList();
-                        var discoveredFiles = inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
-                        foreach (var file in discoveredFiles)
-                        {
-                            VerifyActualAndPredictedExtensionsMatch(inMPQArchive, file);
-                        }
+                        VerifyActualAndPredictedExtensionsMatch(inMPQArchive, file);
+                    }
+
+                    if (DebugSettings.BenchmarkUnknownRecovery)
+                    {
                         var recoveredFileNames_globalListFile = inMPQArchive.DiscoveredFileNames.Except(discoveredFileNamesBackup_globalListFile, StringComparer.InvariantCultureIgnoreCase).ToList();
                         if (recoveredFileNames_globalListFile.Any())
                         {
@@ -620,10 +611,10 @@ namespace WC3MapDeprotector
 
                             DebugSettings.Warn("Research how to get these files!");
                         }
-                    }
 
-                    _deprotectionResult.WarningMessages.Add("Done benchmarking. Unknowns left: " + beforeGlobalListFileCount + globalListFileBenchmarkMessage);
-                    return _deprotectionResult;
+                        _deprotectionResult.WarningMessages.Add("Done benchmarking. Unknowns left: " + beforeGlobalListFileCount + globalListFileBenchmarkMessage);
+                        return _deprotectionResult;
+                    }
                 }
 
                 if (inMPQArchive.HasUnknownHashes || inMPQArchive.HasFakeFiles)
