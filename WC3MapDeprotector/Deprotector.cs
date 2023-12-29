@@ -668,7 +668,7 @@ namespace WC3MapDeprotector
                 File.WriteAllText(skinPath, "");
             }
             var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
-            var ini = parser.ReadFile(skinPath);
+            var ini = parser.ReadFile(skinPath, Encoding.UTF8);
             ini.Configuration.AssigmentSpacer = "";
             ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0hJR0g=")] = decode("REVQUk9URUNURUQ=");
             ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0xPVw==")] = decode("REVQUk9URUNURUQ=");
@@ -1081,7 +1081,7 @@ namespace WC3MapDeprotector
 
         protected void VerifyActualAndPredictedExtensionsMatch(StormMPQArchive archive, string archiveFileName)
         {
-            if (!DebugSettings.BenchmarkUnknownRecovery || archive.HasFakeFiles)
+            if (!archive.HasFakeFiles && !DebugSettings.BenchmarkUnknownRecovery)
             {
                 return;
             }
@@ -1097,16 +1097,25 @@ namespace WC3MapDeprotector
 
             if (!isPseudoFileName && !realExtension.Equals(predictedExtension, StringComparison.InvariantCultureIgnoreCase) && !StormMPQArchiveExtensions.IsInDefaultListFile(archiveFileName))
             {
-                //NOTE: sometimes there are multiple valid extensions for a file. Sometimes a map maker accidentally names something wrong. These formats give a lot of false positives during testing and the file detection code for these types has already been tested to be correct.
-                var ignoreMistakenPrediction = (string.Equals(realExtension, ".ini") && string.Equals(predictedExtension, ".txt")) ||
-                    (string.Equals(predictedExtension, ".ini") && string.Equals(realExtension, ".txt")) ||
-                    (string.Equals(realExtension, ".wav") && string.Equals(predictedExtension, ".mp3")) ||
-                    (string.Equals(predictedExtension, ".wav") && string.Equals(realExtension, ".mp3")) ||
-                    (string.Equals(realExtension, ".mdx") && string.Equals(predictedExtension, ".blp")) ||
-                    (string.Equals(predictedExtension, ".mdx") && string.Equals(realExtension, ".blp"));
-                if (!ignoreMistakenPrediction)
+                if (archive.HasFakeFiles && !string.IsNullOrWhiteSpace(predictedExtension))
                 {
-                    DebugSettings.Warn("Possible bug in PredictUnknownFileExtension");
+                    //todo: don't run until end in case it's corrected later by 2nd file name being discovered
+                    _deprotectionResult.WarningMessages.Add($"{archiveFileName} had different extension than predicted {predictedExtension}. It's possible it was discovered under a fake file name, you may need to research the correct name and rename it.");
+                }
+
+                if (!archive.HasFakeFiles)
+                {
+                    //NOTE: sometimes there are multiple valid extensions for a file. Sometimes a map maker accidentally names something wrong. These formats give a lot of false positives during testing and the file detection code for these types has already been tested to be correct.
+                    var debugIgnoreMistakenPrediction = (string.Equals(realExtension, ".ini") && string.Equals(predictedExtension, ".txt")) ||
+                        (string.Equals(predictedExtension, ".ini") && string.Equals(realExtension, ".txt")) ||
+                        (string.Equals(realExtension, ".wav") && string.Equals(predictedExtension, ".mp3")) ||
+                        (string.Equals(predictedExtension, ".wav") && string.Equals(realExtension, ".mp3")) ||
+                        (string.Equals(realExtension, ".mdx") && string.Equals(predictedExtension, ".blp")) ||
+                        (string.Equals(predictedExtension, ".mdx") && string.Equals(realExtension, ".blp"));
+                    if (!debugIgnoreMistakenPrediction)
+                    {
+                        DebugSettings.Warn("Possible bug in PredictUnknownFileExtension");
+                    }
                 }
             }
         }

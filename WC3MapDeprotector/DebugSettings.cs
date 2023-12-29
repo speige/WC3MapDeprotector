@@ -22,9 +22,9 @@ namespace WC3MapDeprotector
         {
             if (IsDebugMode)
             {
-                BenchmarkUnknownRecovery = true;
-                DontCleanTemp = true;
-                BreakOnWarnings = true;
+                //BenchmarkUnknownRecovery = true;
+                //DontCleanTemp = true;
+                //BreakOnWarnings = true;
             }
         }
 

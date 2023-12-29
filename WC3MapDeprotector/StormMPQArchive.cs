@@ -139,6 +139,10 @@ namespace WC3MapDeprotector
                             {
                                 stream.Position = 0;
                                 predictedExtension = StormMPQArchiveExtensions.PredictUnknownFileExtension(stream) ?? "";
+                                if (string.IsNullOrWhiteSpace(predictedExtension) && !IsPseudoFileName(archiveFileName))
+                                {
+                                    predictedExtension = Path.GetExtension(archiveFileName);
+                                }
                                 if (string.IsNullOrWhiteSpace(predictedExtension))
                                 {
                                     predictedExtension = Path.GetExtension(localDiskFileName).Replace(".xxx", "", StringComparison.InvariantCultureIgnoreCase);
@@ -207,8 +211,8 @@ namespace WC3MapDeprotector
                 }
                 finally
                 {
-                StormLibrary.SFileCloseFile(fileHandle);
-                Marshal.FreeHGlobal(ptrFileIndex);
+                    StormLibrary.SFileCloseFile(fileHandle);
+                    Marshal.FreeHGlobal(ptrFileIndex);
                 }
             }
 
@@ -401,6 +405,19 @@ namespace WC3MapDeprotector
             }
         }
 
+        public static T[] MarshalUnmanagedArrayToStruct<T>(IntPtr unmanagedArray, int length)
+        {
+            var size = Marshal.SizeOf(typeof(T));
+            var result = new T[length];
+
+            for (var idx = 0; idx < length; idx++)
+            {
+                result[idx] = Marshal.PtrToStructure<T>(new IntPtr(unmanagedArray.ToInt64() + idx * size));
+            }
+
+            return result;
+        }
+
         public unsafe StormMPQArchive(string mpqFileName, string extractFolder, Action<string> logEvent, DeprotectionResult deprotectionResult)
         {
             _extractFolder = extractFolder;
@@ -410,19 +427,6 @@ namespace WC3MapDeprotector
             {
                 throw new Exception("Unable to open MPQ Archive");
             }
-
-            /*
-            IntPtr ptrFileCount = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
-            try
-            {
-                StormLibrary.SFileGetFileInfo(_archiveHandle, StormLibrary.SFileInfoClass.SFileMpqNumberOfFiles, ptrFileCount, (uint)Marshal.SizeOf(typeof(uint)), out var _);
-                _fileCount = (uint)Marshal.ReadInt32(ptrFileCount);
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(ptrFileCount);
-            }
-            */
 
             _logEvent("Opening MPQ Archive");
             var findFileHandle = StormLibrary.SFileFindFirstFile(_archiveHandle, "*", out var findData, null);
@@ -435,18 +439,8 @@ namespace WC3MapDeprotector
 
                     if (TryGetHashByFilename(fileName, out var fileIndex, out var hashIndex, out var mpqLeftPartialHash, out var mpqRightPartialHash, out var mpqFullHash))
                     {
-                        //todo: test if this should be before or after the "fake file check"
-                        _fullHashToPartialHashes[mpqFullHash] = new Tuple<uint, uint>(mpqLeftPartialHash, mpqRightPartialHash);
-
                         if (_fileIndexToMd5.ContainsKey(fileIndex))
                         {
-                            HasFakeFiles = true;
-
-                            if (!mpqFileName.Contains("lusin", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                DebugSettings.Warn("Found a new map with fake files. Do extra testing");
-                            }
-
                             continue;
                         }
 
@@ -489,9 +483,48 @@ namespace WC3MapDeprotector
                 } while (StormLibrary.SFileFindNextFile(findFileHandle, out findData));
 
                 _logEvent("Extraction Completed");
+
+
+                uint hashTableEntryCount;
+                IntPtr ptrHashtableSize = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
+                try
+                {
+                    StormLibrary.SFileGetFileInfo(_archiveHandle, StormLibrary.SFileInfoClass.SFileMpqHashTableSize, ptrHashtableSize, (uint)Marshal.SizeOf(typeof(uint)), out var _);
+                    hashTableEntryCount = (uint)Marshal.ReadInt32(ptrHashtableSize);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(ptrHashtableSize);
+                }
+
+                StormLibrary.TMPQHash[] hashTable;
+                var hashTableMemorySize = (uint)(hashTableEntryCount * Marshal.SizeOf(typeof(StormLibrary.TMPQHash)));
+                IntPtr ptrHashtable = Marshal.AllocHGlobal((int)hashTableMemorySize);
+                try
+                {
+                    StormLibrary.SFileGetFileInfo(_archiveHandle, StormLibrary.SFileInfoClass.SFileMpqHashTable, ptrHashtable, hashTableMemorySize, out var _);
+                    hashTable = MarshalUnmanagedArrayToStruct<StormLibrary.TMPQHash>(ptrHashtable, (int)hashTableEntryCount);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(ptrHashtable);
+                }
+
+                var validHashEntries = hashTable.Where(x => _fileIndexToMd5.ContainsKey(x.dwBlockIndex)).ToList();
+                foreach (var hash in validHashEntries)
+                {
+                    _fullHashToPartialHashes[MPQFullHash.GetValue(hash.dwName2, hash.dwName1)] = new Tuple<uint, uint>(hash.dwName2, hash.dwName1);
+                }
+                HasFakeFiles = validHashEntries.GroupBy(x => x.dwBlockIndex).Any(x => x.Count() > 1);
+
                 if (HasFakeFiles)
                 {
-                    _deprotectionResult.WarningMessages.Add("MPQ Archive had fake files, it's possible some names were detected incorrectly. Safest option is to run live game scanner which attaches to running warcraft3 instance and scans memory or local file access.");
+                    _deprotectionResult.WarningMessages.Add("MPQ Archive has fake files, it's possible some names were detected incorrectly. Safest option is to run live game of map i nwarcraft3 with scanner attached which scans memory and local file access.");
+
+                    if (!mpqFileName.Contains("lusin", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        DebugSettings.Warn("Found a new map with fake files. Do extra testing");
+                    }
                 }
             }
             finally
