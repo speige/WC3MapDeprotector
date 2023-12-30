@@ -502,12 +502,11 @@ namespace WC3MapDeprotector
                                 _deprotectionResult.CountOfProtectionsFound++;
                             }
 
-                            if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
+                            //todo: if File.Exsts, use War3Net to decompile both files & merge their contents together & output new file
+                            if (!File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
                             {
-                                DebugSettings.Warn("Verify if original file had anything valueable that was erased by SLKRecover");
-                                _logEvent($"Overwriting {fileName} with SLKRecover version");
+                                File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), false);
                             }
-                            File.Copy(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), true);
                         }
                     }
                 }

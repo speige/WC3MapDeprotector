@@ -1,5 +1,6 @@
 ﻿using CSharpLua;
 using NAudio.Wave;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -179,10 +180,10 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"<[^>]+>")]
         private static partial Regex Regex_HtmlTags();
 
-        [GeneratedRegex(@"\s*function\s+config\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"\s*function\s+\S+\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_JassScript();
 
-        [GeneratedRegex(@"\s*function\s+config\s*\(\)", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"\s*function\s+\S+\s*\([a-z, \t]*\)", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_LuaScript();
         
         [GeneratedRegex(@"\s*function\s+preloadfiles\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
@@ -220,6 +221,30 @@ namespace WC3MapDeprotector
                 }
                 var fileContents = stringBuilder.ToString();
                 var isProbablyBinaryOrUnicode = nonReadableAsciiCount >= Math.Max(bytes.Length / 2, 1);
+                var isProbablyAscii = !isProbablyBinaryOrUnicode;
+
+                var utf8String = Encoding.UTF8.GetString(bytes);
+                var nonReadableUtf8Count = 0;
+                foreach (var character in utf8String)
+                {
+                    var charBytes = Encoding.UTF8.GetBytes(character.ToString());
+                    if (charBytes.Length == 1)
+                    {
+                        if (character >= 127 || (character >= '\0' && character < (byte)' '))
+                        {
+                            nonReadableUtf8Count++;
+                        }
+                    }
+                    else
+                    {
+                        var category = char.GetUnicodeCategory(character);
+                        if (category == UnicodeCategory.OtherNotAssigned || category == UnicodeCategory.PrivateUse || category == UnicodeCategory.Control)
+                        {
+                            nonReadableUtf8Count++;
+                        }
+                    }
+                }
+                var isProbablyUTF8 = isProbablyBinaryOrUnicode && (nonReadableUtf8Count <= Math.Max(utf8String.Length * .1, 1));
 
                 //todo: detect w3m & w3x for nested campaign maps (test if StormLib can parse)
 
@@ -285,6 +310,7 @@ namespace WC3MapDeprotector
                 }
 
                 var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                var utf8Lines = utf8String.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
                 if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= Math.Max(lines.Count / 2, 1))
                 {
                     return ".toc";
@@ -307,16 +333,21 @@ namespace WC3MapDeprotector
                     return ".fdf";
                 }
 
-                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("ID3", StringComparison.Ordinal) && (fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) || fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase)))
+                if (IsMp3AudioFile(stream))
+                {
+                    //NOTE: mp3 gets false positives sometimes, so this should be below any higher-priority file extensions. Replace with different library instead of NAudio?
+                    //todo: move up higher to see if I fixed it by resetting stream position to 0 before reading
+                    return ".mp3";
+                }
+
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("ID3", StringComparison.Ordinal))
                 {
                     return ".mp3";
                 }
 
-                var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && x.Trim().StartsWith("[") && x.Trim().EndsWith("]")));
-                if (iniLines >= Math.Max(lines.Count / 2, 1))
+                if (isProbablyBinaryOrUnicode && fileContents.Contains("Lavf", StringComparison.InvariantCultureIgnoreCase) && fileContents.Contains("LAME", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    //note: could technically also be ini, but unlikely
-                    return ".txt";
+                    return ".mp3";
                 }
 
                 var slkLines = lines.Count(x => x.Length >= 2 && ((x[0] >= 'a' && x[0] <= 'z') || (x[0] >= 'A' && x[0] <= 'Z')) && x[1] == ';');
@@ -332,21 +363,9 @@ namespace WC3MapDeprotector
                 }
                 */
 
-                if (Regex_HtmlTags().Matches(fileContents).Count >= lines.Count)
-                {
-                    return ".html";
-                }
-
                 if (fileContents.Contains("TRUEVISION-XFILE", StringComparison.InvariantCultureIgnoreCase))
                 {
                     return ".tga";
-                }
-
-                if (IsMp3AudioFile(stream))
-                {
-                    //NOTE: mp3 gets false positives sometimes, so this should be below any higher-priority file extensions. Replace with different library instead of NAudio?
-                    //todo: move up higher to see if I fixed it by resetting stream position to 0 before reading
-                    return ".mp3";
                 }
 
                 if (isProbablyBinaryOrUnicode && fileContents.StartsWith("MPQ\x1A", StringComparison.Ordinal))
@@ -369,7 +388,7 @@ namespace WC3MapDeprotector
                     return ".gif";
                 }
 
-                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("\x1Blua", StringComparison.Ordinal))
+                if (isProbablyBinaryOrUnicode && fileContents.StartsWith("\x1BLua", StringComparison.Ordinal))
                 {
                     return ".lua";
                 }
@@ -421,6 +440,18 @@ namespace WC3MapDeprotector
                     return ".wav";
                 }
 
+                if (Regex_HtmlTags().Matches(fileContents).Count >= lines.Count)
+                {
+                    return ".html";
+                }
+
+                var iniLines = lines.Count(x => (x.Length - x.Replace("=", "").Length) == 1 || (!x.Contains("=") && x.Trim().StartsWith("[") && x.Trim().EndsWith("]")));
+                if (iniLines >= Math.Max(lines.Count / 2, 1))
+                {
+                    //note: could technically also be ini, but unlikely
+                    return ".txt";
+                }
+
                 if (fileContents.Length >= 2 && fileContents[0] == '\xFF' && (fileContents[1] >= '\xE0' && fileContents[1] <= '\xFF'))
                 {
                     return ".mp3";
@@ -430,6 +461,11 @@ namespace WC3MapDeprotector
                 {
                     DebugSettings.Warn("Delete this file detection if breakpoint is never hit");
                     return ".tga";
+                }
+
+                if (isProbablyAscii || isProbablyUTF8)
+                {
+                    return ".txt";
                 }
             }
             catch { }
