@@ -57,7 +57,7 @@ namespace WC3MapDeprotector
 
         public static List<string> ProcessDefaultListFile(this StormMPQArchive archive)
         {
-            return archive.ProcessListFile(_defaultListFileRainbowTable.Value);
+            return archive.ProcessListFile_RainbowTable(_defaultListFileRainbowTable.Value);
         }
 
         private static string PredictFontFileExtension(Stream stream)

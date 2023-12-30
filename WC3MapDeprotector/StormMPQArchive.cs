@@ -28,6 +28,21 @@ namespace WC3MapDeprotector
         protected Dictionary<string, string> _md5ToLocalDiskFileName = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
 
         public bool HasFakeFiles { get; init; }
+        public bool HasFilesWithWrongEncryptionKey
+        {
+            get
+            {
+                return _fileIndexToMd5.Values.Any(x => !_md5ToPredictedExtension.TryGetValue(x, out var extension) || string.IsNullOrWhiteSpace(extension));
+            }
+        }
+
+        public bool ShouldKeepScanningForUnknowns
+        {
+            get
+            {
+                return HasUnknownHashes || HasFilesWithWrongEncryptionKey;
+            }
+        }
 
         public string GetPredictedFileExtension(string md5Hash)
         {
@@ -111,32 +126,31 @@ namespace WC3MapDeprotector
             }
         }
 
-        public List<string> DiscoveredFileNames
+        public List<string> GetDiscoveredFileNames()
         {
-            get
-            {
-                return _discoveredFileNameToMD5.Keys.ToList();
-            }
+            return _discoveredFileNameToMD5.Keys.ToList();
         }
 
-        public List<string> ProcessListFile(Dictionary<ulong, string> rainbowTable)
+        public List<string> ProcessListFile(List<string> listFile)
+        {
+            var verifiedNames = new ConcurrentList<string>();
+            Parallel.ForEach(listFile, fileName =>
+            {
+                if (MPQPartialHash.TryCalculate(fileName, MPQPartialHash.LEFT_OFFSET, out var leftHash) && _leftPartialHashes.Contains(leftHash))
+                {
+                    if (MPQPartialHash.TryCalculate(fileName, MPQPartialHash.RIGHT_OFFSET, out var rightHash) && _rightPartialHashes.Contains(rightHash))
+                    {
+                        verifiedNames.Add(fileName);
+                    }
+                }
+            });
+            return DiscoverFiles(verifiedNames.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList());
+        }
+
+        public List<string> ProcessListFile_RainbowTable(Dictionary<ulong, string> rainbowTable)
         {
             var verifiedFileNames = _fullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            return ProcessListFile_Slow(verifiedFileNames);
-        }
-
-        public List<string> ProcessListFile_Slow(List<string> fileNames)
-        {
-            List<string> result = new List<string>();
-            foreach (var file in fileNames)
-            {
-                if (DiscoverFile(file, out var _))
-                {
-                    result.Add(file);
-                }
-            }
-
-            return result;
+            return DiscoverFiles(verifiedFileNames);
         }
 
         protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint encryptionKey)
@@ -327,7 +341,21 @@ namespace WC3MapDeprotector
             encryptionKey = 0;
             return false;
         }
-        
+
+        protected List<string> DiscoverFiles(List<string> fileNames)
+        {
+            List<string> result = new List<string>();
+            foreach (var file in fileNames)
+            {
+                if (DiscoverFile(file, out var _))
+                {
+                    result.Add(file);
+                }
+            }
+
+            return result;
+        }
+
         protected object _discoverFileLock = new object();
         public bool DiscoverFile(string archiveFileName, out string md5Hash)
         {

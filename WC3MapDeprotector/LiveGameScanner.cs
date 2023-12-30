@@ -76,7 +76,7 @@ namespace WC3MapDeprotector
 
                             strings.Add(oldValue);
                         }
-                        var result = strings.Distinct().SelectMany(x => Regex.Matches(x, @".*\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct(StringComparer.InvariantCultureIgnoreCase).Where(x => !scannedFileNames.Contains(x)).ToList();
+                        var result = strings.Distinct(StringComparer.InvariantCultureIgnoreCase).SelectMany(x => Regex.Matches(x, @".*\" + suffix, RegexOptions.IgnoreCase)).Select(x => x.Value).Distinct(StringComparer.InvariantCultureIgnoreCase).Where(x => !scannedFileNames.Contains(x)).ToList();
                         foreach (var fileName in result)
                         {
                             var scannedFileName = fileName;
