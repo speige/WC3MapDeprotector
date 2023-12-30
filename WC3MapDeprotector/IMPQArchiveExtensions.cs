@@ -54,30 +54,10 @@ namespace WC3MapDeprotector
 
             return result.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value);
         }
-        
+
         public static List<string> ProcessDefaultListFile(this StormMPQArchive archive)
         {
             return archive.ProcessListFile(_defaultListFileRainbowTable.Value);
-        }
-
-        public static List<string> ProcessListFile(this StormMPQArchive archive, Dictionary<ulong, string> rainbowTable)
-        {
-            var verifiedFileNames = archive.MPQFileNameFullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            return ProcessListFile_Slow(archive, verifiedFileNames);
-        }
-
-        public static List<string> ProcessListFile_Slow(this StormMPQArchive archive, List<string> fileNames)
-        {
-            List<string> result = new List<string>();
-            foreach (var file in fileNames)
-            {
-                if (archive.DiscoverFile(file, out var _))
-                {
-                    result.Add(file);
-                }
-            }
-
-            return result;
         }
 
         private static string PredictFontFileExtension(Stream stream)

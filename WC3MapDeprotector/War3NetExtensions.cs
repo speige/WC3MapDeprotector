@@ -91,7 +91,7 @@ namespace WC3MapDeprotector
 
             if (int.TryParse((map.Info.MapName ?? "").Replace("TRIGSTR_", ""), out var trgStr1))
             {
-                var str = map.TriggerStrings.Strings.FirstOrDefault(x => x.Key == trgStr1);
+                var str = map.TriggerStrings?.Strings?.FirstOrDefault(x => x.Key == trgStr1);
                 if (str != null)
                 {
                     str.Value = "\u0044\u0045\u0050\u0052\u004F\u0054\u0045\u0043\u0054\u0045\u0044" + (str.Value ?? "");

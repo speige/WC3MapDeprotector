@@ -1,6 +1,5 @@
 ﻿using CSharpLua;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace WC3MapDeprotector
@@ -19,7 +18,9 @@ namespace WC3MapDeprotector
         protected Dictionary<uint, string> _fileIndexToMd5 = new Dictionary<uint, string>();
         protected Dictionary<uint, HashSet<string>> _fileIndexToDiscoveredFileNames = new Dictionary<uint, HashSet<string>>();
         protected Dictionary<string, string> _md5ToPredictedExtension = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
-        protected Dictionary<ulong, Tuple<uint, uint>> _fullHashToPartialHashes = new Dictionary<ulong, Tuple<uint, uint>>();
+        protected HashSet<ulong> _fullHashes = new HashSet<ulong>();
+        protected HashSet<ulong> _leftPartialHashes = new HashSet<ulong>();
+        protected HashSet<ulong> _rightPartialHashes = new HashSet<ulong>();
         protected Dictionary<string, string> _discoveredFileNameToMD5 = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
         protected Dictionary<ulong, string> _discoveredMPQFullHashToMD5 = new Dictionary<ulong, string>();
 
@@ -50,40 +51,39 @@ namespace WC3MapDeprotector
             return false;
         }
 
+        public List<string> AllExtractedMD5s
+        {
+            get
+            {
+                return _fileIndexToMd5.Values.ToList();
+            }
+        }
+
         public bool IsPseudoFileName(string fileName)
         {
             return TryParseFileIndexFromPseudoFileName(fileName, out var fileIndex) && _fileIndexToMd5.ContainsKey(fileIndex);
         }
 
-        public List<uint> MPQFileNameLeftHashes
+        public bool LeftPartialHashExists(uint leftPartialHash)
         {
-            get
-            {
-                return _fullHashToPartialHashes.Values.Select(x => x.Item1).ToList();
-            }
+            return _leftPartialHashes.Contains(leftPartialHash);
         }
 
-        public List<uint> MPQFileNameRightHashes
+        public bool RightPartialHashExists(uint rightPartialHash)
         {
-            get
-            {
-                return _fullHashToPartialHashes.Values.Select(x => x.Item2).ToList();
-            }
+            return _rightPartialHashes.Contains(rightPartialHash);
         }
 
-        public List<ulong> MPQFileNameFullHashes
+        public bool FullHashExists(uint fullHash)
         {
-            get
-            {
-                return _fullHashToPartialHashes.Keys.ToList();
-            }
+            return _fullHashes.Contains(fullHash);
         }
 
         protected List<ulong> UnknownFileNameFullHashes
         {
             get
             {
-                return _fullHashToPartialHashes.Keys.Where(x => !_discoveredMPQFullHashToMD5.ContainsKey(x)).ToList();
+                return _fullHashes.Where(x => !_discoveredMPQFullHashToMD5.ContainsKey(x)).ToList();
             }
         }
 
@@ -119,6 +119,26 @@ namespace WC3MapDeprotector
             }
         }
 
+        public List<string> ProcessListFile(Dictionary<ulong, string> rainbowTable)
+        {
+            var verifiedFileNames = _fullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            return ProcessListFile_Slow(verifiedFileNames);
+        }
+
+        public List<string> ProcessListFile_Slow(List<string> fileNames)
+        {
+            List<string> result = new List<string>();
+            foreach (var file in fileNames)
+            {
+                if (DiscoverFile(file, out var _))
+                {
+                    result.Add(file);
+                }
+            }
+
+            return result;
+        }
+
         protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint encryptionKey)
         {
             md5Hash = null;
@@ -135,7 +155,7 @@ namespace WC3MapDeprotector
                         isEmpty = stream.Length == 0;
                         if (!isEmpty)
                         {
-                            md5Hash = CalculateMD5(stream);
+                            md5Hash = stream.CalculateMD5();
                             _md5ToLocalDiskFileName[md5Hash] = localDiskFileName;
                             if (!_md5ToPredictedExtension.TryGetValue(md5Hash, out predictedExtension))
                             {
@@ -193,7 +213,7 @@ namespace WC3MapDeprotector
                 try
                 {
                     var buffer = new byte[1];
-                    fixed (byte* ptrBuffer = &buffer[1])
+                    fixed (byte* ptrBuffer = &buffer[0])
                     {
                         NativeOverlapped overlapped = default;
                         StormLibrary.SFileReadFile(fileHandle, new IntPtr(ptrBuffer), 1, out var bytesTransferred, ref overlapped);
@@ -327,7 +347,7 @@ namespace WC3MapDeprotector
                 {
                     if (!_fileIndexToMd5.TryGetValue(fileIndex, out md5Hash))
                     {
-                        _fullHashToPartialHashes.Remove(MPQFullHash.Calculate(archiveFileName), out var _);
+                        RemoveFakeMPQHash(MPQFullHash.Calculate(archiveFileName));
 
                         //todo: test extraction to stream with predict extension to see if it's ever a real file
                         if (!HasFakeFiles)
@@ -344,6 +364,8 @@ namespace WC3MapDeprotector
 
                     if (_fileIndexToEncryptionKey[fileIndex] != encryptionKey)
                     {
+                        var oldExtension = Path.GetExtension(pseudoFileFullPath);
+
                         //Original encryption key detected incorrectly
                         File.Delete(pseudoFileFullPath);
                         if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out var newEncryptionKey))
@@ -351,10 +373,33 @@ namespace WC3MapDeprotector
                             return false;
                         }
 
-                        pseudoFileName = Path.Combine(UNKNOWN_FOLDER, CalculatePseudoFileName(fileIndex));
-                        pseudoFileFullPath = Path.Combine(_extractFolder, pseudoFileName);
+                        var oldEncryptionKey = _fileIndexToEncryptionKey[fileIndex];
+                        var oldMD5Hash = _fileIndexToMd5[fileIndex];
+
                         _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
                         _fileIndexToMd5[fileIndex] = md5Hash;
+
+                        var newPseudoFileName = Path.Combine(UNKNOWN_FOLDER, CalculatePseudoFileName(fileIndex));
+                        var newPseudoFileFullPath = Path.Combine(_extractFolder, pseudoFileName);
+                        var newExtension = Path.GetExtension(pseudoFileFullPath);
+
+                        if (string.IsNullOrWhiteSpace(newExtension) && !string.IsNullOrWhiteSpace(oldExtension))
+                        {
+                            DebugSettings.Warn("Probably found fake file name. Verify this code is correct.");
+
+                            _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
+                            _fileIndexToMd5[fileIndex] = md5Hash;
+                            File.Delete(newPseudoFileFullPath);
+                            return false;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(newExtension) && !string.IsNullOrWhiteSpace(oldExtension) && newExtension != oldExtension)
+                        {
+                            DebugSettings.Warn("Which encryption key is valid?");
+                        }
+
+                        pseudoFileName = newPseudoFileName;
+                        pseudoFileFullPath = newPseudoFileFullPath;
                     }
 
                     var extractedPath = Path.Combine(_extractFolder, DISCOVERED_FOLDER, archiveFileName);
@@ -376,6 +421,7 @@ namespace WC3MapDeprotector
                             DebugSettings.Warn("Fix FakeFile detection");
                         }
 
+                        //todo: if file encrypted, check if encryption key matches file name, to ignore fake names
                         alreadyDiscoveredFileNames.Add(archiveFileName);
                         var filesMatchingPredictedExtension = new HashSet<string>(alreadyDiscoveredFileNames.Where(x => predictedExtension.Equals(Path.GetExtension(x), StringComparison.InvariantCultureIgnoreCase)), StringComparer.InvariantCultureIgnoreCase);
                         var filesNotMatchingPredictedExtension = new HashSet<string>(alreadyDiscoveredFileNames.Except(filesMatchingPredictedExtension, StringComparer.InvariantCultureIgnoreCase), StringComparer.InvariantCultureIgnoreCase);
@@ -412,9 +458,9 @@ namespace WC3MapDeprotector
                             {
                                 _logEvent($"Multiple fileNames found for same file. {fakeFileName} had different extension than predicted {predictedExtension}, assuming it's a fake name and deleting it.");
                                 var oldMPQHash = MPQFullHash.Calculate(fakeFileName);
-                                _fullHashToPartialHashes.Remove(oldMPQHash, out var _);
-                                _discoveredFileNameToMD5.Remove(fakeFileName, out var _);
-                                _discoveredMPQFullHashToMD5.Remove(oldMPQHash, out var _);
+                                RemoveFakeMPQHash(oldMPQHash);
+                                _discoveredFileNameToMD5.Remove(fakeFileName);
+                                _discoveredMPQFullHashToMD5.Remove(oldMPQHash);
                                 File.Delete(Path.Combine(_extractFolder, DISCOVERED_FOLDER, fakeFileName));
                             }
 
@@ -450,6 +496,22 @@ namespace WC3MapDeprotector
             return false;
         }
 
+        protected void AddMPQHash(ulong mpqFullHash)
+        {
+            _fullHashes.Add(mpqFullHash);
+            var partialHashes = MPQFullHash.SplitValue(mpqFullHash);
+            _leftPartialHashes.Add(partialHashes.Item1);
+            _rightPartialHashes.Add(partialHashes.Item2);
+        }
+
+        protected void RemoveFakeMPQHash(ulong fakeMPQHash)
+        {
+            _fullHashes.Remove(fakeMPQHash);
+            var oldMPQPartialHashes = MPQFullHash.SplitValue(fakeMPQHash);
+            _leftPartialHashes.Remove(oldMPQPartialHashes.Item1);
+            _rightPartialHashes.Remove(oldMPQPartialHashes.Item2);
+        }
+
         protected unsafe string MarshalByteArrayAsString(byte* unsafeCString)
         {
             return Marshal.PtrToStringUTF8((nint)unsafeCString);
@@ -458,14 +520,6 @@ namespace WC3MapDeprotector
         protected unsafe string MarshalByteArrayAsString(IntPtr ptr)
         {
             return MarshalByteArrayAsString((byte*)ptr.ToPointer());
-        }
-
-        protected string CalculateMD5(Stream stream)
-        {
-            using (var md5 = MD5.Create())
-            {
-                return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "");
-            }
         }
 
         public static T[] MarshalUnmanagedArrayToStruct<T>(IntPtr unmanagedArray, int length)
@@ -530,7 +584,7 @@ namespace WC3MapDeprotector
                             {
                                 mpqFullHash = MPQFullHash.Calculate(realFileName);
                                 _fileIndexToDiscoveredFileNames[fileIndex] = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { realFileName };
-                                _fullHashToPartialHashes[mpqFullHash] = MPQFullHash.SplitValue(mpqFullHash);
+                                AddMPQHash(mpqFullHash);
                                 _discoveredMPQFullHashToMD5[mpqFullHash] = fileContentsMD5Hash;
                                 _discoveredFileNameToMD5[realFileName] = fileContentsMD5Hash;
                             }
@@ -576,7 +630,7 @@ namespace WC3MapDeprotector
                 var validHashEntries = hashTable.Where(x => _fileIndexToMd5.ContainsKey(x.dwBlockIndex)).ToList();
                 foreach (var hash in validHashEntries)
                 {
-                    _fullHashToPartialHashes[MPQFullHash.GetValue(hash.dwName2, hash.dwName1)] = new Tuple<uint, uint>(hash.dwName2, hash.dwName1);
+                    AddMPQHash(MPQFullHash.GetValue(hash.dwName2, hash.dwName1));
                 }
                 HasFakeFiles = validHashEntries.GroupBy(x => x.dwBlockIndex).Any(x => x.Count() > 1);
 
