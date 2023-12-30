@@ -636,7 +636,7 @@ namespace WC3MapDeprotector
 
                 if (HasFakeFiles)
                 {
-                    _deprotectionResult.WarningMessages.Add("MPQ Archive has fake files, it's possible some names were detected incorrectly. Safest option is to run live game of map i nwarcraft3 with scanner attached which scans memory and local file access.");
+                    _deprotectionResult.WarningMessages.Add("MPQ Archive has fake files, it's possible some names were detected incorrectly. Safest option is to run a live game of protected map in warcraft3 with scanner attached which scans memory and local file access.");
 
                     if (!mpqFileName.Contains("lusin", StringComparison.InvariantCultureIgnoreCase))
                     {

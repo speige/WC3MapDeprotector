@@ -626,9 +626,27 @@ namespace WC3MapDeprotector
                 string globalListFileBenchmarkMessage = "";
                 var discoveredFileNamesBackup_globalListFile = inMPQArchive.DiscoveredFileNames.ToList();
                 var discoveredFiles = inMPQArchive.ProcessListFile(globalListFileRainbowTable.Value);
-                foreach (var file in discoveredFiles)
+
+                if (DebugSettings.BenchmarkUnknownRecovery)
                 {
-                    VerifyActualAndPredictedExtensionsMatch(inMPQArchive, file);
+                    foreach (var fileName in inMPQArchive.DiscoveredFileNames)
+                    {
+                        VerifyActualAndPredictedExtensionsMatch(inMPQArchive, fileName);
+                    }
+                }
+                foreach (var fileName in inMPQArchive.DiscoveredFileNames)
+                {
+                    if (!inMPQArchive.DiscoverFile(fileName, out var md5Hash) || inMPQArchive.IsPseudoFileName(fileName))
+                    {
+                        continue;
+                    }
+
+                    var predictedExtension = inMPQArchive.GetPredictedFileExtension(md5Hash);
+
+                    if (string.IsNullOrWhiteSpace(predictedExtension))
+                    {
+                        _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. If game can't read file, you may need to discover the real file name and add it to your global list file. You can do this by running a live game of protected map in warcraft3 with scanner attached which scans memory and local file access.");
+                    }
                 }
 
                 if (DebugSettings.BenchmarkUnknownRecovery)
@@ -1089,25 +1107,11 @@ namespace WC3MapDeprotector
 
             _logEvent($"Extracted from MPQ: {archiveFileName}");
 
-            VerifyActualAndPredictedExtensionsMatch(archive, archiveFileName);
             return true;
         }
 
-        protected HashSet<string> _verifyActualAndPredictedExtensionsMatchAlreadyDone = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         protected void VerifyActualAndPredictedExtensionsMatch(StormMPQArchive archive, string archiveFileName)
         {
-            if (!archive.HasFakeFiles && !DebugSettings.BenchmarkUnknownRecovery)
-            {
-                return;
-            }
-
-            if (_verifyActualAndPredictedExtensionsMatchAlreadyDone.Contains(archiveFileName))
-            {
-                return;
-            }
-
-            _verifyActualAndPredictedExtensionsMatchAlreadyDone.Add(archiveFileName);
-
             if (!archive.DiscoverFile(archiveFileName, out var md5Hash))
             {
                 return;
@@ -1119,25 +1123,16 @@ namespace WC3MapDeprotector
 
             if (!isPseudoFileName && !realExtension.Equals(predictedExtension, StringComparison.InvariantCultureIgnoreCase) && !StormMPQArchiveExtensions.IsInDefaultListFile(archiveFileName))
             {
-                if (archive.HasFakeFiles && !string.IsNullOrWhiteSpace(predictedExtension))
+                //NOTE: sometimes there are multiple valid extensions for a file. Sometimes a map maker accidentally names something wrong. These formats give a lot of false positives during testing and the file detection code for these types has already been tested to be correct.
+                var debugIgnoreMistakenPrediction = (string.Equals(realExtension, ".ini") && string.Equals(predictedExtension, ".txt")) ||
+                    (string.Equals(predictedExtension, ".ini") && string.Equals(realExtension, ".txt")) ||
+                    (string.Equals(realExtension, ".wav") && string.Equals(predictedExtension, ".mp3")) ||
+                    (string.Equals(predictedExtension, ".wav") && string.Equals(realExtension, ".mp3")) ||
+                    (string.Equals(realExtension, ".mdx") && string.Equals(predictedExtension, ".blp")) ||
+                    (string.Equals(predictedExtension, ".mdx") && string.Equals(realExtension, ".blp"));
+                if (!debugIgnoreMistakenPrediction)
                 {
-                    //todo: don't run until end in case it's corrected later by 2nd file name being discovered
-                    _deprotectionResult.WarningMessages.Add($"{archiveFileName} had different extension than predicted {predictedExtension}. It's possible it was discovered under a fake file name, you may need to research the correct name and rename it.");
-                }
-
-                if (!archive.HasFakeFiles)
-                {
-                    //NOTE: sometimes there are multiple valid extensions for a file. Sometimes a map maker accidentally names something wrong. These formats give a lot of false positives during testing and the file detection code for these types has already been tested to be correct.
-                    var debugIgnoreMistakenPrediction = (string.Equals(realExtension, ".ini") && string.Equals(predictedExtension, ".txt")) ||
-                        (string.Equals(predictedExtension, ".ini") && string.Equals(realExtension, ".txt")) ||
-                        (string.Equals(realExtension, ".wav") && string.Equals(predictedExtension, ".mp3")) ||
-                        (string.Equals(predictedExtension, ".wav") && string.Equals(realExtension, ".mp3")) ||
-                        (string.Equals(realExtension, ".mdx") && string.Equals(predictedExtension, ".blp")) ||
-                        (string.Equals(predictedExtension, ".mdx") && string.Equals(realExtension, ".blp"));
-                    if (!debugIgnoreMistakenPrediction)
-                    {
-                        DebugSettings.Warn("Possible bug in PredictUnknownFileExtension");
-                    }
+                    DebugSettings.Warn("Possible bug in PredictUnknownFileExtension");
                 }
             }
         }
