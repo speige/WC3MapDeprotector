@@ -15,6 +15,7 @@ namespace WC3MapDeprotector
         protected DeprotectionResult _deprotectionResult;
 
         //NOTE: Due to fake hash entries in some corrupted MPQs we can't use the MPQFullHash as a unique key, so we're created our own by calculating the MD5 hash of the extracted file instead
+        protected Dictionary<uint, uint> _fileIndexToEncryptionKey = new Dictionary<uint, uint>();
         protected Dictionary<uint, string> _fileIndexToMd5 = new Dictionary<uint, string>();
         protected Dictionary<uint, HashSet<string>> _fileIndexToDiscoveredFileNames = new Dictionary<uint, HashSet<string>>();
         protected Dictionary<string, string> _md5ToPredictedExtension = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
@@ -118,14 +119,14 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash)
+        protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint encryptionKey)
         {
             md5Hash = null;
 
             var extractedPath = Path.Combine(_extractFolder, localDiskFileName);
             try
             {
-                if (ExtractFile(archiveFileName, extractedPath))
+                if (ExtractFile(archiveFileName, extractedPath, out encryptionKey))
                 {
                     bool isEmpty = false;
                     string predictedExtension = "";
@@ -168,6 +169,7 @@ namespace WC3MapDeprotector
                         var newFileName = Path.ChangeExtension(extractedPath, predictedExtension);
                         if (!extractedPath.Equals(newFileName, StringComparison.InvariantCultureIgnoreCase))
                         {
+                            _md5ToLocalDiskFileName[md5Hash] = newFileName;
                             File.Move(extractedPath, newFileName);
                         }
 
@@ -178,13 +180,42 @@ namespace WC3MapDeprotector
             catch { }
 
             File.Delete(extractedPath);
+            encryptionKey = 0;
             return false;
         }
 
-        protected bool ExtractFile(string archiveFileName, string extractedFileName)
+        protected unsafe bool ExtractFile(string archiveFileName, string extractedFileName, out uint encryptionKey)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(extractedFileName));
-            return StormLibrary.SFileExtractFile(_archiveHandle, archiveFileName, extractedFileName, 0);
+            //NOTE: can't call SFileExtractFile because it hides the encryption key
+            if (StormLibrary.SFileOpenFileEx(_archiveHandle, archiveFileName, 0, out var fileHandle))
+            {
+                IntPtr ptrEncryptionKey = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
+                try
+                {
+                    var buffer = new byte[1];
+                    fixed (byte* ptrBuffer = &buffer[1])
+                    {
+                        NativeOverlapped overlapped = default;
+                        StormLibrary.SFileReadFile(fileHandle, new IntPtr(ptrBuffer), 1, out var bytesTransferred, ref overlapped);
+                    }
+
+                    //NOTE: encryptionKey is based on real file name. SFileOpenFileEx will have blank encryption key for psuedoFileName. SFileReadFile attempts to crack the encryption key, but it's only stored on the current filehandle. So, we have to read 1 byte to get key for later before calling normal SFileExtractFile
+                    //NOTE: If encryptionKey is blank, extracted file will have garbage bytes. We can still use MD5 as unique key, but once we discover real filename we need to re-extract & update MD5s. If extracted with fake file name, extracted file will still be garbage.
+                    StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoEncryptionKey, ptrEncryptionKey, (uint)Marshal.SizeOf(typeof(uint)), out var _);
+                    encryptionKey = (uint)Marshal.ReadInt32(ptrEncryptionKey);
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(extractedFileName));
+                    return StormLibrary.SFileExtractFile(_archiveHandle, archiveFileName, extractedFileName, 0);
+                }
+                finally
+                {
+                    StormLibrary.SFileCloseFile(fileHandle);
+                    Marshal.FreeHGlobal(ptrEncryptionKey);
+                }
+            }
+
+            encryptionKey = 0;
+            return false;
         }
 
         protected string CalculatePseudoFileName(uint fileIndex)
@@ -200,18 +231,22 @@ namespace WC3MapDeprotector
         protected bool TryGetHashByFileIndex(uint fileIndex, out string pseudoFileName, out uint hashIndex, out uint leftHash, out uint rightHash, out ulong fullHash)
         {
             pseudoFileName = CalculatePseudoFileName(fileIndex);
-            return TryGetHashByFilename(pseudoFileName, out var _, out hashIndex, out leftHash, out rightHash, out fullHash);
+            return TryGetHashByFilename(pseudoFileName, out var _, out hashIndex, out leftHash, out rightHash, out fullHash, out var _);
         }
 
-        protected bool TryGetFileIndexFilename(string fileName, out uint fileIndex)
+        protected bool TryGetFileIndexByFilename(string fileName, out uint fileIndex, out uint encryptionKey)
         {
+            //NOTE: encryptionKey will only be available for a DiscoveredFile, not a PseudoFileName(FileIndex).
             if (StormLibrary.SFileOpenFileEx(_archiveHandle, fileName, 0, out var fileHandle))
             {
                 IntPtr ptrFileIndex = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
+                IntPtr ptrEncryptionKey = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 try
                 {
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoFileIndex, ptrFileIndex, (uint)Marshal.SizeOf(typeof(uint)), out var _);
+                    StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoEncryptionKey, ptrEncryptionKey, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     fileIndex = (uint)Marshal.ReadInt32(ptrFileIndex);
+                    encryptionKey = (uint)Marshal.ReadInt32(ptrEncryptionKey);
                     return true;
 
                 }
@@ -219,14 +254,16 @@ namespace WC3MapDeprotector
                 {
                     StormLibrary.SFileCloseFile(fileHandle);
                     Marshal.FreeHGlobal(ptrFileIndex);
+                    Marshal.FreeHGlobal(ptrEncryptionKey);
                 }
             }
 
             fileIndex = 0;
+            encryptionKey = 0;
             return false;
         }
 
-        protected bool TryGetHashByFilename(string fileName, out uint fileIndex, out uint hashIndex, out uint leftHash, out uint rightHash, out ulong fullHash)
+        protected bool TryGetHashByFilename(string fileName, out uint fileIndex, out uint hashIndex, out uint leftHash, out uint rightHash, out ulong fullHash, out uint encryptionKey)
         {
             if (StormLibrary.SFileOpenFileEx(_archiveHandle, fileName, 0, out var fileHandle))
             {
@@ -234,18 +271,21 @@ namespace WC3MapDeprotector
                 IntPtr ptrHashIndex = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 IntPtr ptrRightHash = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 IntPtr ptrLeftHash = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
+                IntPtr ptrEncryptionKey = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 try
                 {
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoFileIndex, ptrFileIndex, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoHashIndex, ptrHashIndex, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash1, ptrRightHash, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoNameHash2, ptrLeftHash, (uint)Marshal.SizeOf(typeof(uint)), out var _);
+                    StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoEncryptionKey, ptrEncryptionKey, (uint)Marshal.SizeOf(typeof(uint)), out var _);
 
                     fileIndex = (uint)Marshal.ReadInt32(ptrFileIndex);
                     hashIndex = (uint)Marshal.ReadInt32(ptrHashIndex);
                     leftHash = (uint)Marshal.ReadInt32(ptrLeftHash);
                     rightHash = (uint)Marshal.ReadInt32(ptrRightHash);
                     fullHash = ((ulong)leftHash << 32) | rightHash;
+                    encryptionKey = (uint)Marshal.ReadInt32(ptrEncryptionKey);
                     return true;
                 }
                 finally
@@ -255,6 +295,7 @@ namespace WC3MapDeprotector
                     Marshal.FreeHGlobal(ptrHashIndex);
                     Marshal.FreeHGlobal(ptrLeftHash);
                     Marshal.FreeHGlobal(ptrRightHash);
+                    Marshal.FreeHGlobal(ptrEncryptionKey);
                 }
             }
 
@@ -263,6 +304,7 @@ namespace WC3MapDeprotector
             leftHash = 0;
             rightHash = 0;
             fullHash = 0;
+            encryptionKey = 0;
             return false;
         }
         
@@ -279,7 +321,7 @@ namespace WC3MapDeprotector
                 return true;
             }
 
-            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileIndexFilename(archiveFileName, out fileIndex))
+            if (StormLibrary.SFileHasFile(_archiveHandle, archiveFileName) && TryGetFileIndexByFilename(archiveFileName, out fileIndex, out var encryptionKey))
             {                
                 lock (_discoverFileLock)
                 {
@@ -297,11 +339,26 @@ namespace WC3MapDeprotector
                         return false;
                     }
 
-                    var extractedPath = Path.Combine(_extractFolder, DISCOVERED_FOLDER, archiveFileName);
-                    Directory.CreateDirectory(Path.GetDirectoryName(extractedPath));
-
                     var pseudoFileName = Path.Combine(UNKNOWN_FOLDER, CalculatePseudoFileName(fileIndex));
                     var pseudoFileFullPath = Path.Combine(_extractFolder, pseudoFileName);
+
+                    if (_fileIndexToEncryptionKey[fileIndex] != encryptionKey)
+                    {
+                        //Original encryption key detected incorrectly
+                        File.Delete(pseudoFileFullPath);
+                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out var newEncryptionKey))
+                        {
+                            return false;
+                        }
+
+                        pseudoFileName = Path.Combine(UNKNOWN_FOLDER, CalculatePseudoFileName(fileIndex));
+                        pseudoFileFullPath = Path.Combine(_extractFolder, pseudoFileName);
+                        _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
+                        _fileIndexToMd5[fileIndex] = md5Hash;
+                    }
+
+                    var extractedPath = Path.Combine(_extractFolder, DISCOVERED_FOLDER, archiveFileName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(extractedPath));
 
                     var alreadyDiscovered = _fileIndexToDiscoveredFileNames.TryGetValue(fileIndex, out var alreadyDiscoveredFileNames);
                     if (!alreadyDiscovered)
@@ -443,7 +500,7 @@ namespace WC3MapDeprotector
                 {
                     var fileName = MarshalByteArrayAsString(findData.cFileName);
 
-                    if (TryGetHashByFilename(fileName, out var fileIndex, out var hashIndex, out var mpqLeftPartialHash, out var mpqRightPartialHash, out var mpqFullHash))
+                    if (TryGetHashByFilename(fileName, out var fileIndex, out var hashIndex, out var mpqLeftPartialHash, out var mpqRightPartialHash, out var mpqFullHash, out var _))
                     {
                         if (_fileIndexToMd5.ContainsKey(fileIndex))
                         {
@@ -465,8 +522,10 @@ namespace WC3MapDeprotector
                         }
 
                         var extractedFileName = Path.Combine(isUnknown ? UNKNOWN_FOLDER : DISCOVERED_FOLDER, realFileName ?? pseudoFileName);
-                        if (TryExtractFile(fileName, extractedFileName, out var fileContentsMD5Hash))
+                        if (TryExtractFile(fileName, extractedFileName, out var fileContentsMD5Hash, out var encryptionKey))
                         {
+                            _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
+
                             if (!isUnknown)
                             {
                                 mpqFullHash = MPQFullHash.Calculate(realFileName);

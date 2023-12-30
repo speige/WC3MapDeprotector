@@ -1294,6 +1294,8 @@ namespace WC3MapDeprotector
             if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.Add($"DIS{Path.GetFileName(potentialFileName)}");
+                result.Add($"PAS{Path.GetFileName(potentialFileName)}");
+                result.Add($"DISPAS{Path.GetFileName(potentialFileName)}");
             }
             if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
