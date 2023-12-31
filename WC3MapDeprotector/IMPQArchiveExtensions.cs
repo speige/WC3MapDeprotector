@@ -165,6 +165,8 @@ namespace WC3MapDeprotector
 
         [GeneratedRegex(@"\s*function\s+\S+\s*\([a-z, \t]*\)", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_LuaScript();
+        [GeneratedRegex(@"\s*requires\s+'[^']+'", RegexOptions.IgnoreCase)]
+        private static partial Regex Regex_LuaScript2();
         
         [GeneratedRegex(@"\s*function\s+preloadfiles\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_PreloadFile_Jass();
@@ -290,7 +292,11 @@ namespace WC3MapDeprotector
                 }
 
                 var lines = fileContents.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                var utf8Lines = utf8String.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                if (lines.Any(x => Regex_LuaScript2().IsMatch(x)))
+                {
+                    return ".lua";
+                }
+
                 if (lines.Count(x => x.EndsWith(".fdf", StringComparison.InvariantCultureIgnoreCase)) >= Math.Max(lines.Count / 2, 1))
                 {
                     return ".toc";

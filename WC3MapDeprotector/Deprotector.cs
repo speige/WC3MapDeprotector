@@ -428,7 +428,11 @@ namespace WC3MapDeprotector
 
             using (var inMPQArchive = new StormMPQArchive(_inMapFile, ExtractedFilesPath, _logEvent, _deprotectionResult))
             {
-                if (!ExtractFileFromArchive(inMPQArchive, "(listfile)"))
+                if (ExtractFileFromArchive(inMPQArchive, "(listfile)"))
+                {
+                    inMPQArchive.ProcessListFile(File.ReadAllLines(Path.Combine(DiscoveredFilesPath, "(listfile)")).ToList());
+                }
+                else
                 {
                     _deprotectionResult.CountOfProtectionsFound++;
                 }
@@ -491,8 +495,11 @@ namespace WC3MapDeprotector
                                 _deprotectionResult.CountOfProtectionsFound++;
                             }
 
-                            //todo: if File.Exsts, use War3Net to decompile both files & merge their contents together & output new file
-                            if (!File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
+                            if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
+                            {
+                                DebugSettings.Warn("Use War3Net to decompile both files & merge their contents together & output new file");
+                            }
+                            else
                             {
                                 File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), false);
                             }
@@ -662,7 +669,7 @@ namespace WC3MapDeprotector
 
                 foreach (var fileName in inMPQArchive.GetDiscoveredFileNames())
                 {
-                    if (!inMPQArchive.DiscoverFile(fileName, out var md5Hash) || inMPQArchive.IsPseudoFileName(fileName))
+                    if (StormMPQArchiveExtensions.IsInDefaultListFile(fileName) || !inMPQArchive.DiscoverFile(fileName, out var md5Hash) || inMPQArchive.IsPseudoFileName(fileName))
                     {
                         continue;
                     }
@@ -671,7 +678,7 @@ namespace WC3MapDeprotector
 
                     if (string.IsNullOrWhiteSpace(predictedExtension))
                     {
-                        _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. If game can't read file, you may need to discover the real file name and add it to your global list file. You can do this by running a live game of protected map in warcraft3 with scanner attached which scans memory and local file access.");
+                        _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. If game can't read file, you may need to discover the real file name using 'W3X Name Scanner' tool in MPQEditor.exe");
                     }
                 }
 
@@ -1704,7 +1711,6 @@ namespace WC3MapDeprotector
                                 {
                                     if (jassScriptDecompiler.TryDecompileMapUnits(enumValue, subEnumValue, useNewFormat, out units, out var unitsDecompiledFromVariableName) && units?.Units?.Any() == true)
                                     {
-
                                         result.Units = units;
                                         result.UnitsDecompiledFromVariableName = unitsDecompiledFromVariableName;
 
@@ -1807,6 +1813,17 @@ namespace WC3MapDeprotector
 
         protected Map DecompileMap(Action<Map> forcedValueOverrides = null)
         {
+            var allEncodings = Encoding.GetEncodings().Select(x =>
+            {
+                try
+                {
+                    return x.GetEncoding();
+                }
+                catch { }
+                return null;
+            }).Where(x => x != null).ToList();
+            var sortedEncodings = allEncodings.OrderBy(x => x == Encoding.ASCII ? 0 : 1).ThenBy(x => x == Encoding.UTF8 ? 0 : 1).ToList();
+
             //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file multiple times looking for changes
             _logEvent("Analyzing map files");
             var mapFiles = Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => string.Equals(x, "war3map.w3i", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1).ToList();
@@ -1821,18 +1838,25 @@ namespace WC3MapDeprotector
 
                 foreach (var mapFile in mapFiles)
                 {
-                    try
+                    using (var stream = new FileStream(mapFile, FileMode.Open))
                     {
-                        using (var stream = new FileStream(mapFile, FileMode.Open))
+                        if (stream.Length == 0)
                         {
-                            if (stream.Length != 0)
+                            continue;
+                        }
+
+                        foreach (var encoding in sortedEncodings)
+                        {
+                            try
                             {
+                                stream.Position = 0;
                                 _logEvent($"Analyzing {mapFile} ...");
-                                map.SetFile(Path.GetFileName(mapFile), false, stream);
+                                map.SetFile(Path.GetFileName(mapFile), false, stream, encoding, true);
+                                break;
                             }
+                            catch { }
                         }
                     }
-                    catch { }
                 }
             }
 

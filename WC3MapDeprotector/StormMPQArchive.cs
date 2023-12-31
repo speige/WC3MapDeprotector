@@ -200,7 +200,11 @@ namespace WC3MapDeprotector
 
                     if (!isEmpty)
                     {
-                        var newFileName = Path.ChangeExtension(extractedPath, predictedExtension);
+                        var newFileName = extractedPath;
+                        if (IsPseudoFileName(archiveFileName))
+                        {
+                            newFileName = Path.ChangeExtension(extractedPath, predictedExtension);
+                        }
                         if (!extractedPath.Equals(newFileName, StringComparison.InvariantCultureIgnoreCase))
                         {
                             _md5ToLocalDiskFileName[md5Hash] = newFileName;
@@ -664,7 +668,7 @@ namespace WC3MapDeprotector
 
                 if (HasFakeFiles)
                 {
-                    _deprotectionResult.WarningMessages.Add("MPQ Archive has fake files, it's possible some names were detected incorrectly. Safest option is to run a live game of protected map in warcraft3 with scanner attached which scans memory and local file access.");
+                    _deprotectionResult.WarningMessages.Add("MPQ Archive has fake files, it's possible some names were detected incorrectly. Safest option is to recover real filenames using 'W3X Name Scanner' tool in MPQEditor.exe");
 
                     if (!mpqFileName.Contains("lusin", StringComparison.InvariantCultureIgnoreCase))
                     {
