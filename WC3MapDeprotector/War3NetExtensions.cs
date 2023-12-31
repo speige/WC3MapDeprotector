@@ -8,8 +8,8 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
-using War3Net.Build.Extensions;
-using Newtonsoft.Json;
+using War3Net.Common.Extensions;
+using NuGet.Packaging;
 
 namespace WC3MapDeprotector
 {
@@ -61,16 +61,64 @@ namespace WC3MapDeprotector
             return syntaxNode.DFS_Flatten(GetAllChildSyntaxNodes).ToList();
         }
 
-        public static string GetAllObjectData_JSON(this Map map)
+        public static List<string> GetObjectDataStringValues(this Map map, List<string> rawCodes = null)
         {
-            var objectData = map.GetAllObjectData();
-            return JsonConvert.SerializeObject(objectData, new JsonSerializerSettings() {Error = (sender, errorArgs)=> { errorArgs.ErrorContext.Handled = true; } });
-        }
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            var identifierToRawCode = new HashSet<int>();
+            if (rawCodes != null)
+            {
+                identifierToRawCode.AddRange(rawCodes.Select(x => x.FromRawcode()));
+            }
 
-        public static Dictionary<string, object> GetAllObjectData(this Map map)
-        {
-            var properties = typeof(Map).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.EndsWith("ObjectData", StringComparison.InvariantCultureIgnoreCase));
-            return properties.ToDictionary(x => x.Name, x => x.GetValue(map));
+            var objectDataProperties = typeof(Map).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.EndsWith("ObjectData", StringComparison.InvariantCultureIgnoreCase)).ToList();
+            foreach (var objectDataProperty in objectDataProperties)
+            {
+                var objectData = objectDataProperty.GetValue(map);
+                if (objectData == null)
+                {
+                    continue;
+                }
+
+                var childProperties = objectData.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.StartsWith("Base", StringComparison.InvariantCultureIgnoreCase) || x.Name.StartsWith("New", StringComparison.InvariantCultureIgnoreCase)).ToList();
+                foreach (var childProperty in childProperties)
+                {
+                    var childData = (System.Collections.IList)childProperty.GetValue(objectData);
+                    if (childData == null || childData.Count == 0)
+                    {
+                        continue;
+                    }
+                    
+                    var modificationProperty = childData[0].GetType().GetProperty("Modifications", BindingFlags.Public | BindingFlags.Instance);
+                    foreach (var child in childData)
+                    {
+                        var modifications = (System.Collections.IList)modificationProperty.GetValue(child);
+                        if (modifications == null || modifications.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        var modificationType = modifications[0].GetType();
+                        var idProperty = modificationType.GetProperty("Id", BindingFlags.Public | BindingFlags.Instance);
+                        var valueProperty = modificationType.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance);
+                        foreach (var modification in modifications)
+                        {
+                            var id = (int)idProperty.GetValue(modification);
+                            if (identifierToRawCode.Any() && !identifierToRawCode.Contains(id))
+                            {
+                                continue;
+                            }
+
+                            var value = valueProperty.GetValue(modification);
+                            if (value is string)
+                            {
+                                result.Add((string)value);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result.ToList();
         }
 
         public static List<MpqKnownFile> GetAllFiles(this Map map)

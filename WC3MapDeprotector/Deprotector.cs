@@ -25,7 +25,6 @@ using War3Net.CodeAnalysis.Transpilers;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
 using System.Numerics;
-using Newtonsoft.Json.Linq;
 using FastMDX;
 using System.Collections.Concurrent;
 
@@ -584,7 +583,7 @@ namespace WC3MapDeprotector
                     var newScannedFiles = possibleFileNames_parsed.Where(x => !previousScannedFiles.Contains(x)).ToList();
                     inMPQArchive.ProcessListFile(newScannedFiles);
 
-                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, newScannedFiles).Where(x => !deepScanDirectories.Contains(x));
+                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
                     deepScanDirectories.AddRange(newDeepScanDirectories);
 
                     if (inMPQArchive.ShouldKeepScanningForUnknowns)
@@ -601,9 +600,11 @@ namespace WC3MapDeprotector
                 }
 
                 var alreadyScannedMD5WithFileExtension = new ConcurrentDictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
-                var foundNewFiles = true;
+                bool keepScanning;
                 do
                 {
+                    keepScanning = false;
+
                     //NOTE: MPQ files can be encrypted. The decryption key is based on the real file name. StormLibrary attempts to crack the encryption, so it sometimes can extract without a name, but other times the extraction is garbage bytes. Each time a new MD5 is discovered, re-scan.
                     if (!inMPQArchive.ShouldKeepScanningForUnknowns)
                     {
@@ -612,6 +613,7 @@ namespace WC3MapDeprotector
 
                     var previousMD5s = new HashSet<string>(inMPQArchive.AllExtractedMD5s, StringComparer.InvariantCultureIgnoreCase);
                     var previousScannedFiles = new HashSet<string>(possibleFileNames_parsed, StringComparer.InvariantCultureIgnoreCase);
+                    var previousDiscoveredFileNames = new HashSet<string>(inMPQArchive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase);
 
                     var allExtractedFiles = Directory.GetFiles(ExtractedFilesPath, "*", SearchOption.AllDirectories).ToList();
                     Parallel.ForEach(allExtractedFiles, fileName =>
@@ -637,7 +639,7 @@ namespace WC3MapDeprotector
                     var newScannedFiles = possibleFileNames_parsed.Where(x => !previousScannedFiles.Contains(x)).ToList();
                     inMPQArchive.ProcessListFile(newScannedFiles);
 
-                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, newScannedFiles).Where(x => !deepScanDirectories.Contains(x));
+                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
                     deepScanDirectories.AddRange(newDeepScanDirectories);
 
                     if (inMPQArchive.ShouldKeepScanningForUnknowns)
@@ -652,8 +654,10 @@ namespace WC3MapDeprotector
                         }
                     }
 
-                    foundNewFiles = inMPQArchive.AllExtractedMD5s.Any(x => !previousMD5s.Contains(x));
-                } while (foundNewFiles);
+                    keepScanning |= DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Any(x => !deepScanDirectories.Contains(x));
+                    keepScanning |= inMPQArchive.GetDiscoveredFileNames().Any(x => !previousDiscoveredFileNames.Contains(x));
+                    keepScanning |= inMPQArchive.AllExtractedMD5s.Any(x => !previousMD5s.Contains(x));
+                } while (keepScanning);
 
                 var recoveredFileNames = discoveredFileNamesBackup.Except(inMPQArchive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase).ToList();
                 AddToGlobalListFile(recoveredFileNames);
@@ -1432,8 +1436,8 @@ namespace WC3MapDeprotector
                 }
             });
 
-            var filesFound = archive.UnknownFileCount - originalUnknownCount;
-            _logEvent($"Deep Scan completed, {filesFound} filenames found");
+            var filesFound = originalUnknownCount - archive.UnknownFileCount;
+            _logEvent($"Deep Scan completed: {filesFound} filenames found");
         }
 
         [GeneratedRegex(@"\$[0-9a-f]{8}", RegexOptions.IgnoreCase)]
@@ -2536,7 +2540,7 @@ namespace WC3MapDeprotector
             var globalvars = new List<GlobalVariable>();
             var categories = new List<WTGCategory>();
             var triggers = new List<WTGTrigger>();
-            foreach (var line in jassScript.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries))
+            foreach (var line in jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (line.Trim() == "endglobals")
                 {
@@ -2771,6 +2775,7 @@ endfunction
             _logEvent($"{newfiles.Count} files added to import list");
         }
 
+        protected List<string> _objectDataKeysWithFileReferences = new List<string>() { "aaea", "aart", "acat", "aeat", "aefs", "amat", "aord", "arar", "asat", "atat", "auar", "bfil", "bnam", "bptx", "btxf", "dfil", "dptx", "fart", "feat", "fsat", "ftat", "gar1", "ifil", "iico", "ucua", "uico", "umdl", "upat", "uspa", "ussi" };
         protected List<string> ParseMapForUnknowns(Map map, List<string> unknownFileExtensions)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -2790,15 +2795,13 @@ endfunction
                 result.Add(map.Info.LoadingScreenPath);
             }
 
-            // todo: Refactor this to not use NewtonSoft JSON for speed (also, if "Just My Code" is disabled while debugging, this practically freezes up)
-            _logEvent("Extracting all object data from map files");
-            var objectDataJson = map.GetAllObjectData_JSON();
-            _logEvent("Parsing map object data into strings");
-            var deserialized = (JObject)JsonConvert.DeserializeObject(objectDataJson);
-            _logEvent("Searching map data strings for unknown files");
-            var allDecompiledStrings = deserialized.DescendantsAndSelf().Where(x => x is JValue).Cast<JValue>().Where(x => x.Type == JTokenType.String).Select(x => (string)x.Value).ToList();
-            result.AddRange(allDecompiledStrings);
-            result.AddRange(allDecompiledStrings.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, unknownFileExtensions)));
+            var allObjectValues = map.GetObjectDataStringValues();
+            var stringsWithFileExtensions = allObjectValues.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)).ToList();
+            result.AddRange(stringsWithFileExtensions);
+            result.AddRange(stringsWithFileExtensions.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, unknownFileExtensions)));
+
+            var commonFileReferenceObjectValues = map.GetObjectDataStringValues(_objectDataKeysWithFileReferences);
+            result.AddRange(commonFileReferenceObjectValues);
 
             return result.ToList();
         }
@@ -2820,10 +2823,10 @@ endfunction
                 catch { }
             }
 
-            if (extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.AddRange(allLines.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, unknownFileExtensions)));
-            }
+            var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(bytes).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
+            stringsWithFileExtensions.AddRange(allLines.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
+            result.AddRange(stringsWithFileExtensions);
 
             if (extension.Equals(".toc", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".imp", StringComparison.InvariantCultureIgnoreCase))
             {
@@ -2850,18 +2853,6 @@ endfunction
                 result.AddRange(allLines.SelectMany(x => ParseQuotedStringsFromCode(x)));
             }
 
-            if (extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".html", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.AddRange(allLines.SelectMany(y => ScanTextForPotentialUnknownFileNames_SLOW(y, unknownFileExtensions)));
-            }
-
-            //todo: run through several test maps & if there are any file extensions here which never produce unknown names, remove them
-            if (string.IsNullOrWhiteSpace(extension) || !_commonFileExtensions.Contains(extension) || _binaryExtensionsToParseReadableStrings.Contains(extension))
-            {
-                var strings = ScanBinaryFileForReadableAsciiStrings(fileName);
-                result.AddRange(strings.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, unknownFileExtensions)));
-            }
-
             //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
 
             if (extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase))
@@ -2877,19 +2868,13 @@ endfunction
                 result.AddRange(requiredFiles);
             }
 
-            if (extension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase))
-            {
-                result.AddRange(allLines.SelectMany(x => ScanFileForUnknowns_Regex(x, unknownFileExtensions)));
-            }
-
             result.AddRange(result.SelectMany(y => ScanTextForPotentialUnknownFileNames_SLOW(y, unknownFileExtensions)).ToList());
 
             return result.ToList();
         }
 
-        protected List<string> ScanBinaryFileForReadableAsciiStrings(string fileName)
+        protected List<string> ScanBytesForReadableAsciiStrings(byte[] bytes)
         {
-            var bytes = File.ReadAllBytes(fileName);
             List<string> result = new List<string>();
             var stringBuilder = new StringBuilder();
             foreach (var value in bytes)
@@ -2932,6 +2917,12 @@ endfunction
 
         protected List<string> SplitTextByFileExtensionLocations(string text, List<string> unknownFileExtensions)
         {
+            var splitByNull = text.Split('\0', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (splitByNull.Count > 1)
+            {
+                return splitByNull.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)).ToList();
+            }
+
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
             var unknownExtensionsWithoutPeriod = unknownFileExtensions.Select(x => x.Trim('.')).ToList();
@@ -3147,8 +3138,6 @@ endfunction
             result.AddRange(ScanMDXForPossibleFileNames_FastMDX(mdxFileName));
             result.AddRange(ScanMDXForPossibleFileNames_MDXLib(mdxFileName));
             result.AddRange(ScanMDXForPossibleFileNames_Regex(mdxFileName));
-            var strings = ScanBinaryFileForReadableAsciiStrings(mdxFileName);
-            result.AddRange(strings.Where(x => _modelAndTextureFileExtensions.Any(y => x.Contains(y, StringComparison.InvariantCultureIgnoreCase))).SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, _modelAndTextureFileExtensions.ToList())));
             result.AddRange(result.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))).ToList());
             return result.ToList();
         }
