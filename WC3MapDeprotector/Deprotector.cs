@@ -2953,15 +2953,18 @@ endfunction
                     continue;
                 }
 
-                var length = split.Value;
-                result.Add(text.Substring(startIndex, idx + length - startIndex));
-                var newStartIndex = idx+length;
-                while (distinctSplitLocations.TryGetValue(newStartIndex, out var nextSplitLength))
+                var extensionLength = split.Value;
+                var endIdx = idx + extensionLength;
+                var length = Math.Min(1000, endIdx - startIndex);
+                result.Add(text.Substring(endIdx-length, length));
+                var newStartIndex = idx+extensionLength;
+                while (distinctSplitLocations.TryGetValue(newStartIndex, out var nextExtensionLength))
                 {
                     var nextIdx = newStartIndex;
-                    var nextLength = nextSplitLength;
-                    result.Add(text.Substring(startIndex, nextIdx + nextLength - startIndex));
-                    newStartIndex = nextIdx + nextLength;
+                    var nextEndIdx = nextIdx + nextExtensionLength;
+                    var nextLength = Math.Min(1000, nextEndIdx - startIndex);
+                    result.Add(text.Substring(nextEndIdx-nextLength, nextLength));
+                    newStartIndex = nextIdx + nextExtensionLength;
                 }
                 startIndex = newStartIndex;
             }
@@ -2976,14 +2979,14 @@ endfunction
                 return new List<string>();
             }
 
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            result.AddRange(SplitTextByFileExtensionLocations(text, unknownFileExtensions));
+            var splitText = SplitTextByFileExtensionLocations(text, unknownFileExtensions);
 
-            if (result.Count == 0)
+            if (splitText.Count == 0)
             {
                 return new List<string>();
             }
 
+            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             void AddPotentialStrings(List<string> strings)
             {
                 result.AddRange(strings.Where(x => unknownFileExtensions.Any(y => x.Contains(y, StringComparison.InvariantCultureIgnoreCase))).Select(x => x.Trim()));
@@ -2992,7 +2995,7 @@ endfunction
             var nonVisibleSeparators = Enumerable.Range((int)'\0', (int)' ' - (int)'\0').Concat(Enumerable.Range(127, 256 - 127)).Select(x => (char)x).ToArray();
             var visibleSeparators = Enumerable.Range(0, 256).Select(x => (char)x).Where(x => !(x >= 'a' && x <= 'z') && !(x >= 'A' && x <= 'Z') && !(x >= '0' && x <= '9')).Except(nonVisibleSeparators).ToList();
 
-            AddPotentialStrings(text.Split(nonVisibleSeparators, StringSplitOptions.RemoveEmptyEntries).ToList());
+            AddPotentialStrings(splitText.SelectMany(x => x.Split(nonVisibleSeparators, StringSplitOptions.RemoveEmptyEntries)).ToList());
 
             int oldCount;
             do
