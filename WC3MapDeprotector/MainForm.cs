@@ -1,6 +1,7 @@
 using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.Principal;
 
 namespace WC3MapDeprotector
 {
@@ -11,8 +12,40 @@ namespace WC3MapDeprotector
         protected bool _disclaimerApproved = false;
         private CancellationTokenSource _bruteForceCancellationToken;
 
+        protected void AdminRelauncher()
+        {
+            if (!Debugger.IsAttached && !IsRunAsAdmin())
+            {
+                ProcessStartInfo process = new ProcessStartInfo();
+                process.UseShellExecute = true;
+                process.WorkingDirectory = Environment.CurrentDirectory;
+                process.FileName = Path.ChangeExtension(Assembly.GetEntryAssembly().Location, ".exe");
+                process.Verb = "runas";
+
+                try
+                {
+                    Process.Start(process);
+                    Process.GetCurrentProcess().Kill();
+                }
+                catch
+                {
+                    MessageBox.Show("This program must be run as an administrator!");
+                }
+            }
+        }
+
+        protected bool IsRunAsAdmin()
+        {
+            WindowsIdentity id = WindowsIdentity.GetCurrent();
+            WindowsPrincipal principal = new WindowsPrincipal(id);
+
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
         public MainForm()
         {
+            //AdminRelauncher();
+
             //todo: add gear icon for advanced settings?
             InitializeComponent();
             WindowUITracker.Tracker.Track(this);

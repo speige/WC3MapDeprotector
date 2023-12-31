@@ -2785,6 +2785,7 @@ endfunction
                 return new List<string>();
             }
 
+            _logEvent("Scanning Map ObjectData");
             if (map.ImportedFiles?.Files != null)
             {
                 result.AddRange(map.ImportedFiles.Files.Select(x => x.FullPath));
