@@ -153,14 +153,14 @@ namespace WC3MapDeprotector
             return DiscoverFiles(verifiedFileNames);
         }
 
-        protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint encryptionKey)
+        protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint fileIndex, out uint encryptionKey)
         {
             md5Hash = null;
 
             var extractedPath = Path.Combine(_extractFolder, localDiskFileName);
             try
             {
-                if (ExtractFile(archiveFileName, extractedPath, out encryptionKey))
+                if (ExtractFile(archiveFileName, extractedPath, out fileIndex, out encryptionKey))
                 {
                     bool isEmpty = false;
                     string predictedExtension = "";
@@ -170,6 +170,7 @@ namespace WC3MapDeprotector
                         if (!isEmpty)
                         {
                             md5Hash = stream.CalculateMD5();
+                            _fileIndexToMd5[fileIndex] = md5Hash;
                             _md5ToLocalDiskFileName[md5Hash] = localDiskFileName;
                             if (!_md5ToPredictedExtension.TryGetValue(md5Hash, out predictedExtension))
                             {
@@ -218,15 +219,17 @@ namespace WC3MapDeprotector
             catch { }
 
             File.Delete(extractedPath);
+            fileIndex = 0;
             encryptionKey = 0;
             return false;
         }
 
-        protected unsafe bool ExtractFile(string archiveFileName, string extractedFileName, out uint encryptionKey)
+        protected unsafe bool ExtractFile(string archiveFileName, string extractedFileName, out uint fileIndex, out uint encryptionKey)
         {
             //NOTE: can't call SFileExtractFile because it hides the encryption key
             if (StormLibrary.SFileOpenFileEx(_archiveHandle, archiveFileName, 0, out var fileHandle))
             {
+                IntPtr ptrFileIndex = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 IntPtr ptrEncryptionKey = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(uint)));
                 try
                 {
@@ -239,7 +242,9 @@ namespace WC3MapDeprotector
 
                     //NOTE: encryptionKey is based on real file name. SFileOpenFileEx will have blank encryption key for psuedoFileName. SFileReadFile attempts to crack the encryption key, but it's only stored on the current filehandle. So, we have to read 1 byte to get key for later before calling normal SFileExtractFile
                     //NOTE: If encryptionKey is blank, extracted file will have garbage bytes. We can still use MD5 as unique key, but once we discover real filename we need to re-extract & update MD5s. If extracted with fake file name, extracted file will still be garbage.
+                    StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoFileIndex, ptrFileIndex, (uint)Marshal.SizeOf(typeof(uint)), out var _);
                     StormLibrary.SFileGetFileInfo(fileHandle, StormLibrary.SFileInfoClass.SFileInfoEncryptionKey, ptrEncryptionKey, (uint)Marshal.SizeOf(typeof(uint)), out var _);
+                    fileIndex = (uint)Marshal.ReadInt32(ptrFileIndex);
                     encryptionKey = (uint)Marshal.ReadInt32(ptrEncryptionKey);
 
                     Directory.CreateDirectory(Path.GetDirectoryName(extractedFileName));
@@ -248,10 +253,12 @@ namespace WC3MapDeprotector
                 finally
                 {
                     StormLibrary.SFileCloseFile(fileHandle);
+                    Marshal.FreeHGlobal(ptrFileIndex);
                     Marshal.FreeHGlobal(ptrEncryptionKey);
                 }
             }
 
+            fileIndex = 0;
             encryptionKey = 0;
             return false;
         }
@@ -397,16 +404,15 @@ namespace WC3MapDeprotector
                     if (_fileIndexToEncryptionKey[fileIndex] != encryptionKey)
                     {
                         var oldExtension = Path.GetExtension(pseudoFileFullPath);
+                        var oldEncryptionKey = _fileIndexToEncryptionKey[fileIndex];
+                        var oldMD5Hash = _fileIndexToMd5[fileIndex];
 
                         //Original encryption key detected incorrectly
                         File.Delete(pseudoFileFullPath);
-                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out var newEncryptionKey))
+                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out var _, out var newEncryptionKey))
                         {
                             return false;
                         }
-
-                        var oldEncryptionKey = _fileIndexToEncryptionKey[fileIndex];
-                        var oldMD5Hash = _fileIndexToMd5[fileIndex];
 
                         _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
                         _fileIndexToMd5[fileIndex] = md5Hash;
@@ -608,7 +614,7 @@ namespace WC3MapDeprotector
                         }
 
                         var extractedFileName = Path.Combine(isUnknown ? UNKNOWN_FOLDER : DISCOVERED_FOLDER, realFileName ?? pseudoFileName);
-                        if (TryExtractFile(fileName, extractedFileName, out var fileContentsMD5Hash, out var encryptionKey))
+                        if (TryExtractFile(fileName, extractedFileName, out var fileContentsMD5Hash, out var _, out var encryptionKey))
                         {
                             _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
 
@@ -621,7 +627,6 @@ namespace WC3MapDeprotector
                                 _discoveredFileNameToMD5[realFileName] = fileContentsMD5Hash;
                             }
 
-                            _fileIndexToMd5[fileIndex] = fileContentsMD5Hash;
                             _logEvent($"Extracted File: {extractedFileName}");
                         }
                     }

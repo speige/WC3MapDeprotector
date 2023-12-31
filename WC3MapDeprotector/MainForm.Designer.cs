@@ -182,7 +182,7 @@
             cbVisualTriggers.Name = "cbVisualTriggers";
             cbVisualTriggers.Size = new Size(341, 29);
             cbVisualTriggers.TabIndex = 15;
-            cbVisualTriggers.Text = "Create Visual Triggers (experimental)";
+            cbVisualTriggers.Text = "Create Visual/GUI Triggers (experimental)";
             cbVisualTriggers.UseVisualStyleBackColor = true;
             // 
             // label4

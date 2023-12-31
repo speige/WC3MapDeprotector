@@ -9,7 +9,7 @@ namespace WC3MapDeprotector
             get
             {
                 bool result = false;
-                Debug.Assert(result = true); //NOTE: = assigns value to true, but Assert call is skipped it not debug mode
+                Debug.Assert(result = true); //NOTE: = assigns value to true, but Assert call is skipped if not debug mode
                 return result;
             }
         }

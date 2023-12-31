@@ -165,7 +165,7 @@ namespace WC3MapDeprotector
 
         [GeneratedRegex(@"\s*function\s+\S+\s*\([a-z, \t]*\)", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_LuaScript();
-        [GeneratedRegex(@"\s*requires\s+'[^']+'", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"\s*require\s+'[^']+'", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_LuaScript2();
         
         [GeneratedRegex(@"\s*function\s+preloadfiles\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
