@@ -8,7 +8,7 @@ namespace WC3MapDeprotector
 {
     public static partial class StormMPQArchiveExtensions
     {
-        private static Lazy<Dictionary<ulong, string>> _defaultListFileRainbowTable = new Lazy<Dictionary<ulong, string>>(() =>
+        private static Lazy<HashSet<string>> _defaultListFile = new Lazy<HashSet<string>>(() =>
         {
             var defaultListFile = new ConcurrentHashSet<string>(StringComparer.InvariantCultureIgnoreCase) {
                 "(attributes)",
@@ -54,31 +54,17 @@ namespace WC3MapDeprotector
                 }
             });
 
-            return ConvertListFileToRainbowTable(defaultListFile.ToList());
+            return defaultListFile.ToHashSet<string>(StringComparer.InvariantCultureIgnoreCase);
         });
 
         public static bool IsInDefaultListFile(string fileName)
         {
-            return MPQFullHash.TryCalculate(fileName, out var hash) && _defaultListFileRainbowTable.Value.ContainsKey(hash);
-        }
-
-        public static Dictionary<ulong, string> ConvertListFileToRainbowTable(List<string> fileNames)
-        {
-            var result = new ConcurrentList<KeyValuePair<ulong, string>>();
-            Parallel.ForEach(fileNames, fileName =>
-            {
-                if (MPQFullHash.TryCalculate(fileName, out var hash))
-                {
-                    result.Add(new KeyValuePair<ulong, string>(hash, fileName));
-                }
-            });
-
-            return result.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.First().Value);
+            return _defaultListFile.Value.Contains(fileName);
         }
 
         public static List<string> ProcessDefaultListFile(this StormMPQArchive archive)
         {
-            return archive.ProcessListFile_RainbowTable(_defaultListFileRainbowTable.Value);
+            return archive.ProcessListFile(_defaultListFile.Value);
         }
 
         private static string PredictFontFileExtension(Stream stream)

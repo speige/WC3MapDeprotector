@@ -94,11 +94,11 @@ namespace WC3MapDeprotector
             return _fullHashes.Contains(fullHash);
         }
 
-        protected List<ulong> UnknownFileNameFullHashes
+        protected int UnknownFileNameFullHashCount
         {
             get
             {
-                return _fullHashes.Where(x => !_discoveredMPQFullHashToMD5.ContainsKey(x)).ToList();
+                return _fullHashes.Count(x => !_discoveredMPQFullHashToMD5.ContainsKey(x));
             }
         }
 
@@ -106,7 +106,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return UnknownFileNameFullHashes.Count - UnknownFileCount;
+                return UnknownFileNameFullHashCount - UnknownFileCount;
             }
         }
 
@@ -122,7 +122,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return UnknownFileNameFullHashes.Count > 0;
+                return UnknownFileNameFullHashCount > 0;
             }
         }
 
@@ -131,7 +131,7 @@ namespace WC3MapDeprotector
             return _discoveredFileNameToMD5.Keys.ToList();
         }
 
-        public List<string> ProcessListFile(List<string> listFile)
+        public List<string> ProcessListFile(IEnumerable<string> listFile)
         {
             var verifiedNames = new ConcurrentList<string>();
             Parallel.ForEach(listFile, fileName =>
@@ -145,12 +145,6 @@ namespace WC3MapDeprotector
                 }
             });
             return DiscoverFiles(verifiedNames.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList());
-        }
-
-        public List<string> ProcessListFile_RainbowTable(Dictionary<ulong, string> rainbowTable)
-        {
-            var verifiedFileNames = _fullHashes.Select(x => rainbowTable.TryGetValue(x, out var fileName) ? fileName : null).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-            return DiscoverFiles(verifiedFileNames);
         }
 
         protected bool TryExtractFile(string archiveFileName, string localDiskFileName, out string md5Hash, out uint fileIndex, out uint encryptionKey)

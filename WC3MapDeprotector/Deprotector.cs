@@ -86,50 +86,43 @@ namespace WC3MapDeprotector
 
             foreach (var fileName in fileNames)
             {
-                if (MPQFullHash.TryCalculate(fileName, out var hash))
-                {
-                    globalListFileRainbowTable.Value[hash] = fileName;
-                }
                 _logEvent($"added to global listfile: {fileName}");
             }
         }
 
-        protected static Lazy<Dictionary<ulong, string>> globalListFileRainbowTable = new Lazy<Dictionary<ulong, string>>(() =>
+        protected HashSet<string> GetGlobalListFile()
         {
+            HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+
             if (File.Exists(InstallerListFileName))
             {
                 var extractedListFileFolder = Path.Combine(Path.GetTempPath(), "WC3MapDeprotector");
                 Directory.CreateDirectory(extractedListFileFolder);
                 ZipFile.ExtractToDirectory(InstallerListFileName, extractedListFileFolder, true);
 
-                var extractedListFileEntries = new string[0];
                 var extractedListFileName = Path.Combine(extractedListFileFolder, "listfile.txt");
                 if (File.Exists(extractedListFileName))
                 {
-                    extractedListFileEntries = File.ReadAllLines(extractedListFileName);
+                    result.AddRange(File.ReadLines(extractedListFileName));
                 }
 
-                var existingListFileEntries = new string[0];
                 if (File.Exists(WorkingListFileName))
                 {
-                    existingListFileEntries = File.ReadAllLines(WorkingListFileName);
+                    result.AddRange(File.ReadLines(WorkingListFileName));
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(WorkingListFileName));
-                File.WriteAllLines(WorkingListFileName, extractedListFileEntries.Concat(existingListFileEntries).OrderBy(x => x).Distinct(StringComparer.InvariantCultureIgnoreCase));
+                File.WriteAllLines(WorkingListFileName, result);
                 File.Delete(InstallerListFileName);
                 File.Delete(Path.Combine(extractedListFileFolder, "listfile.txt"));
             }
-
-            var originalListFile = File.ReadAllLines(WorkingListFileName);
-            var listFile = new List<string>(originalListFile.OrderBy(x => x).Distinct(StringComparer.InvariantCultureIgnoreCase));
-            if (originalListFile.Length != listFile.Count)
+            else if (File.Exists(WorkingListFileName))
             {
-                File.WriteAllLines(WorkingListFileName, listFile);
+                result.AddRange(File.ReadLines(WorkingListFileName));
             }
 
-            return StormMPQArchiveExtensions.ConvertListFileToRainbowTable(listFile);
-        });
+            return result;
+        }
 
         public Deprotector(string inMapFile, string outMapFile, DeprotectionSettings settings, Action<string> logEvent)
         {
@@ -524,7 +517,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
-                    inMPQArchive.ProcessListFile_RainbowTable(globalListFileRainbowTable.Value);
+                    inMPQArchive.ProcessListFile(GetGlobalListFile());
                 }
 
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
@@ -669,7 +662,7 @@ namespace WC3MapDeprotector
                     var beforeGlobalListFileCount = inMPQArchive.UnknownFileCount;
                     string globalListFileBenchmarkMessage = "";
                     var discoveredFileNamesBackup_globalListFile = inMPQArchive.GetDiscoveredFileNames();
-                    inMPQArchive.ProcessListFile_RainbowTable(globalListFileRainbowTable.Value);
+                    inMPQArchive.ProcessListFile(GetGlobalListFile());
 
                     foreach (var fileName in inMPQArchive.GetDiscoveredFileNames())
                     {
