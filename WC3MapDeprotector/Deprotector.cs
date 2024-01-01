@@ -90,12 +90,11 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected HashSet<string> GetGlobalListFile()
+        protected void ProcessGlobalListFile(StormMPQArchive archive)
         {
-            HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-
             if (File.Exists(InstallerListFileName))
             {
+                HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 var extractedListFileFolder = Path.Combine(Path.GetTempPath(), "WC3MapDeprotector");
                 Directory.CreateDirectory(extractedListFileFolder);
                 ZipFile.ExtractToDirectory(InstallerListFileName, extractedListFileFolder, true);
@@ -116,12 +115,11 @@ namespace WC3MapDeprotector
                 File.Delete(InstallerListFileName);
                 File.Delete(Path.Combine(extractedListFileFolder, "listfile.txt"));
             }
-            else if (File.Exists(WorkingListFileName))
+            
+            if (File.Exists(WorkingListFileName))
             {
-                result.AddRange(File.ReadLines(WorkingListFileName));
+                archive.ProcessListFile(File.ReadLines(WorkingListFileName));
             }
-
-            return result;
         }
 
         public Deprotector(string inMapFile, string outMapFile, DeprotectionSettings settings, Action<string> logEvent)
@@ -517,7 +515,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
-                    inMPQArchive.ProcessListFile(GetGlobalListFile());
+                    ProcessGlobalListFile(inMPQArchive);
                 }
 
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
@@ -662,7 +660,7 @@ namespace WC3MapDeprotector
                     var beforeGlobalListFileCount = inMPQArchive.UnknownFileCount;
                     string globalListFileBenchmarkMessage = "";
                     var discoveredFileNamesBackup_globalListFile = inMPQArchive.GetDiscoveredFileNames();
-                    inMPQArchive.ProcessListFile(GetGlobalListFile());
+                    ProcessGlobalListFile(inMPQArchive);
 
                     foreach (var fileName in inMPQArchive.GetDiscoveredFileNames())
                     {
