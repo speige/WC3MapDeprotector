@@ -10,6 +10,7 @@
     <SignAssembly>False</SignAssembly>
     <AssemblyVersion>1.1.4.0</AssemblyVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,10 +29,11 @@
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-arm64" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x86" Version="7.4.4" />
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.7" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="NLua" Version="1.6.3" />
     <PackageReference Include="SixLabors.Fonts" Version="2.0.1" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.1" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.2" />
     <PackageReference Include="War3Net.Build" Version="5.7.1" />
     <PackageReference Include="War3Net.Build.Core" Version="5.7.1" />
     <PackageReference Include="War3Net.CodeAnalysis" Version="5.6.1" />
@@ -61,9 +63,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Blizzard.j">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="ce-lib32.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="ce-lib64.dll">

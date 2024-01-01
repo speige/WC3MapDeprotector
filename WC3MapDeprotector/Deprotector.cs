@@ -28,6 +28,8 @@ using System.Numerics;
 using FastMDX;
 using System.Collections.Concurrent;
 using War3Net.IO.Slk;
+using Microsoft.Win32;
+using Microsoft.Diagnostics.Tracing.AutomatedAnalysis;
 
 namespace WC3MapDeprotector
 {
@@ -282,83 +284,126 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected void WaitForProcessToExit(Process process, CancellationToken cancellationToken = default)
-        {
-            while (!process.HasExited)
-            {
-                Thread.Sleep(1000);
-
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    process.Kill();
-                }
-            }
-        }
-
-        protected Process ExecuteCommand(string exePath, string arguments)
-        {
-            var process = new Process();
-            process.StartInfo.FileName = exePath;
-            process.StartInfo.Arguments = arguments;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = false;
-            process.StartInfo.RedirectStandardError = false;
-            process.StartInfo.RedirectStandardInput = false;
-            process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
-            process.StartInfo.CreateNoWindow = false;
-            process.StartInfo.WorkingDirectory = Path.GetDirectoryName(exePath);
-            process.Start();
-            return process;
-        }
-
         protected string decode(string encoded)
         {
             return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
         }
 
-        protected async Task LiveGameScanForUnknownFiles(StormMPQArchive archive)
+        protected System.Diagnostics.Process LaunchWC3(string wc3ExePath, string mapFileName)
         {
-            var process = ExecuteCommand(Settings.WC3ExePath, $"-launch -loadfile \"{_inMapFile}\" -mapdiff 1 -testmapprofile WorldEdit -fixedseed 1");
-            //Thread.Sleep(15 * 1000); // wait for WC3 to load
+            return Utils.ExecuteCommand(wc3ExePath, $"-launch -loadfile \"{mapFileName}\"");
+        }
 
-            var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            directories.AddRange(archive.GetDiscoveredFileNames().Select(x => Path.GetDirectoryName(x.Replace("/", "\\"))).Where(x => x != null));
-            var originalDirectories = directories.ToList();
-            foreach (var directory in originalDirectories)
+        protected string GetWc3LocalFilesPath(string wc3ExePath)
+        {
+            return Path.GetDirectoryName(Path.GetDirectoryName(wc3ExePath));
+        }
+
+        protected void LiveGameScanForUnknownFiles(StormMPQArchive archive)
+        {
+            const string REGISTRY_KEY = @"HKEY_CURRENT_USER\SOFTWARE\Blizzard Entertainment\Warcraft III";
+            const string REGISTRY_VALUE = "Allow Local Files";
+
+            var alreadyDiscoveredFileNames = new HashSet<string>(archive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase);
+            var deepScanDirectories = archive.DeepScan_GetDirectories(archive.GetDiscoveredFileNames());
+            var oldEnableLocalFiles = Registry.GetValue(REGISTRY_KEY, REGISTRY_VALUE, null);
+            Registry.SetValue(REGISTRY_KEY, REGISTRY_VALUE, 1);
+
+            //todo: save to %appdata% so it remembers last set location
+            var wc3ExePath = Path.Combine(@"c:\Program Files (x86)\Warcraft III\_retail_\x86_64\Warcraft III.exe");
+            var wc3LocalFilesPath = GetWc3LocalFilesPath(wc3ExePath);
+
+            System.Diagnostics.Process process = null;
+            var tempMapLocation = Path.ChangeExtension(Path.GetTempPath(), "WC3MapDeprotector_LiveGameScan" + Path.GetExtension(_inMapFile));
+            try
             {
-                var split = directory.Split('\\');
-                for (int i = 1; i <= split.Length; i++)
+                if (File.Exists(tempMapLocation))
                 {
-                    directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
-                }
-            }
-
-            //todo: if we can hook the FileAccess API from WC3 & enable LocalFiles, we can just search every file it accesses, regardless of extension
-            var extensions = GetPredictedUnknownFileExtensions();
-            var cheatEngineForm = new frmLiveGameScanner(scannedFileName =>
-            {
-                var filesToTest = new List<string>() { scannedFileName };
-                var baseFileName = Path.GetFileName(scannedFileName);
-                foreach (var directory in directories)
-                {
-                    filesToTest.Add(directory + "\\" + baseFileName);
+                    File.Delete(tempMapLocation);
                 }
 
-                foreach (var fileName in filesToTest)
+                File.Copy(_inMapFile, tempMapLocation);
+                using (var scanner = new ProcessFileAccessScanner())
                 {
-                    if (ExtractFileFromArchive(archive, fileName))
+                    var form = new frmLiveGameScanner();
+                    form.WC3ExePath = wc3ExePath;
+
+                    scanner.FileAccessed += fileName =>
                     {
-                        AddToGlobalListFile(fileName);
+                        if (!alreadyDiscoveredFileNames.Contains(fileName))
+                        {
+                            archive.DiscoverFile(fileName, out var _);
+                            archive.DiscoverUnknownFileNames_DeepScan(new List<string>() { fileName }, deepScanDirectories.ToList());
+                            var newDeepScanDirectories = archive.DeepScan_GetDirectories(new List<string>() { fileName }).Where(x => !deepScanDirectories.Contains(x));
+                            if (newDeepScanDirectories.Count() > 0)
+                            {
+                                archive.DiscoverUnknownFileNames_DeepScan(alreadyDiscoveredFileNames.ToList(), newDeepScanDirectories.ToList());
+                                deepScanDirectories.AddRange(newDeepScanDirectories);
+                            }
+                            var recoveredFileNames = archive.GetDiscoveredFileNames().Where(x => !alreadyDiscoveredFileNames.Contains(x)).ToList();
+                            if (recoveredFileNames.Any())
+                            {
+                                alreadyDiscoveredFileNames.UnionWith(recoveredFileNames);
+                                form.BeginInvoke(() => form.UpdateLabels(archive));
+                                AddToGlobalListFile(recoveredFileNames);
+                                foreach (var recoveredFile in recoveredFileNames)
+                                {
+                                    _logEvent($"Extracted from MPQ: {recoveredFile}");
+                                }
+                            }
 
-                        if (!archive.HasUnknownHashes)
+                            if (!archive.ShouldKeepScanningForUnknowns)
+                            {
+                                form.Close();
+                                process.Kill();
+                                return;
+                            }
+                        }
+                    };
+
+                    var restartProcess = () =>
+                    {
+                        if (process != null)
                         {
                             process.Kill();
-                            return;
                         }
-                    }
+
+                        scanner.MonitorFolderPath = GetWc3LocalFilesPath(form.WC3ExePath);
+                        process = LaunchWC3(form.WC3ExePath, tempMapLocation);
+                        scanner.ProcessId = process.Id;
+                    };
+
+                    form.RestartGameRequested += () => { restartProcess(); };
+                    form.RequestGameRestart();
+
+                    form.UpdateLabels(archive);
+                    form.ShowDialog();
                 }
-            }, process, extensions);
-            cheatEngineForm.ShowDialog();
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show("Unable to launch Live Game Scanner: " + e.Message);
+            }
+            finally
+            {
+                if (process != null)
+                {
+                    process.Kill();
+                }
+
+                Registry.SetValue(REGISTRY_KEY, REGISTRY_VALUE, oldEnableLocalFiles);
+
+                new Thread(() =>
+                {
+                    try
+                    {
+                        //wait for process to end so file can unlock
+                        Thread.Sleep(15 * 1000);
+                        File.Delete(tempMapLocation);
+                    }
+                    catch { }
+                }).Start();
+            }
         }
 
         protected void CleanTemp()
@@ -485,7 +530,7 @@ namespace WC3MapDeprotector
                     var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
                     new DirectoryInfo(slkRecoverOutPath).Delete(true);
                     Directory.CreateDirectory(slkRecoverOutPath);
-                    WaitForProcessToExit(ExecuteCommand(SLKRecoverEXE, ""));
+                    Utils.WaitForProcessToExit(Utils.ExecuteCommand(SLKRecoverEXE, ""));
 
                     _logEvent("SilkObjectOptimizer completed");
 
@@ -560,7 +605,7 @@ namespace WC3MapDeprotector
                 var alreadyDiscoveredFiles = inMPQArchive.GetDiscoveredFileNames();
                 possibleFileNames_parsed.UnionWith(alreadyDiscoveredFiles);
                 possibleFileNames_parsed.UnionWith(alreadyDiscoveredFiles.SelectMany(x => GetAlternateUnknownRecoveryFileNames(x)));
-                var alreadyDiscoveredDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, alreadyDiscoveredFiles);
+                var alreadyDiscoveredDeepScanDirectories = inMPQArchive.DeepScan_GetDirectories(alreadyDiscoveredFiles);
                 deepScanDirectories.AddRange(alreadyDiscoveredDeepScanDirectories);
                 DiscoverUnknownFileNames_DeepScan(inMPQArchive, possibleFileNames_parsed.Select(x => Path.GetFileName(x).Trim('\\')).ToList(), alreadyDiscoveredDeepScanDirectories);
 
@@ -575,7 +620,7 @@ namespace WC3MapDeprotector
                     var newScannedFiles = possibleFileNames_parsed.Where(x => !previousScannedFiles.Contains(x)).ToList();
                     inMPQArchive.ProcessListFile(newScannedFiles);
 
-                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
+                    var newDeepScanDirectories = inMPQArchive.DeepScan_GetDirectories(inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
                     deepScanDirectories.AddRange(newDeepScanDirectories);
 
                     if (inMPQArchive.ShouldKeepScanningForUnknowns)
@@ -631,7 +676,7 @@ namespace WC3MapDeprotector
                     var newScannedFiles = possibleFileNames_parsed.Where(x => !previousScannedFiles.Contains(x)).ToList();
                     inMPQArchive.ProcessListFile(newScannedFiles);
 
-                    var newDeepScanDirectories = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
+                    var newDeepScanDirectories = inMPQArchive.DeepScan_GetDirectories(inMPQArchive.GetDiscoveredFileNames()).Where(x => !deepScanDirectories.Contains(x));
                     deepScanDirectories.AddRange(newDeepScanDirectories);
 
                     if (inMPQArchive.ShouldKeepScanningForUnknowns)
@@ -646,12 +691,12 @@ namespace WC3MapDeprotector
                         }
                     }
 
-                    keepScanning = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Any(x => !deepScanDirectories.Contains(x)) ||
+                    keepScanning = inMPQArchive.DeepScan_GetDirectories(inMPQArchive.GetDiscoveredFileNames()).Any(x => !deepScanDirectories.Contains(x)) ||
                         inMPQArchive.GetDiscoveredFileNames().Any(x => !previousDiscoveredFileNames.Contains(x)) ||
                         inMPQArchive.AllExtractedMD5s.Any(x => !previousMD5s.Contains(x));
                 } while (keepScanning);
 
-                var recoveredFileNames = discoveredFileNamesBackup.Except(inMPQArchive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase).ToList();
+                var recoveredFileNames = inMPQArchive.GetDiscoveredFileNames().Except(discoveredFileNamesBackup, StringComparer.InvariantCultureIgnoreCase).ToList();
                 AddToGlobalListFile(recoveredFileNames);
                 _logEvent($"Scan completed, {recoveredFileNames.Count} filenames found");
 
@@ -696,11 +741,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns)
                 {
-                    //NOTE: If LiveGameScan finds a new filename under an MD5 hash that already has a known filename, keep copies of both files, because it might actually be a legitimately duplicate file since the game isn't going to look for fake file names.
-                    //todo: add checkbox to disable this option?
-                    //var cancellationToken = new CancellationToken();
-                    //await LiveGameScanForUnknownFiles(inMPQArchive, _deprotectionResult);
-                    //WaitForProcessToExit(process, cancellationToken);
+                    LiveGameScanForUnknownFiles(inMPQArchive);
                 }
 
                 if (Settings.BruteForceUnknowns && inMPQArchive.HasUnknownHashes)
@@ -1333,11 +1374,11 @@ namespace WC3MapDeprotector
                 var withoutPrefix = Path.GetFileName(potentialFileName);
                 if (withoutPrefix.StartsWith("DISPAS", StringComparison.InvariantCultureIgnoreCase) || withoutPrefix.StartsWith("DISDIS", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    withoutPrefix = withoutPrefix.Substring(6, withoutPrefix.Length - 6);
+                    withoutPrefix = withoutPrefix.Substring(6);
                 }
                 else if (withoutPrefix.StartsWith("DIS", StringComparison.InvariantCultureIgnoreCase) || withoutPrefix.StartsWith("PAS", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    withoutPrefix = withoutPrefix.Substring(3, withoutPrefix.Length - 3);
+                    withoutPrefix = withoutPrefix.Substring(3);
                 }
 
                 result.Add($"DIS{withoutPrefix}");
@@ -1373,25 +1414,6 @@ namespace WC3MapDeprotector
             } while (oldCount != result.Count);
 
             return result.ToList();
-        }
-
-        protected HashSet<string> _extraSearchDirectories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "", "scripts", "Fonts", "ReplaceableTextures\\CommandButtons", "ReplaceableTextures\\CommandButtonsDisabled", "ReplaceableTextures\\PassiveButtons", "war3mapImported" };
-        protected List<string> DeepScan_GetDirectories(StormMPQArchive archive, List<string> scannedFileNames)
-        {
-            var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            directories.AddRange(_extraSearchDirectories);
-            directories.AddRange(archive.GetDiscoveredFileNames().Select(x => Path.GetDirectoryName(x)).Select(x => x.Trim('\\')).Distinct(StringComparer.InvariantCultureIgnoreCase));
-            directories.AddRange(scannedFileNames.Select(x => Path.GetDirectoryName(x.Replace("/", "\\").Trim('\\'))).Where(x => x != null));
-            foreach (var directory in directories.ToList())
-            {
-                var split = directory.Split('\\');
-                for (int i = 1; i <= split.Length; i++)
-                {
-                    directories.Add(split.Take(i).Aggregate((x, y) => $"{x}\\{y}"));
-                }
-            }
-
-            return directories.ToList();
         }
 
         protected void DiscoverUnknownFileNames_DeepScan(StormMPQArchive archive, List<string> baseFileNames, List<string> directories)

@@ -1,6 +1,6 @@
 ﻿namespace WC3MapDeprotector
 {
-    partial class MainForm
+    partial class frmMain
     {
         /// <summary>
         ///  Required designer variable.
@@ -28,7 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
-            var resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
+            var resources = new System.ComponentModel.ComponentResourceManager(typeof(frmMain));
             tbInputFile = new TextBox();
             tbOutputFile = new TextBox();
             fdInputFile = new OpenFileDialog();

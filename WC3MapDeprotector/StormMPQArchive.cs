@@ -169,7 +169,7 @@ namespace WC3MapDeprotector
                             if (!_md5ToPredictedExtension.TryGetValue(md5Hash, out predictedExtension))
                             {
                                 stream.Position = 0;
-                                predictedExtension = StormMPQArchiveExtensions.PredictUnknownFileExtension(stream) ?? "";
+                                predictedExtension = FileFormatPredictor.PredictUnknownFileExtension(stream) ?? "";
                                 if (string.IsNullOrWhiteSpace(predictedExtension) && !TryParseFileIndexFromPseudoFileName(archiveFileName, out var _))
                                 {
                                     predictedExtension = Path.GetExtension(archiveFileName);

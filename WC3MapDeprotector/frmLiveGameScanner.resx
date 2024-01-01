@@ -117,4 +117,28 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="label1.Text" xml:space="preserve">
+    <value>Some files in the MPQ Archive could not be discovered automatically. This is usually 3D Models, Textures, or Sounds.
+
+This tool monitors file access of the actual Warcraft III game while playing the map to recover unknown file names.
+
+Please play the map and pretend you are a beta tester. Try to click every possible button, create every possible unit, etc. The game needs to load the file in order for the scanner to find it.
+The game will automatically quit when all files have been found.
+You can quit early if you think you have tested everything. Occasionally there are files in the MPQ that are unused.
+
+Use greedisgood to speed up testing, if needed.
+</value>
+  </data>
+  <assembly alias="System.Drawing" name="System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <data name="btnWC3ExePathBrowse.Image" type="System.Drawing.Bitmap, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        iVBORw0KGgoAAAANSUhEUgAAACgAAAAdCAYAAADYSS5zAAAABGdBTUEAALGPC/xhBQAAAKFJREFUWEft
+        jsEJwzAQBNVQekphLivvFJKPbMcDh+wFY4V476GBeWkPTdnznh71qpzegwo4k9N7UAFncvo/1KcZJC95
+        oHrIZPm8njWzI/BX8weuqIcMfuNW1GMGyRuB3ZI3ArslbwR2SdqGGrglbUMN3JIWqJFTsgI1ckpWoEZO
+        yQrUyClZgRq5JKlFDV2S1KKGLklqUUOXJB1RY4fkLJQyA5TFNoKLoXXHAAAAAElFTkSuQmCC
+</value>
+  </data>
+  <metadata name="fdOpen.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 17</value>
+  </metadata>
 </root>
