@@ -27,6 +27,7 @@ using War3Net.IO.Mpq;
 using System.Numerics;
 using FastMDX;
 using System.Collections.Concurrent;
+using War3Net.IO.Slk;
 
 namespace WC3MapDeprotector
 {
@@ -521,6 +522,11 @@ namespace WC3MapDeprotector
                     }
                 }
 
+                if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
+                {
+                    inMPQArchive.ProcessListFile_RainbowTable(globalListFileRainbowTable.Value);
+                }
+
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
                 {
                     if (Path.GetDirectoryName(scriptFile) != DiscoveredFilesPath)
@@ -553,11 +559,6 @@ namespace WC3MapDeprotector
                     {
                         File.Copy(Path.Combine(UnknownFilesPath, unknownFile), Path.Combine(DiscoveredFilesPath, "war3map.lua"), true);
                     }
-                }
-
-                if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
-                {
-                    inMPQArchive.ProcessListFile_RainbowTable(globalListFileRainbowTable.Value);
                 }
 
                 var discoveredFileNamesBackup = inMPQArchive.GetDiscoveredFileNames();
@@ -654,9 +655,9 @@ namespace WC3MapDeprotector
                         }
                     }
 
-                    keepScanning |= DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Any(x => !deepScanDirectories.Contains(x));
-                    keepScanning |= inMPQArchive.GetDiscoveredFileNames().Any(x => !previousDiscoveredFileNames.Contains(x));
-                    keepScanning |= inMPQArchive.AllExtractedMD5s.Any(x => !previousMD5s.Contains(x));
+                    keepScanning = DeepScan_GetDirectories(inMPQArchive, inMPQArchive.GetDiscoveredFileNames()).Any(x => !deepScanDirectories.Contains(x)) ||
+                        inMPQArchive.GetDiscoveredFileNames().Any(x => !previousDiscoveredFileNames.Contains(x)) ||
+                        inMPQArchive.AllExtractedMD5s.Any(x => !previousMD5s.Contains(x));
                 } while (keepScanning);
 
                 var recoveredFileNames = discoveredFileNamesBackup.Except(inMPQArchive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase).ToList();
@@ -1323,7 +1324,7 @@ namespace WC3MapDeprotector
             new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".w3m", ".w3x", ".mpq", ".pud" },
             new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".txt", ".ini" },
             new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".j", ".lua" },
-            new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".wav", ".mp3", ".flac", ".aif", ".aiff" },
+            new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".wav", ".mp3", ".flac", ".aif", ".aiff", ".ogg" },
             new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".ttf", ".otf", ".woff" },
             new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".mdl", ".mdx", ".blp", ".tga", ".jpg", ".dds", ".gif" }
         };
@@ -1338,14 +1339,30 @@ namespace WC3MapDeprotector
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { potentialFileName };
             if (potentialFileName.EndsWith(".blp", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".tga", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.Add($"DIS{Path.GetFileName(potentialFileName)}");
-                result.Add($"PAS{Path.GetFileName(potentialFileName)}");
-                result.Add($"DISPAS{Path.GetFileName(potentialFileName)}");
+                var withoutPrefix = Path.GetFileName(potentialFileName);
+                if (withoutPrefix.StartsWith("DISPAS", StringComparison.InvariantCultureIgnoreCase) || withoutPrefix.StartsWith("DISDIS", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    withoutPrefix = withoutPrefix.Substring(6, withoutPrefix.Length - 6);
+                }
+                else if (withoutPrefix.StartsWith("DIS", StringComparison.InvariantCultureIgnoreCase) || withoutPrefix.StartsWith("PAS", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    withoutPrefix = withoutPrefix.Substring(3, withoutPrefix.Length - 3);
+                }
+
+                result.Add($"DIS{withoutPrefix}");
+                result.Add($"PAS{withoutPrefix}");
+                result.Add($"DISDIS{withoutPrefix}");
+                result.Add($"DISPAS{withoutPrefix}");
             }
             if (potentialFileName.EndsWith(".mdl", StringComparison.InvariantCultureIgnoreCase) || potentialFileName.EndsWith(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
                 var directory = Path.GetDirectoryName(potentialFileName) ?? "";
-                result.Add($"{Path.Combine(directory, Path.GetFileNameWithoutExtension(potentialFileName))}_PORTRAIT{Path.GetExtension(potentialFileName)}");
+                var withoutExtensionOrSuffix = Path.GetFileNameWithoutExtension(potentialFileName);
+                if (withoutExtensionOrSuffix.EndsWith("_PORTRAIT", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    withoutExtensionOrSuffix = withoutExtensionOrSuffix.Substring(0, withoutExtensionOrSuffix.Length - 9);
+                }
+                result.Add($"{Path.Combine(directory, withoutExtensionOrSuffix)}_PORTRAIT{Path.GetExtension(potentialFileName)}");
             }
 
             var oldCount = result.Count;
@@ -1367,7 +1384,7 @@ namespace WC3MapDeprotector
             return result.ToList();
         }
 
-        protected HashSet<string> _extraSearchDirectories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "", "scripts", "ReplaceableTextures\\CommandButtons", "ReplaceableTextures\\CommandButtonsDisabled", "ReplaceableTextures\\PassiveButtons", "war3mapImported" };
+        protected HashSet<string> _extraSearchDirectories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "", "scripts", "Fonts", "ReplaceableTextures\\CommandButtons", "ReplaceableTextures\\CommandButtonsDisabled", "ReplaceableTextures\\PassiveButtons", "war3mapImported" };
         protected List<string> DeepScan_GetDirectories(StormMPQArchive archive, List<string> scannedFileNames)
         {
             var directories = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -2775,6 +2792,50 @@ endfunction
             _logEvent($"{newfiles.Count} files added to import list");
         }
 
+        [GeneratedRegex(@"\\{2,}", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_MultipleSequentialPathSeparators();
+        protected List<string> CleanScannedUnknownFileNames(List<string> scannedFileNames)
+        {
+            var invalidPathChars = new HashSet<char>(Path.GetInvalidPathChars());
+            var invalidFileNameChars = new HashSet<char>(Path.GetInvalidFileNameChars());
+
+            HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            result.AddRange(scannedFileNames.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x =>
+            {
+                try
+                {
+                    var withoutExcessSeparators = Regex_MultipleSequentialPathSeparators().Replace(x.Trim(Path.DirectorySeparatorChar), @"\");
+                    var withoutInvalidCharacters = new StringBuilder();
+                    var path = Path.GetDirectoryName(withoutExcessSeparators);
+                    var fileName = Path.GetFileName(withoutExcessSeparators);
+                    if (path == null || fileName == null)
+                    {
+                        return x;
+                    }
+
+                    path = path.Trim(Path.DirectorySeparatorChar);
+                    foreach (var character in path.Where(x => !invalidPathChars.Contains(x)))
+                    {
+                        withoutInvalidCharacters.Append(character);
+                    }
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        withoutInvalidCharacters.Append(Path.DirectorySeparatorChar);
+                    }
+                    foreach (var character in fileName.Where(x => !invalidFileNameChars.Contains(x)))
+                    {
+                        withoutInvalidCharacters.Append(character);
+                    }
+                    return withoutInvalidCharacters.ToString();
+                }
+                catch { }
+
+                return x;
+            }));
+
+            return result.ToList();
+        }
+
         protected List<string> _objectDataKeysWithFileReferences = new List<string>() { "aaea", "aart", "acat", "aeat", "aefs", "amat", "aord", "arar", "asat", "atat", "auar", "bfil", "bnam", "bptx", "btxf", "dfil", "dptx", "fart", "feat", "fsat", "ftat", "gar1", "ifil", "iico", "ucua", "uico", "umdl", "upat", "uspa", "ussi" };
         protected List<string> ParseMapForUnknowns(Map map, List<string> unknownFileExtensions)
         {
@@ -2803,11 +2864,11 @@ endfunction
 
             var commonFileReferenceObjectValues = map.GetObjectDataStringValues(_objectDataKeysWithFileReferences);
             result.AddRange(commonFileReferenceObjectValues);
+            result.AddRange(AddCommonModelAndTextureFileExtensions(commonFileReferenceObjectValues));
 
-            return result.ToList();
+            return CleanScannedUnknownFileNames(result.ToList());
         }
 
-        protected HashSet<string> _binaryExtensionsToParseReadableStrings = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".wai", ".w3a", ".w3b", ".w3c", ".w3d", ".w3e", ".w3f", ".w3h", ".w3i", ".w3q", ".w3r", ".w3s", ".w3t", ".w3u", ".wai", ".wct", ".wpm", ".wtg", ".wts", ".shd", ".mmp", ".doo", ".dll", ".exe" };
         protected List<string> ParseFileToDetectPossibleUnknowns(string fileName, List<string> unknownFileExtensions)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -2823,7 +2884,7 @@ endfunction
                 }
                 catch { }
             }
-
+            
             var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(bytes).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
             stringsWithFileExtensions.AddRange(allLines.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
@@ -2849,9 +2910,46 @@ endfunction
                 result.AddRange(ScanMDLForPossibleFileNames(fileName));
             }
 
-            if (extension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".fdf", StringComparison.InvariantCultureIgnoreCase))
+            if (extension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".fdf", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.AddRange(allLines.SelectMany(x => ParseQuotedStringsFromCode(x)));
+                var quotedStrings = allLines.SelectMany(x => ParseQuotedStringsFromCode(x)).ToList();
+                result.AddRange(AddCommonModelAndTextureFileExtensions(quotedStrings));
+            }
+
+            if (extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase))
+            {
+                try
+                {
+                    var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
+                    var columns = new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
+                    for (var idx = 0; idx < slkTable.Width; idx++)
+                    {
+                        var columnName = slkTable[idx, 0]?.ToString();
+                        if (!string.IsNullOrWhiteSpace(columnName))
+                        {
+                            columns[columnName] = idx;
+                        }
+                    }
+                    var files = new List<string>();
+                    if (columns.TryGetValue("dir", out var directoryColumn) && columns.TryGetValue("file", out var fileColumn))
+                    {
+                        for (var row = 1; row < slkTable.Rows; row++)
+                        {
+                            try
+                            {
+                                var directory = slkTable[directoryColumn, row]?.ToString();
+                                var file = slkTable[fileColumn, row]?.ToString();
+                                if (!string.IsNullOrWhiteSpace(directory) && !string.IsNullOrWhiteSpace(file))
+                                {
+                                    files.Add(Path.Combine(directory, file));
+                                }
+                            }
+                            catch { }
+                        }
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(files));
+                    }
+                }
+                catch { }
             }
 
             //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
@@ -2871,7 +2969,7 @@ endfunction
 
             result.AddRange(result.SelectMany(y => ScanTextForPotentialUnknownFileNames_SLOW(y, unknownFileExtensions)).ToList());
 
-            return result.ToList();
+            return CleanScannedUnknownFileNames(result.ToList());
         }
 
         protected List<string> ScanBytesForReadableAsciiStrings(byte[] bytes)
@@ -3034,6 +3132,16 @@ endfunction
 
         protected HashSet<string> _modelAndTextureFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".mdx", ".mdl", ".tga", ".blp", ".jpg", ".bmp", ".dds" };
 
+        protected List<string> AddCommonModelAndTextureFileExtensions(List<string> strings)
+        {
+            HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+            result.AddRange(strings);
+            var shortStrings = strings.Where(x => x.Length <= 150).ToList();
+            result.AddRange(_modelAndTextureFileExtensions.SelectMany(ext => shortStrings.Select(fileName => $"{fileName}{ext}")));
+            result.AddRange(_modelAndTextureFileExtensions.SelectMany(ext => shortStrings.Select(fileName => Path.ChangeExtension(fileName, ext))));
+            return result.ToList();
+        }
+
         protected List<string> ScanMDLForPossibleFileNames(string mdlFileName)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -3053,10 +3161,14 @@ endfunction
                     if (model.Textures != null)
                     {
                         var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-                        result.AddRange(textures);
-                        result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
-                        result.Add($"{model.Name}.mdl");
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
                     }
+                    if (model.Nodes != null)
+                    {
+                        var nodes = model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
+                    }
+                    result.Add($"{model.Name}.mdl");
                 }
                 catch { }
             }
@@ -3079,8 +3191,12 @@ endfunction
                     if (model.Textures != null)
                     {
                         var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-                        result.AddRange(textures);
-                        result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
+                    }
+                    if (model.Nodes != null)
+                    {
+                        var nodes = model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
                     }
                     result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
                     return result.ToList();
@@ -3102,8 +3218,7 @@ endfunction
                 if (mdx.Textures != null)
                 {
                     var textures = mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-                    result.AddRange(textures);
-                    result.AddRange(textures.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))));
+                    result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
                 }
                 result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{mdx.Info.Name}{ext}"));
                 return result.ToList();
@@ -3157,6 +3272,11 @@ endfunction
                 {
                     foreach (var key in section.Keys)
                     {
+                        if (key.KeyName.EndsWith("art", StringComparison.InvariantCultureIgnoreCase) || key.KeyName.EndsWith("name", StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            result.AddRange(AddCommonModelAndTextureFileExtensions(new List<string>() { key.Value }));
+                        }
+
                         result.AddRange(ScanTextForPotentialUnknownFileNames_SLOW(key.Value, unknownFileExtensions));
                     }
                 }

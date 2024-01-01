@@ -10,16 +10,37 @@ namespace WC3MapDeprotector
     {
         private static Lazy<Dictionary<ulong, string>> _defaultListFileRainbowTable = new Lazy<Dictionary<ulong, string>>(() =>
         {
-            var defaultListFile = new ConcurrentHashSet<string>() {
+            var defaultListFile = new ConcurrentHashSet<string>(StringComparer.InvariantCultureIgnoreCase) {
                 "(attributes)",
                 "(listfile)",
                 "(signature)",
                 "(user data)"
             };
 
-            var extensions = new List<string>() { "blp", "doo", "imp", "j", "json", "lua", "mmp", "shd", "slk", "tga", "txt", "w3a", "w3b", "w3c", "w3d", "w3e", "w3f", "w3h", "w3i", "w3q", "w3r", "w3s", "w3t", "w3u", "wai", "wct", "wpm", "wtg", "wts" };
-            var filePrefixes = new List<string>() { "AbilityBuffData", "AbilityBuffMetaData", "AbilityData", "AbilityMetaData", "conversation", "DestructableData", "DestructableMetaData", "DoodadMetaData", "Doodads", "ItemData", "ItemMetaData", "UnitAbilities", "UnitBalance", "UnitData", "UnitMetaData", "UnitUI", "UnitWeapons", "UpgradeData", "war3campaign", "war3campaignSkin", "war3map", "war3mapExtra", "war3mapMap", "war3mapMisc", "war3mapPath", "war3mapPreview", "war3mapSkin", "war3mapUnits" };
-            var folders = new List<string>() { "", "scripts", "units", "doodads" };
+            var extensions = new List<string>() { "blp", "b00", "doo", "imp", "j", "json", "lua", "mmp", "shd", "slk", "tga", "txt", "wai", "wct", "wpm", "wtg", "wts" };
+            extensions.AddRange(Enumerable.Range((int)'a', 26).Select(x => "w3" + (char)x));
+            var filePrefixes = new List<string>() { "blizzard", "common", "conversation", "doodads", "eaxdefs", "Terrain", "war3campaign", "war3campaignSkin", "war3map", "war3mapExtra", "war3mapMap", "war3mapMisc", "war3mapPath", "war3mapPreview", "war3mapSkin", "war3mapUnits", "water", "weather" };
+
+            foreach (var prefix1 in new string[] { "Campaign", "Common", "Human", "Item", "Neutral", "NightElf", "Orc", "Undead", "NotUsed_" })
+            {
+                foreach (var prefix2 in new string[] { "Unit", "Upgrade", "Ability" })
+                {
+                    foreach (var prefix3 in new string[] { "Data", "Func", "Strings", "UI" })
+                    {
+                        filePrefixes.Add($"{prefix1}{prefix2}{prefix3}");
+                    }
+                }
+            }
+
+            foreach (var prefix1 in new string[] { "Ambience", "Ambient", "Ability", "Anim", "Cliff", "Destructable", "Dialog", "Doodad", "Environment", "Item", "Lightning", "Misc", "MIDI", "Portrait", "Skin", "Spawn", "Splat", "UberSplat", "Unit", "UnitAck", "UnitCombat", "Upgrade", "UpgradeEffect", "UI" })
+            {
+                foreach (var prefix2 in new string[] { "Abilities", "Anims", "Balance", "BuffData", "BuffMetaData", "Data", "Lookups", "MetaData", "Music", "Sounds", "Types", "UI", "Weapons" })
+                {
+                    filePrefixes.Add($"{prefix1}{prefix2}");
+                }
+            }
+
+            var folders = new List<string>() { "", "doodads", "scripts", "splats", "terrainart", "ui", @"ui\soundinfo", "units" };
 
             Parallel.ForEach(folders.Select(x => x.Trim('\\')), folder =>
             {
