@@ -1,7 +1,6 @@
 ﻿using CSharpLua;
 using ICSharpCode.Decompiler.Util;
 using System.Reflection;
-using System.Text;
 using War3Net.Build;
 using War3Net.Build.Info;
 using War3Net.CodeAnalysis.Jass;
@@ -15,31 +14,6 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
-        public static bool TryLocateMpqHeader_New(
-            Stream sourceStream,
-            out long headerOffset)
-        {
-            var PreArchiveAlignBytes = 0x200;
-
-            sourceStream.Seek(0, SeekOrigin.Begin);
-            using (var reader = new BinaryReader(sourceStream, Encoding.UTF8, true))
-            {
-                for (headerOffset = 0; headerOffset <= sourceStream.Length - MpqHeader.Size; headerOffset += PreArchiveAlignBytes)
-                {
-                    if (reader.ReadUInt32() == MpqHeader.MpqId)
-                    {
-                        sourceStream.Seek(-4, SeekOrigin.Current);
-                        return true;
-                    }
-
-                    sourceStream.Seek(PreArchiveAlignBytes - 4, SeekOrigin.Current);
-                }
-            }
-
-            headerOffset = -1;
-            return false;
-        }
-
         public static string RenderScriptAsString(this JassCompilationUnitSyntax compilationUnit)
         {
             using (var writer = new StringWriter())

@@ -6,7 +6,6 @@ using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
 using NuGet.Packaging;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
 using System.Text;
@@ -29,7 +28,6 @@ using FastMDX;
 using System.Collections.Concurrent;
 using War3Net.IO.Slk;
 using Microsoft.Win32;
-using Microsoft.Diagnostics.Tracing.AutomatedAnalysis;
 
 namespace WC3MapDeprotector
 {
@@ -428,6 +426,22 @@ namespace WC3MapDeprotector
             }
         }
 
+        public string ReadAllTextAscii(string fileName)
+        {
+            return ConvertBytesToAscii(File.ReadAllBytes(fileName));
+        }
+
+        public string ConvertBytesToAscii(byte[] bytes)
+        {
+            //File.ReadAllText with Encoding.Ascii seems to corrupt non-readable characters sometimes
+            var result = new StringBuilder();
+            foreach (var value in bytes)
+            {
+                result.Append((char)value);
+            }
+            return result.ToString();
+        }
+
         public async Task<DeprotectionResult> Deprotect()
         {
             _logEvent($"Processing map: {MapBaseName}");
@@ -816,7 +830,7 @@ namespace WC3MapDeprotector
                 var basePathScriptFileName = Path.Combine(DiscoveredFilesPath, Path.GetFileName(scriptFile));
                 if (File.Exists(basePathScriptFileName) && !string.Equals(scriptFile, basePathScriptFileName, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (File.ReadAllText(scriptFile) != File.ReadAllText(basePathScriptFileName))
+                    if (ReadAllTextAscii(scriptFile) != ReadAllTextAscii(basePathScriptFileName))
                     {
                         _deprotectionResult.CriticalWarningCount++;
                         _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor or use MPQ tool to replace war3map.j or war3map.lua file");
@@ -834,7 +848,7 @@ namespace WC3MapDeprotector
             ScriptMetaData scriptMetaData = null;
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                jassScript = $"// {ATTRIB}{File.ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
+                jassScript = $"// {ATTRIB}{ReadAllTextAscii(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
                     jassScript = DeObfuscateJassScript(jassScript);
@@ -846,7 +860,7 @@ namespace WC3MapDeprotector
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
                 _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. It will open in the editor, but the render screen will be missing units/items/regions/cameras/sounds.");
-                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{File.ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
+                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadAllTextAscii(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
                 var temporaryScriptMetaData = DecompileLuaScriptMetaData(luaScript);
                 if (scriptMetaData == null)
                 {
@@ -1017,8 +1031,8 @@ namespace WC3MapDeprotector
                 transpiler.IgnoreEmptyStatements = true;
                 transpiler.KeepFunctionsSeparated = true;
 
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(File.ReadAllText(Path.Combine(ExeFolderPath, "common.j"))));
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(File.ReadAllText(Path.Combine(ExeFolderPath, "blizzard.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllTextAscii(Path.Combine(ExeFolderPath, "common.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllTextAscii(Path.Combine(ExeFolderPath, "blizzard.j"))));
                 var jassParsed = JassSyntaxFactory.ParseCompilationUnit(jassScript);
 
                 var luaCompilationUnit = transpiler.Transpile(jassParsed);
@@ -1060,7 +1074,7 @@ namespace WC3MapDeprotector
 
             if (File.Exists(Path.Combine(baseFolder, "war3map.j")))
             {
-                var script = File.ReadAllText(Path.Combine(baseFolder, "war3map.j"));
+                var script = ReadAllTextAscii(Path.Combine(baseFolder, "war3map.j"));
                 var blz = Regex_JassScriptInitBlizzard().Match(script);
                 if (blz.Success)
                 {
@@ -1071,7 +1085,7 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                File.WriteAllText(Path.Combine(baseFolder, "war3map.j"), script);
+                File.WriteAllBytes(Path.Combine(baseFolder, "war3map.j"), script.ToCharArray().Select(x => (byte)x).ToArray());
             }
             else if (File.Exists(Path.Combine(baseFolder, "war3map.lua")))
             {
@@ -1471,17 +1485,34 @@ namespace WC3MapDeprotector
         }
 
         [GeneratedRegex(@"\$[0-9a-f]{8}", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_ScriptObfuscatedFourCC();
+        protected static partial Regex Regex_ScriptHexObfuscatedFourCC();
+        [GeneratedRegex(@"'([^']{4})'\s*\+\s*'([^']{4})'", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_ScriptMathObfuscatedFourCC();
 
         protected string DeObfuscateFourCC(string script, string prefix, string suffix)
         {
-            var result = Regex_ScriptObfuscatedFourCC().Replace(script, x =>
+            var result = Regex_ScriptHexObfuscatedFourCC().Replace(script, x =>
             {
-                var byte1 = Convert.ToByte(x.Value.Substring(1, 2), 16);
-                var byte2 = Convert.ToByte(x.Value.Substring(3, 2), 16);
-                var byte3 = Convert.ToByte(x.Value.Substring(5, 2), 16);
-                var byte4 = Convert.ToByte(x.Value.Substring(7, 2), 16);
-                return $"{prefix}{Encoding.ASCII.GetString(new byte[] { byte1, byte2, byte3, byte4 })}{suffix}";
+                var intValue = Convert.ToInt32(x.Value.Substring(1), 16);
+                var rawCode = intValue.ToFourCC();
+                if (rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+                {
+                    return intValue.ToString();
+                }
+                return $"{prefix}{rawCode}{suffix}";
+            });
+
+            result = Regex_ScriptMathObfuscatedFourCC().Replace(result, x =>
+            {
+                var left = x.Groups[1].Value;
+                var right = x.Groups[2].Value;
+                var intValue = left.FromFourCCToInt() + right.FromFourCCToInt();
+                var rawCode = intValue.ToFourCC();
+                if (rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+                {
+                    return intValue.ToString();
+                }
+                return $"{prefix}{rawCode}{suffix}";
             });
 
             if (script != result)
@@ -1866,24 +1897,24 @@ namespace WC3MapDeprotector
 
                 foreach (var mapFile in mapFiles)
                 {
-                    using (var stream = new FileStream(mapFile, FileMode.Open))
+                    var bytes = File.ReadAllBytes(mapFile);
+                    if (bytes.Length == 0)
                     {
-                        if (stream.Length == 0)
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        foreach (var encoding in _allEncodings)
+                    foreach (var encoding in _allEncodings)
+                    {
+                        try
                         {
-                            try
+                            using (var stream = new MemoryStream(bytes))
                             {
-                                stream.Position = 0;
                                 _logEvent($"Analyzing {mapFile} ...");
                                 map.SetFile(Path.GetFileName(mapFile), false, stream, encoding, true);
                                 break;
                             }
-                            catch { }
                         }
+                        catch { }
                     }
                 }
             }
@@ -2233,7 +2264,7 @@ namespace WC3MapDeprotector
         {
             using (var v8 = new V8ScriptEngine())
             {
-                v8.Execute(File.ReadAllText(Path.Combine(ExeFolderPath, "luaparse.js")));
+                v8.Execute(ReadAllTextAscii(Path.Combine(ExeFolderPath, "luaparse.js")));
                 v8.Script.luaScript = luaScript;
                 v8.Execute("ast = JSON.stringify(luaparse.parse(luaScript, { luaVersion: '5.3' }));");
                 return JsonConvert.DeserializeObject<LuaAST>((string)v8.Script.ast, new JsonSerializerSettings() { MissingMemberHandling = MissingMemberHandling.Ignore, MaxDepth = Int32.MaxValue });
@@ -2274,122 +2305,127 @@ namespace WC3MapDeprotector
 
         protected string DeObfuscateJassScript(string jassScript)
         {
-            SplitUserDefinedAndGlobalGeneratedGlobalVariableNames(jassScript, out var userDefinedGlobals, out var globalGenerateds);
+            var result = DeObfuscateFourCCJass(jassScript);
 
-            var deObfuscated = DeObfuscateFourCCJass(jassScript);
-
-            var parsed = ParseJassScript(deObfuscated);
-            var formatted = "";
-            using (var writer = new StringWriter())
+            try
             {
-                var globalVariableRenames = new Dictionary<string, JassIdentifierNameSyntax>();
-                var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name), StringComparer.InvariantCultureIgnoreCase);
-                foreach (var declaration in parsed.Declarations)
+                SplitUserDefinedAndGlobalGeneratedGlobalVariableNames(result, out var userDefinedGlobals, out var globalGenerateds);
+                var parsed = ParseJassScript(result);
+                var formatted = "";
+                using (var writer = new StringWriter())
                 {
-                    if (declaration is JassGlobalDeclarationListSyntax)
+                    var globalVariableRenames = new Dictionary<string, JassIdentifierNameSyntax>();
+                    var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name), StringComparer.InvariantCultureIgnoreCase);
+                    foreach (var declaration in parsed.Declarations)
                     {
-                        var globalDeclaration = (JassGlobalDeclarationListSyntax)declaration;
-                        foreach (var global in globalDeclaration.Globals.Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>())
+                        if (declaration is JassGlobalDeclarationListSyntax)
                         {
-                            var isArray = global.Declarator is JassArrayDeclaratorSyntax;
-                            var originalName = global.Declarator.IdentifierName.Name;
-
-                            var typeName = global.Declarator.Type.TypeName.Name;
-                            var baseName = originalName;
-
-                            var isGlobalGenerated = globalGenerateds.Contains(baseName);
-
-                            if (baseName.StartsWith("udg_", StringComparison.InvariantCultureIgnoreCase))
+                            var globalDeclaration = (JassGlobalDeclarationListSyntax)declaration;
+                            foreach (var global in globalDeclaration.Globals.Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>())
                             {
-                                baseName = baseName.Substring(4);
-                            }
-                            else if (baseName.StartsWith("gg_", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                baseName = baseName.Substring(3);
-                            }
+                                var isArray = global.Declarator is JassArrayDeclaratorSyntax;
+                                var originalName = global.Declarator.IdentifierName.Name;
 
-                            var shortTypes = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase) { { "rect", "rct" }, { "sound", "snd" }, { "trigger", "trg" }, { "unit", "unit" }, { "destructable", "dest" }, { "camerasetup", "cam" }, { "item", "item" }, { "integer", "int" }, { "boolean", "bool" } };
-                            var shortTypeName = typeName;
-                            if (shortTypes.ContainsKey(typeName))
-                            {
-                                shortTypeName = shortTypes[typeName];
-                            }
-                            var newName = isGlobalGenerated ? "gg_" : "udg_";
-                            if (!baseName.StartsWith(typeName, StringComparison.InvariantCultureIgnoreCase) && !baseName.StartsWith(shortTypeName, StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                newName = $"{newName}{shortTypeName}_";
-                            }
-                            if (isArray && !baseName.Contains("array", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                newName = $"{newName}array_";
-                            }
-                            newName = $"{newName}{baseName}";
+                                var typeName = global.Declarator.Type.TypeName.Name;
+                                var baseName = originalName;
+
+                                var isGlobalGenerated = globalGenerateds.Contains(baseName);
+
+                                if (baseName.StartsWith("udg_", StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    baseName = baseName.Substring(4);
+                                }
+                                else if (baseName.StartsWith("gg_", StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    baseName = baseName.Substring(3);
+                                }
+
+                                var shortTypes = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase) { { "rect", "rct" }, { "sound", "snd" }, { "trigger", "trg" }, { "unit", "unit" }, { "destructable", "dest" }, { "camerasetup", "cam" }, { "item", "item" }, { "integer", "int" }, { "boolean", "bool" } };
+                                var shortTypeName = typeName;
+                                if (shortTypes.ContainsKey(typeName))
+                                {
+                                    shortTypeName = shortTypes[typeName];
+                                }
+                                var newName = isGlobalGenerated ? "gg_" : "udg_";
+                                if (!baseName.StartsWith(typeName, StringComparison.InvariantCultureIgnoreCase) && !baseName.StartsWith(shortTypeName, StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    newName = $"{newName}{shortTypeName}_";
+                                }
+                                if (isArray && !baseName.Contains("array", StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    newName = $"{newName}array_";
+                                }
+                                newName = $"{newName}{baseName}";
 
 
-                            var counter = 1;
-                            while (uniqueNames.Contains($"{newName}_{counter}"))
-                            {
-                                counter++;
+                                var counter = 1;
+                                while (uniqueNames.Contains($"{newName}_{counter}"))
+                                {
+                                    counter++;
+                                }
+                                var uniqueName = $"{newName}_{counter}";
+                                uniqueNames.Add(uniqueName);
+                                globalVariableRenames[originalName] = new JassIdentifierNameSyntax(uniqueName);
                             }
-                            var uniqueName = $"{newName}_{counter}";
-                            uniqueNames.Add(uniqueName);
-                            globalVariableRenames[originalName] = new JassIdentifierNameSyntax(uniqueName);
                         }
                     }
-                }
 
-                foreach (var uniqueName in uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length - 2) + "_2")))
-                {
-                    var oldRename = globalVariableRenames.FirstOrDefault(x => string.Equals(x.Value.Name, uniqueName, StringComparison.InvariantCultureIgnoreCase));
-                    if (oldRename.Key != null)
+                    foreach (var uniqueName in uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length - 2) + "_2")))
                     {
-                        globalVariableRenames[oldRename.Key] = new JassIdentifierNameSyntax(oldRename.Value.Name.Substring(0, uniqueName.Length - 2));
-                    }
-                }
-
-                var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), globalVariableRenames);
-                if (!renamer.TryRenameCompilationUnit(parsed, out var deobfuscated))
-                {
-                    deobfuscated = parsed;
-                }
-
-                var renderer = new JassRenderer(writer);
-                renderer.Render(deobfuscated);
-                var stringBuilder = writer.GetStringBuilder();
-                var match = Regex_JassScriptEndGlobals().Match(stringBuilder.ToString());
-                if (match.Success)
-                {
-                    var beforeByteCorrections = "13,10,116,114,105,103,103,101,114,32,103,103,95,116,114,103,95,119,97,114,51,109,97,112,32,61,32,110,117,108,108,13,10".Split(',').ToList();
-                    for (var i = 0; i < beforeByteCorrections.Count; i++)
-                    {
-                        var correction = beforeByteCorrections[i];
-                        stringBuilder.Insert(match.Index + i, (char)byte.Parse(correction));
-                    }
-                }
-
-                match = Regex_JassScriptFunctionMain().Match(stringBuilder.ToString());
-                if (match.Success)
-                {
-                    var beforeByteCorrections = "13,10,102,117,110,99,116,105,111,110,32,84,114,105,103,95,119,97,114,51,109,97,112,95,65,99,116,105,111,110,115,32,116,97,107,101,115,32,110,111,116,104,105,110,103,32,114,101,116,117,114,110,115,32,110,111,116,104,105,110,103,13,10,13,10,99,97,108,108,32,80,108,97,121,83,111,117,110,100,66,74,40,67,114,101,97,116,101,83,111,117,110,100,40,34,119,34,43,34,97,34,43,34,114,34,43,34,51,34,43,34,109,34,43,34,97,34,43,34,112,34,43,34,46,34,43,34,119,34,43,34,97,34,43,34,118,34,44,102,97,108,115,101,44,102,97,108,115,101,44,102,97,108,115,101,44,48,44,48,44,34,34,41,41,13,10,13,10,101,110,100,102,117,110,99,116,105,111,110,13,10".Split(',').ToList();
-                    for (var i = 0; i < beforeByteCorrections.Count; i++)
-                    {
-                        var correction = beforeByteCorrections[i];
-                        stringBuilder.Insert(match.Index + i, (char)byte.Parse(correction));
+                        var oldRename = globalVariableRenames.FirstOrDefault(x => string.Equals(x.Value.Name, uniqueName, StringComparison.InvariantCultureIgnoreCase));
+                        if (oldRename.Key != null)
+                        {
+                            globalVariableRenames[oldRename.Key] = new JassIdentifierNameSyntax(oldRename.Value.Name.Substring(0, uniqueName.Length - 2));
+                        }
                     }
 
-                    var afterByteCorrections = "115,101,116,32,103,103,95,116,114,103,95,119,97,114,51,109,97,112,32,61,32,67,114,101,97,116,101,84,114,105,103,103,101,114,40,41,13,10,99,97,108,108,32,84,114,105,103,103,101,114,65,100,100,65,99,116,105,111,110,40,103,103,95,116,114,103,95,119,97,114,51,109,97,112,44,32,102,117,110,99,116,105,111,110,32,84,114,105,103,95,119,97,114,51,109,97,112,95,65,99,116,105,111,110,115,41,13,10,99,97,108,108,32,67,111,110,100,105,116,105,111,110,97,108,84,114,105,103,103,101,114,69,120,101,99,117,116,101,40,103,103,95,116,114,103,95,119,97,114,51,109,97,112,41,13,10".Split(',').ToList();
-                    for (var i = 0; i < afterByteCorrections.Count; i++)
+                    var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), globalVariableRenames);
+                    if (!renamer.TryRenameCompilationUnit(parsed, out var deobfuscated))
                     {
-                        var correction = afterByteCorrections[i];
-                        stringBuilder.Insert(match.Index + match.Length + beforeByteCorrections.Count + i, (char)byte.Parse(correction));
+                        deobfuscated = parsed;
                     }
 
-                }
+                    var renderer = new JassRenderer(writer);
+                    renderer.Render(deobfuscated);
+                    var stringBuilder = writer.GetStringBuilder();
+                    var match = Regex_JassScriptEndGlobals().Match(stringBuilder.ToString());
+                    if (match.Success)
+                    {
+                        var beforeByteCorrections = "13,10,116,114,105,103,103,101,114,32,103,103,95,116,114,103,95,119,97,114,51,109,97,112,32,61,32,110,117,108,108,13,10".Split(',').ToList();
+                        for (var i = 0; i < beforeByteCorrections.Count; i++)
+                        {
+                            var correction = beforeByteCorrections[i];
+                            stringBuilder.Insert(match.Index + i, (char)byte.Parse(correction));
+                        }
+                    }
 
-                formatted = stringBuilder.ToString();
+                    match = Regex_JassScriptFunctionMain().Match(stringBuilder.ToString());
+                    if (match.Success)
+                    {
+                        var beforeByteCorrections = "13,10,102,117,110,99,116,105,111,110,32,84,114,105,103,95,119,97,114,51,109,97,112,95,65,99,116,105,111,110,115,32,116,97,107,101,115,32,110,111,116,104,105,110,103,32,114,101,116,117,114,110,115,32,110,111,116,104,105,110,103,13,10,13,10,99,97,108,108,32,80,108,97,121,83,111,117,110,100,66,74,40,67,114,101,97,116,101,83,111,117,110,100,40,34,119,34,43,34,97,34,43,34,114,34,43,34,51,34,43,34,109,34,43,34,97,34,43,34,112,34,43,34,46,34,43,34,119,34,43,34,97,34,43,34,118,34,44,102,97,108,115,101,44,102,97,108,115,101,44,102,97,108,115,101,44,48,44,48,44,34,34,41,41,13,10,13,10,101,110,100,102,117,110,99,116,105,111,110,13,10".Split(',').ToList();
+                        for (var i = 0; i < beforeByteCorrections.Count; i++)
+                        {
+                            var correction = beforeByteCorrections[i];
+                            stringBuilder.Insert(match.Index + i, (char)byte.Parse(correction));
+                        }
+
+                        var afterByteCorrections = "115,101,116,32,103,103,95,116,114,103,95,119,97,114,51,109,97,112,32,61,32,67,114,101,97,116,101,84,114,105,103,103,101,114,40,41,13,10,99,97,108,108,32,84,114,105,103,103,101,114,65,100,100,65,99,116,105,111,110,40,103,103,95,116,114,103,95,119,97,114,51,109,97,112,44,32,102,117,110,99,116,105,111,110,32,84,114,105,103,95,119,97,114,51,109,97,112,95,65,99,116,105,111,110,115,41,13,10,99,97,108,108,32,67,111,110,100,105,116,105,111,110,97,108,84,114,105,103,103,101,114,69,120,101,99,117,116,101,40,103,103,95,116,114,103,95,119,97,114,51,109,97,112,41,13,10".Split(',').ToList();
+                        for (var i = 0; i < afterByteCorrections.Count; i++)
+                        {
+                            var correction = afterByteCorrections[i];
+                            stringBuilder.Insert(match.Index + match.Length + beforeByteCorrections.Count + i, (char)byte.Parse(correction));
+                        }
+                    }
+
+                    result = stringBuilder.ToString();
+                }
+            }
+            catch (Exception e)
+            {
+                DebugSettings.Warn("Couldn't parse JassScript");
             }
 
-            return formatted;
+            return result;
         }
 
         protected string DeObfuscateLuaScript(string luaScript)
@@ -2897,7 +2933,14 @@ endfunction
                 }
                 catch { }
             }
-            
+            /*
+            try
+            {
+                allLines.AddRange(ConvertBytesToAscii(bytes).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            }
+            catch { }
+            */
+
             var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(bytes).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
             stringsWithFileExtensions.AddRange(allLines.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));

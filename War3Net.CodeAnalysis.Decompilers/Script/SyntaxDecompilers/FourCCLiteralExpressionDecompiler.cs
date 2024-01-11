@@ -8,10 +8,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Jass;
-using War3Net.CodeAnalysis.Jass.Extensions;
 using War3Net.CodeAnalysis.Jass.Syntax;
 
 namespace War3Net.CodeAnalysis.Decompilers
@@ -33,7 +31,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 functionParameter = new TriggerFunctionParameter
                 {
                     Type = TriggerFunctionParameterType.String,
-                    Value = fourCCLiteralExpression.Value.ToJassRawcode(),
+                    Value = fourCCLiteralExpression.Value.ToFourCC()
                 };
 
                 return true;
@@ -43,7 +41,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 functionParameter = new TriggerFunctionParameter
                 {
                     Type = TriggerFunctionParameterType.String,
-                    Value = fourCCLiteralExpression.Value.ToJassRawcode(),
+                    Value = fourCCLiteralExpression.Value.ToFourCC(),
                 };
 
                 return true;
@@ -68,7 +66,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         Parameter = new TriggerFunctionParameter
                         {
                             Type = TriggerFunctionParameterType.String,
-                            Value = fourCCLiteralExpression.Value.ToJassRawcode(),
+                            Value = fourCCLiteralExpression.Value.ToFourCC(),
                         },
                     });
                 }

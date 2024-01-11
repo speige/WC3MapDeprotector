@@ -364,6 +364,8 @@ namespace WC3MapDeprotector
         protected object _discoverFileLock = new object();
         public bool DiscoverFile(string archiveFileName, out string md5Hash)
         {
+            archiveFileName = archiveFileName.Trim('\\');
+
             if (_discoveredFileNameToMD5.TryGetValue(archiveFileName, out md5Hash))
             {
                 return true;
