@@ -319,7 +319,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         {
                             units[^1].InventoryData.Add(new InventoryItemData
                             {
-                                ItemId = itemId,
+                                ItemId = itemId.InvertEndianness(),
                                 Slot = slot,
                             });
                         }
