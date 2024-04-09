@@ -14,6 +14,49 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static object GetObjectDataBySLKType(this Map map, SLKType slkType)
+        {
+            //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
+
+            if (slkType == SLKType.Ability)
+            {
+                //w3a
+                return map.AbilityObjectData;
+            }
+            if (slkType == SLKType.Buff)
+            {
+                //w3h
+                return map.BuffObjectData;
+            }
+            if (slkType == SLKType.Destructable)
+            {
+                //w3b
+                return map.DestructableObjectData;
+            }
+            if (slkType == SLKType.Doodad)
+            {
+                //w3d
+                return map.DoodadObjectData;
+            }
+            if (slkType == SLKType.Item)
+            {
+                //w3t
+                return map.ItemObjectData;
+            }
+            if (slkType == SLKType.Unit)
+            {
+                //w3u
+                return map.UnitObjectData;
+            }
+            if (slkType == SLKType.Upgrade)
+            {
+                //w3q
+                return map.UpgradeObjectData;
+            }
+
+            throw new NotImplementedException();
+        }
+
         public static string RenderScriptAsString(this JassCompilationUnitSyntax compilationUnit)
         {
             using (var writer = new StringWriter())
