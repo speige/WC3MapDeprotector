@@ -120,8 +120,8 @@ namespace WC3MapDeprotector
                     { "Areaeffectart", "aaea" },
                     { "Art", "aart" },
                     { "BuffID1", "abuf" },
-                    { "Buttonpos", "abpx" },
-                    { "Buttonpos", "abpy" },
+                    { "ButtonposX", "abpx" },
+                    { "ButtonposY", "abpy" },
                     { "Cast1", "acas" },
                     { "CasterArt", "acat" },
                     { "Casterattach", "acap" },
@@ -162,8 +162,8 @@ namespace WC3MapDeprotector
                     { "Targetattachcount", "atac" },
                     { "Tip", "atp1" },
                     { "Ubertip", "aub1" },
-                    { "UnButtonpos", "aubx" },
-                    { "UnButtonpos", "auby" },
+                    { "UnButtonposX", "aubx" },
+                    { "UnButtonposY", "auby" },
                     { "Unart", "auar" },
                     { "Unhotkey", "auhk" },
                     { "UnitSkinID", "ausk" },
@@ -313,8 +313,8 @@ namespace WC3MapDeprotector
                 SLKType.Item, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Art", "iico" },
-                    { "Buttonpos", "ubpx" },
-                    { "Buttonpos", "ubpy" },
+                    { "ButtonposX", "ubpx" },
+                    { "ButtonposY", "ubpy" },
                     { "Description", "ides" },
                     { "HP", "ihtp" },
                     { "Hotkey", "uhot" },
@@ -364,8 +364,8 @@ namespace WC3MapDeprotector
                     { "Attachmentlinkprops", "ualp" },
                     { "Boneprops", "ubpr" },
                     { "Builds", "ubui" },
-                    { "Buttonpos", "ubpx" },
-                    { "Buttonpos", "ubpy" },
+                    { "ButtonposX", "ubpx" },
+                    { "ButtonposY", "ubpy" },
                     { "Casterupgradeart", "ucua" },
                     { "Casterupgradename", "ucun" },
                     { "Casterupgradetip", "ucut" },
@@ -382,14 +382,14 @@ namespace WC3MapDeprotector
                     { "Hotkey", "uhot" },
                     { "LoopingSoundFadeIn", "ulfi" },
                     { "LoopingSoundFadeOut", "ulfo" },
-                    { "MissileHoming", "umh1" },
-                    { "MissileHoming", "umh2" },
-                    { "Missilearc", "uma1" },
-                    { "Missilearc", "uma2" },
-                    { "Missileart", "ua1m" },
-                    { "Missileart", "ua2m" },
-                    { "Missilespeed", "ua1z" },
-                    { "Missilespeed", "ua2z" },
+                    { "MissileHoming1", "umh1" },
+                    { "MissileHoming2", "umh2" },
+                    { "Missilearc1", "uma1" },
+                    { "Missilearc2", "uma2" },
+                    { "Missileart1", "ua1m" },
+                    { "Missileart2", "ua2m" },
+                    { "Missilespeed1", "ua1z" },
+                    { "Missilespeed2", "ua2z" },
                     { "MovementSoundLabel", "umsl" },
                     { "Name", "unam" },
                     { "Qarea1", "ua1q" },
@@ -564,8 +564,8 @@ namespace WC3MapDeprotector
                 SLKType.Upgrade, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Art", "gar1" },
-                    { "Buttonpos", "gbpx" },
-                    { "Buttonpos", "gbpy" },
+                    { "ButtonposX", "gbpx" },
+                    { "ButtonposY", "gbpy" },
                     { "EditorSuffix", "gnsf" },
                     { "Hotkey", "ghk1" },
                     { "Name", "gnam" },
@@ -601,7 +601,7 @@ namespace WC3MapDeprotector
                 return result;
             }
 
-            throw new NotImplementedException();
+            return null;
         }
     }
 }
