@@ -523,8 +523,8 @@ namespace WC3MapDeprotector
 
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
 
-                var slkFiles = Directory.GetFiles(ExtractedFilesPath, "*.slk", SearchOption.AllDirectories);
-                if (slkFiles.Length > 0)
+                var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
+                if (slkFiles.Count > 0)
                 {
                     var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
                     if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
@@ -532,12 +532,13 @@ namespace WC3MapDeprotector
                         ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
                     }
 
+                    var slkRecoverableFiles = new List<string>() { "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q", "war3map.w3t", "war3map.w3u" };
+
                     _logEvent("Generating temporary map for SLK Recover: slk.w3x");
                     var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
-                    var excludedFileNames = new string[] { "war3map.w3a", "war3map.w3b", "war3map.w3d" }; // can't be in slk.w3x or it will crash
-                    var minimumExtraRequiredFiles = Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !excludedFileNames.Contains(Path.GetFileName(x))).ToList();
+                    var minimumExtraRequiredFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories)).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !slkRecoverableFiles.Contains(Path.GetFileName(x))).ToList();
 
-                    BuildW3X(slkMpqArchive, ExtractedFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
+                    BuildW3X(slkMpqArchive, DiscoveredFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
                     _logEvent("slk.w3x generated");
 
                     _logEvent("Running SilkObjectOptimizer");
@@ -548,9 +549,20 @@ namespace WC3MapDeprotector
 
                     _logEvent("SilkObjectOptimizer completed");
 
-                    var slkRecoveredFiles = new List<string>() { "war3map.w3a", "war3map.w3c", "war3map.w3h", "war3map.w3q", "war3map.w3r", "war3map.w3t", "war3map.w3u" };
-                    foreach (var fileName in slkRecoveredFiles)
+
+                    var slkParser = new SLKParser();
+                    var slkDataPerObjectId = slkParser.ParseSLKObjectsFromFiles(slkFiles);
+                    //NOTE: SLKRecover generates corrupted files for any SLK files that are missing, this excludes them
+                    var validFiles = slkDataPerObjectId.Values.Select(x => x.SLKType).Distinct().Select(x => $"war3map{x.GetMPQFileExtension()}").Distinct().ToHashSet(StringComparer.InvariantCultureIgnoreCase);
+
+                    var map = DecompileMap();
+                    foreach (var fileName in slkRecoverableFiles)
                     {
+                        if (!validFiles.Contains(fileName))
+                        {
+                            continue;
+                        }
+
                         _logEvent($"Replacing {fileName} with SLKRecover version");
                         var recoveredFile = Path.Combine(slkRecoverOutPath, fileName);
                         if (File.Exists(recoveredFile))
@@ -560,15 +572,38 @@ namespace WC3MapDeprotector
                                 _deprotectionResult.CountOfProtectionsFound++;
                             }
 
+                            File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), true);
+
+                            /*
+                            //TODO: Research if there are any maps where "merging" is valuable. So far in my testing overwrite seems correct.
                             if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
                             {
-                                DebugSettings.Warn("Use War3Net to decompile both files & merge their contents together & output new file");
+                                SLKType slkType = SLKParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
+                                var oldObjectData = map.GetObjectDataBySLKType(slkType);
+                                SetMapFile(map, recoveredFile, true);
+                                var newObjectData = map.GetObjectDataBySLKType(slkType);
+
+                                var baseKeys = new HashSet<string>(newObjectData.BaseValues.Select(x => x.ToString()), StringComparer.Ordinal);
+                                var missingBaseValues = oldObjectData.BaseValues.Where(x => !baseKeys.Contains(x.ToString())).ToList();
+                                newObjectData.BaseValues = newObjectData.BaseValues.Concat(missingBaseValues).ToList();
+
+                                var newKeys = new HashSet<string>(newObjectData.NewValues.Select(x => x.ToString()), StringComparer.Ordinal);
+                                var missingNewValues = oldObjectData.NewValues.Where(x => !newKeys.Contains(x.ToString())).ToList();
+                                newObjectData.NewValues = newObjectData.NewValues.Concat(missingNewValues).ToList();
+
+                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), newObjectData.Serialize());
                             }
                             else
                             {
                                 File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), false);
                             }
+                            */
                         }
+                    }
+
+                    foreach (var slkFile in slkFiles)
+                    {
+                        File.Delete(slkFile);
                     }
                 }
 
@@ -1881,9 +1916,31 @@ namespace WC3MapDeprotector
             return new ScriptMetaData();
         }
 
+        protected void SetMapFile(Map map, string fileName, bool overwrite = false)
+        {
+            var bytes = File.ReadAllBytes(fileName);
+            if (bytes.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var encoding in _allEncodings)
+            {
+                try
+                {
+                    using (var stream = new MemoryStream(bytes))
+                    {
+                        map.SetFile(Path.GetFileName(fileName), overwrite, stream, encoding, true);
+                        break;
+                    }
+                }
+                catch { }
+            }
+        }
+
         protected Map DecompileMap(Action<Map> forcedValueOverrides = null)
         {
-            //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file multiple times looking for changes
+            //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file 2x
             _logEvent("Analyzing map files");
             var mapFiles = Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => string.Equals(x, "war3map.w3i", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1).ToList();
 
@@ -1895,27 +1952,10 @@ namespace WC3MapDeprotector
                     forcedValueOverrides(map);
                 }
 
-                foreach (var mapFile in mapFiles)
+                foreach (var fileName in mapFiles)
                 {
-                    var bytes = File.ReadAllBytes(mapFile);
-                    if (bytes.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    foreach (var encoding in _allEncodings)
-                    {
-                        try
-                        {
-                            using (var stream = new MemoryStream(bytes))
-                            {
-                                _logEvent($"Analyzing {mapFile} ...");
-                                map.SetFile(Path.GetFileName(mapFile), false, stream, encoding, true);
-                                break;
-                            }
-                        }
-                        catch { }
-                    }
+                    _logEvent($"Analyzing {fileName} ...");
+                    SetMapFile(map, fileName);
                 }
             }
 

@@ -1,8 +1,623 @@
-﻿using War3Net.Build;
+﻿using CSharpLua;
+using System.Text;
+using War3Net.Build;
+using War3Net.Build.Extensions;
+using War3Net.Build.Object;
+using War3Net.Common.Providers;
 using War3Net.IO.Slk;
 
 namespace WC3MapDeprotector
 {
+    public class War3NetObjectDataModificationWrapper
+    {
+        public object ObjectDataModification { get; protected set; }
+        public War3NetObjectDataModificationWrapper(object objectDataModification)
+        {
+            ObjectDataModification = objectDataModification;
+        }
+
+        public int Level
+        {
+            get
+            {
+                switch (ObjectDataModification)
+                {
+                    case LevelObjectDataModification level:
+                        return level.Level;
+                }
+
+                return default;
+            }
+            set
+            {
+                switch (ObjectDataModification)
+                {
+                    case LevelObjectDataModification level:
+                        level.Level = value;
+                        break;
+                }
+            }
+        }
+
+        public int Variation
+        {
+            get
+            {
+                switch (ObjectDataModification)
+                {
+                    case VariationObjectDataModification variation:
+                        return variation.Variation;
+                }
+
+                return default;
+            }
+            set
+            {
+                switch (ObjectDataModification)
+                {
+                    case VariationObjectDataModification variation:
+                        variation.Variation = value;
+                        break;
+                }
+            }
+        }
+
+        public int Pointer
+        {
+            get
+            {
+                switch (ObjectDataModification)
+                {
+                    case LevelObjectDataModification level:
+                        return level.Pointer;
+                    case VariationObjectDataModification variation:
+                        return variation.Pointer;
+                }
+
+                return default;
+            }
+            set
+            {
+                switch (ObjectDataModification)
+                {
+                    case VariationObjectDataModification variation:
+                        variation.Pointer = value;
+                        break;
+                    case LevelObjectDataModification level:
+                        level.Pointer = value;
+                        break;
+                }
+            }
+        }
+
+        public int Id
+        {
+            get
+            {
+                return ((ObjectDataModification)ObjectDataModification).Id;
+            }
+            set
+            {
+                ((ObjectDataModification)ObjectDataModification).Id = value;
+            }
+        }
+        public ObjectDataType Type
+        {
+            get
+            {
+                return ((ObjectDataModification)ObjectDataModification).Type;
+            }
+            set
+            {
+                ((ObjectDataModification)ObjectDataModification).Type = value;
+            }
+        }
+        public object Value
+        {
+            get
+            {
+                return ((ObjectDataModification)ObjectDataModification).Value;
+            }
+            set
+            {
+                ((ObjectDataModification)ObjectDataModification).Value = value;
+            }
+        }
+
+        public override string ToString()
+        {
+            return ObjectDataModification.ToString();
+        }
+    }
+
+    public class War3NetObjectModificationWrapper
+    {
+        public object ObjectModification { get; protected set; }
+        public War3NetObjectModificationWrapper(object objectModification)
+        {
+            ObjectModification = objectModification;
+        }
+
+        public override string ToString()
+        {
+            return ObjectModification.ToString();
+        }
+
+        public int OldId
+        {
+            get
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        return level.OldId;
+                    case SimpleObjectModification simple:
+                        return simple.OldId;
+                    case VariationObjectModification variation:
+                        return variation.OldId;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            set
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        level.OldId = value;
+                        break;
+                    case SimpleObjectModification simple:
+                        simple.OldId = value;
+                        break;
+                    case VariationObjectModification variation:
+                        variation.OldId = value;
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        public int NewId
+        {
+            get
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        return level.NewId;
+                    case SimpleObjectModification simple:
+                        return simple.NewId;
+                    case VariationObjectModification variation:
+                        return variation.NewId;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            set
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        level.NewId = value;
+                        break;
+                    case SimpleObjectModification simple:
+                        simple.NewId = value;
+                        break;
+                    case VariationObjectModification variation:
+                        variation.NewId = value;
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        public List<int> Unk
+        {
+            get
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        return level.Unk;
+                    case SimpleObjectModification simple:
+                        return simple.Unk;
+                    case VariationObjectModification variation:
+                        return variation.Unk;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        public IEnumerable<War3NetObjectDataModificationWrapper> Modifications
+        {
+            get
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        return level.Modifications.Select(x => new War3NetObjectDataModificationWrapper(x)).ToList().AsReadOnly();
+                    case SimpleObjectModification simple:
+                        return simple.Modifications.Select(x => new War3NetObjectDataModificationWrapper(x)).ToList().AsReadOnly();
+                    case VariationObjectModification variation:
+                        return variation.Modifications.Select(x => new War3NetObjectDataModificationWrapper(x)).ToList().AsReadOnly();
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            set
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        level.Modifications.Clear();
+                        level.Modifications.AddRange(value.Select(x => (LevelObjectDataModification)x.ObjectDataModification));
+                        break;
+                    case SimpleObjectModification simple:
+                        simple.Modifications.Clear();
+                        simple.Modifications.AddRange(value.Select(x => (SimpleObjectDataModification)x.ObjectDataModification));
+                        break;
+                    case VariationObjectModification variation:
+                        variation.Modifications.Clear();
+                        variation.Modifications.AddRange(value.Select(x => (VariationObjectDataModification)x.ObjectDataModification));
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+    }
+
+    public class War3NetObjectDataWrapper
+    {
+        public object ObjectData { get; protected set; }
+        public War3NetObjectDataWrapper(object objectData)
+        {
+            ObjectData = objectData;
+        }
+
+        public byte[] Serialize(Encoding encoding = null)
+        {
+            if (ObjectData is null)
+            {
+                return new byte[0];
+            }
+
+            using (var memoryStream = new MemoryStream())
+            using (var writer = new BinaryWriter(memoryStream, encoding ?? UTF8EncodingProvider.StrictUTF8, true))
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        writer.Write(ability);
+                        break;
+                    case BuffObjectData buff:
+                        writer.Write(buff);
+                        break;
+                    case DestructableObjectData destructable:
+                        writer.Write(destructable);
+                        break;
+                    case DoodadObjectData doodad:
+                        writer.Write(doodad);
+                        break;
+                    case ItemObjectData item:
+                        writer.Write(item);
+                        break;
+                    case UnitObjectData unit:
+                        writer.Write(unit);
+                        break;
+                    case UpgradeObjectData upgrade:
+                        writer.Write(upgrade);
+                        break;
+                }
+                writer.Flush();
+                return memoryStream.ToArray();
+            }
+        }
+
+        public ObjectDataFormatVersion FormatVersion
+        {
+            get
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        return ability.FormatVersion;
+                    case BuffObjectData buff:
+                        return buff.FormatVersion;
+                    case DestructableObjectData destructable:
+                        return destructable.FormatVersion;
+                    case DoodadObjectData doodad:
+                        return doodad.FormatVersion;
+                    case ItemObjectData item:
+                        return item.FormatVersion;
+                    case UnitObjectData unit:
+                        return unit.FormatVersion;
+                    case UpgradeObjectData upgrade:
+                        return upgrade.FormatVersion;
+                }
+
+                throw new NotImplementedException();
+            }
+            set
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        ability.FormatVersion = value;
+                        break;
+                    case BuffObjectData buff:
+                        buff.FormatVersion = value;
+                        break;
+                    case DestructableObjectData destructable:
+                        destructable.FormatVersion = value;
+                        break;
+                    case DoodadObjectData doodad:
+                        doodad.FormatVersion = value;
+                        break;
+                    case ItemObjectData item:
+                        item.FormatVersion = value;
+                        break;
+                    case UnitObjectData unit:
+                        unit.FormatVersion = value;
+                        break;
+                    case UpgradeObjectData upgrade:
+                        upgrade.FormatVersion = value;
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        public override string ToString()
+        {
+            return ObjectData.ToString();
+        }
+
+        public string FileExtension()
+        {
+            switch (ObjectData)
+            {
+                case AbilityObjectData:
+                    return AbilityObjectData.FileExtension;
+                case BuffObjectData:
+                    return BuffObjectData.FileExtension;
+                case DestructableObjectData:
+                    return DestructableObjectData.FileExtension;
+                case DoodadObjectData:
+                    return DoodadObjectData.FileExtension;
+                case ItemObjectData:
+                    return ItemObjectData.FileExtension;
+                case UnitObjectData:
+                    return UnitObjectData.FileExtension;
+                case UpgradeObjectData:
+                    return UpgradeObjectData.FileExtension;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public string CampaignFileName()
+        {
+            switch (ObjectData)
+            {
+                case AbilityObjectData:
+                    return AbilityObjectData.CampaignFileName;
+                case BuffObjectData:
+                    return BuffObjectData.CampaignFileName;
+                case DestructableObjectData:
+                    return DestructableObjectData.CampaignFileName;
+                case DoodadObjectData:
+                    return DoodadObjectData.CampaignFileName;
+                case ItemObjectData:
+                    return ItemObjectData.CampaignFileName;
+                case UnitObjectData:
+                    return UnitObjectData.CampaignFileName;
+                case UpgradeObjectData:
+                    return UpgradeObjectData.CampaignFileName;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public string CampaignSkinFileName()
+        {
+            switch (ObjectData)
+            {
+                case AbilityObjectData:
+                    return AbilityObjectData.CampaignSkinFileName;
+                case BuffObjectData:
+                    return BuffObjectData.CampaignSkinFileName;
+                case DestructableObjectData:
+                    return DestructableObjectData.CampaignSkinFileName;
+                case DoodadObjectData:
+                    return DoodadObjectData.CampaignSkinFileName;
+                case ItemObjectData:
+                    return ItemObjectData.CampaignSkinFileName;
+                case UnitObjectData:
+                    return UnitObjectData.CampaignSkinFileName;
+                case UpgradeObjectData:
+                    return UpgradeObjectData.CampaignSkinFileName;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public string MapFileName()
+        {
+            switch (ObjectData)
+            {
+                case AbilityObjectData:
+                    return AbilityObjectData.MapFileName;
+                case BuffObjectData:
+                    return BuffObjectData.MapFileName;
+                case DestructableObjectData:
+                    return DestructableObjectData.MapFileName;
+                case DoodadObjectData:
+                    return DoodadObjectData.MapFileName;
+                case ItemObjectData:
+                    return ItemObjectData.MapFileName;
+                case UnitObjectData:
+                    return UnitObjectData.MapFileName;
+                case UpgradeObjectData:
+                    return UpgradeObjectData.MapFileName;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public string MapSkinFileName()
+        {
+            switch (ObjectData)
+            {
+                case AbilityObjectData:
+                    return AbilityObjectData.MapSkinFileName;
+                case BuffObjectData:
+                    return BuffObjectData.MapSkinFileName;
+                case DestructableObjectData:
+                    return DestructableObjectData.MapSkinFileName;
+                case DoodadObjectData:
+                    return DoodadObjectData.MapSkinFileName;
+                case ItemObjectData:
+                    return ItemObjectData.MapSkinFileName;
+                case UnitObjectData:
+                    return UnitObjectData.MapSkinFileName;
+                case UpgradeObjectData:
+                    return UpgradeObjectData.MapSkinFileName;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public IEnumerable<War3NetObjectModificationWrapper> BaseValues
+        {
+            get
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        return ability.BaseAbilities.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case BuffObjectData buff:
+                        return buff.BaseBuffs.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case DestructableObjectData destructable:
+                        return destructable.BaseDestructables.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case DoodadObjectData doodad:
+                        return doodad.BaseDoodads.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case ItemObjectData item:
+                        return item.BaseItems.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case UnitObjectData unit:
+                        return unit.BaseUnits.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case UpgradeObjectData upgrade:
+                        return upgrade.BaseUpgrades.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            set
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        ability.BaseAbilities.Clear();
+                        ability.BaseAbilities.AddRange(value.Select(x => (LevelObjectModification)x.ObjectModification));
+                        break;
+                    case BuffObjectData buff:
+                        buff.BaseBuffs.Clear();
+                        buff.BaseBuffs.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case DestructableObjectData destructable:
+                        destructable.BaseDestructables.Clear();
+                        destructable.BaseDestructables.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case DoodadObjectData doodad:
+                        doodad.BaseDoodads.Clear();
+                        doodad.BaseDoodads.AddRange(value.Select(x => (VariationObjectModification)x.ObjectModification));
+                        break;
+                    case ItemObjectData item:
+                        item.BaseItems.Clear();
+                        item.BaseItems.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case UnitObjectData unit:
+                        unit.BaseUnits.Clear();
+                        unit.BaseUnits.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case UpgradeObjectData upgrade:
+                        upgrade.BaseUpgrades.Clear();
+                        upgrade.BaseUpgrades.AddRange(value.Select(x => (LevelObjectModification)x.ObjectModification));
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        public IEnumerable<War3NetObjectModificationWrapper> NewValues
+        {
+            get
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        return ability.NewAbilities.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case BuffObjectData buff:
+                        return buff.NewBuffs.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case DestructableObjectData destructable:
+                        return destructable.NewDestructables.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case DoodadObjectData doodad:
+                        return doodad.NewDoodads.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case ItemObjectData item:
+                        return item.NewItems.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case UnitObjectData unit:
+                        return unit.NewUnits.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    case UpgradeObjectData upgrade:
+                        return upgrade.NewUpgrades.Select(x => new War3NetObjectModificationWrapper(x)).ToList().AsReadOnly();
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            set
+            {
+                switch (ObjectData)
+                {
+                    case AbilityObjectData ability:
+                        ability.NewAbilities.Clear();
+                        ability.NewAbilities.AddRange(value.Select(x => (LevelObjectModification)x.ObjectModification));
+                        break;
+                    case BuffObjectData buff:
+                        buff.NewBuffs.Clear();
+                        buff.NewBuffs.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case DestructableObjectData destructable:
+                        destructable.NewDestructables.Clear();
+                        destructable.NewDestructables.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case DoodadObjectData doodad:
+                        doodad.NewDoodads.Clear();
+                        doodad.NewDoodads.AddRange(value.Select(x => (VariationObjectModification)x.ObjectModification));
+                        break;
+                    case ItemObjectData item:
+                        item.NewItems.Clear();
+                        item.NewItems.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case UnitObjectData unit:
+                        unit.NewUnits.Clear();
+                        unit.NewUnits.AddRange(value.Select(x => (SimpleObjectModification)x.ObjectModification));
+                        break;
+                    case UpgradeObjectData upgrade:
+                        upgrade.NewUpgrades.Clear();
+                        upgrade.NewUpgrades.AddRange(value.Select(x => (LevelObjectModification)x.ObjectModification));
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+
+        }
+    }
+
     public enum SLKType
     {
         Ability,
@@ -16,50 +631,123 @@ namespace WC3MapDeprotector
 
     public class SLKObject
     {
+        public SLKType SLKType { get; protected set; }
         public Dictionary<string, object> Data { get; protected set; } = new Dictionary<string, object>();
 
-        public SLKType SLKType
+        public SLKObject(SLKType slkType)
         {
-            get
-            {
-                var slkFilesFoundIn = Data.Keys.Where(x => x.EndsWith(".slk", StringComparison.InvariantCultureIgnoreCase)).ToList();
-                //NOTE: order is important to avoid misclassifying AbilityBuffData as AbilityData
-                if (slkFilesFoundIn.Any(x => x.Contains("doodad", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Doodad;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("destructable", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Destructable;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("item", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Item;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("upgrade", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Upgrade;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("buff", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Buff;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("unit", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Unit;
-                }
-                if (slkFilesFoundIn.Any(x => x.Contains("ability", StringComparison.InvariantCultureIgnoreCase)))
-                {
-                    return SLKType.Ability;
-                }
+            SLKType = slkType;
+        }
+    }
 
-                throw new NotImplementedException();
+    public static class War3Net_SLK_Extensions
+    {
+        public static string GetMPQFileExtension(this SLKType slkType)
+        {
+            switch (slkType)
+            {
+                case SLKType.Ability:
+                    return AbilityObjectData.FileExtension;
+                case SLKType.Buff:
+                    return BuffObjectData.FileExtension;
+                case SLKType.Destructable:
+                    return DestructableObjectData.FileExtension;
+                case SLKType.Doodad:
+                    return DoodadObjectData.FileExtension;
+                case SLKType.Item:
+                    return ItemObjectData.FileExtension;
+                case SLKType.Unit:
+                    return UnitObjectData.FileExtension;
+                case SLKType.Upgrade:
+                    return UpgradeObjectData.FileExtension;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public static War3NetObjectDataWrapper GetObjectDataBySLKType(this Map map, SLKType slkType)
+        {
+            //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
+            switch (slkType)
+            {
+                case SLKType.Ability:
+                    map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.AbilityObjectData);
+                case SLKType.Buff:
+                    map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.BuffObjectData);
+                case SLKType.Destructable:
+                    map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.DestructableObjectData);
+                case SLKType.Doodad:
+                    map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.DoodadObjectData);
+                case SLKType.Item:
+                    map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.ItemObjectData);
+                case SLKType.Unit:
+                    map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.UnitObjectData);
+                case SLKType.Upgrade:
+                    map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetObjectDataWrapper(map.UpgradeObjectData);
+                default:
+                    throw new NotImplementedException();
             }
         }
     }
 
     public class SLKParser
     {
+        public static SLKType GetTypeByWar3MapFileExtension(string war3mapFileExtension)
+        {
+            foreach (SLKType slkType in Enum.GetValues(typeof(SLKType)))
+            {
+                if (war3mapFileExtension.Equals(slkType.GetMPQFileExtension(), StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return slkType;
+                }
+            }
+
+            throw new NotImplementedException();
+        }
+
+        public static SLKType GetTypeBySLKFileName(string slkFileName)
+        {
+            slkFileName = Path.GetFileName(slkFileName);
+            if (slkFileName.Contains("ability", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (slkFileName.Contains("buff", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    return SLKType.Buff;
+                }
+
+                return SLKType.Ability;
+            }
+            if (slkFileName.Contains("doodad", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return SLKType.Doodad;
+            }
+            if (slkFileName.Contains("destructable", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return SLKType.Destructable;
+            }
+            if (slkFileName.Contains("item", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return SLKType.Item;
+            }
+            if (slkFileName.Contains("unit", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return SLKType.Unit;
+            }
+            if (slkFileName.Contains("upgrade", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return SLKType.Upgrade;
+            }
+
+            throw new NotImplementedException();
+        }
+
         public Dictionary<string, SLKObject> ParseSLKObjectsFromFiles(List<string> fileNames)
         {
             var result = new Dictionary<string, SLKObject>();
@@ -82,11 +770,9 @@ namespace WC3MapDeprotector
                             var objectId = slkTable[0, row]?.ToString();
                             if (!result.TryGetValue(objectId, out var slkObject))
                             {
-                                slkObject = new SLKObject();
+                                slkObject = new SLKObject(GetTypeBySLKFileName(fileName));
                                 result[objectId] = slkObject;
                             }
-
-                            slkObject.Data[Path.GetFileName(fileName)] = true;
 
                             for (var columnIdx = 0; columnIdx < slkTable.Width; columnIdx++)
                             {

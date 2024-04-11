@@ -21,9 +21,9 @@ namespace WC3MapDeprotector
 
             foreach (var prefix1 in new string[] { "Campaign", "Common", "Human", "Item", "Neutral", "NightElf", "Orc", "Undead", "NotUsed_" })
             {
-                foreach (var prefix2 in new string[] { "Unit", "Upgrade", "Ability" })
+                foreach (var prefix2 in new string[] { "Unit", "Upgrade", "Ability", "" })
                 {
-                    foreach (var prefix3 in new string[] { "Data", "Func", "Strings", "UI" })
+                    foreach (var prefix3 in new string[] { "Data", "Func", "Strings", "UI", "" })
                     {
                         filePrefixes.Add($"{prefix1}{prefix2}{prefix3}");
                     }
@@ -32,7 +32,7 @@ namespace WC3MapDeprotector
 
             foreach (var prefix1 in new string[] { "Ambience", "Ambient", "Ability", "Anim", "Cliff", "Destructable", "Dialog", "Doodad", "Environment", "Item", "Lightning", "Misc", "MIDI", "Portrait", "Skin", "Spawn", "Splat", "UberSplat", "Unit", "UnitAck", "UnitCombat", "Upgrade", "UpgradeEffect", "UI" })
             {
-                foreach (var prefix2 in new string[] { "Abilities", "Anims", "Balance", "BuffData", "BuffMetaData", "Data", "Lookups", "MetaData", "Music", "Sounds", "Types", "UI", "Weapons" })
+                foreach (var prefix2 in new string[] { "Abilities", "Anims", "Balance", "BuffData", "BuffMetaData", "Data", "Lookups", "MetaData", "Music", "Sounds", "Types", "UI", "Weapons", "" })
                 {
                     filePrefixes.Add($"{prefix1}{prefix2}");
                 }
