@@ -28,6 +28,7 @@ using FastMDX;
 using System.Collections.Concurrent;
 using War3Net.IO.Slk;
 using Microsoft.Win32;
+using War3Net.Build.Object;
 
 namespace WC3MapDeprotector
 {
@@ -523,6 +524,76 @@ namespace WC3MapDeprotector
 
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
 
+                var slkFiles = Directory.GetFiles(ExtractedFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
+                if (slkFiles.Any())
+                {
+                    var map = DecompileMap();
+                    var desylked = Map.Open(@"C:\temp\SilkObjectOptimizer\de_silked.w3x");
+                    var values = map.GetObjectDataStringValues();
+
+                    var slkParser = new SLKParser();
+                    var slkDataPerObjectId = slkParser.ParseSLKObjectsFromFiles(slkFiles);
+                    foreach (var (objectId, slkObject) in slkDataPerObjectId)
+                    {
+                        var objectData = map.GetObjectDataBySLKType(slkObject.SLKType);
+                        if (objectData == null)
+                        {
+                            continue;
+                        }
+
+                        var a = objectData.BaseValues.FirstOrDefault(x => x.OldId.ToRawcode() == objectId);
+                        var b = objectData.BaseValues.FirstOrDefault(x => x.NewId.ToRawcode() == objectId);
+                        var c = objectData.NewValues.FirstOrDefault(x => x.OldId.ToRawcode() == objectId);
+                        var d = objectData.NewValues.FirstOrDefault(x => x.NewId.ToRawcode() == objectId);
+                        if (a != null | b != null || c != null || d != null)
+                        {
+                            //todo: merge values
+                        }
+                        else if (slkObject.SLKType == SLKType.Ability)
+                        {
+                            var newObject = new LevelObjectModification() { OldId = objectId.FromRawcode() };
+                            if (slkObject.Data.TryGetValue("code", out var code) && code is string)
+                            {
+                                newObject.NewId = ((string)code).FromRawcode();
+                            }
+
+                            foreach (var data in slkObject.Data)
+                            {
+                                var rawCode = slkParser.ConvertToPropertyIdRawCode(slkObject.SLKType, data.Key);
+                                if (string.IsNullOrEmpty(rawCode))
+                                {
+                                    continue;
+                                }
+
+                                var modification = new LevelObjectDataModification() { Id = rawCode.FromRawcode() };
+                                var stringValue = data.Value.ToString();
+
+                                if (int.TryParse(stringValue, out var intValue))
+                                {
+                                    modification.Type = ObjectDataType.Int;
+                                    modification.Value = intValue;
+                                }
+                                else if (float.TryParse(stringValue, out var floatValue))
+                                {
+                                    modification.Type = ObjectDataType.Real;
+                                    modification.Value = floatValue;
+                                }
+                                else
+                                {
+                                    modification.Type = ObjectDataType.String;
+                                    modification.Value = stringValue;
+                                }
+
+                                newObject.Modifications.Add(modification);
+                                map.AbilityObjectData.NewAbilities.Add(newObject);
+                            }
+                        }
+                    }
+                }
+
+                Console.WriteLine("c");
+
+                /*
                 var slkFiles = Directory.GetFiles(ExtractedFilesPath, "*.slk", SearchOption.AllDirectories);
                 if (slkFiles.Length > 0)
                 {
@@ -571,6 +642,7 @@ namespace WC3MapDeprotector
                         }
                     }
                 }
+                */
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
