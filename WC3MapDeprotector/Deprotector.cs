@@ -1855,7 +1855,7 @@ namespace WC3MapDeprotector
             var statements = new List<IStatementSyntax>();
             statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
             statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
-            var newBody = statements.ToImmutableArray();
+            var allInlinedCodeFromConfigAndMain = statements.ToImmutableArray();
 
             var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
 
@@ -1875,13 +1875,14 @@ namespace WC3MapDeprotector
             var newDeclarations = renamed.CompilationUnit.Declarations.ToList();
             foreach (var nativeEditorFunction in _nativeEditorFunctions)
             {
-                newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(newBody)));
+                newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
             }
 
             var editorSpecificCompilationUnit = new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray());
             var editorSpecificJassScript = editorSpecificCompilationUnit.RenderScriptAsString();
 
             var firstPass = DecompileJassScriptMetaData_Internal(editorSpecificJassScript);
+            
             if (firstPass?.UnitsDecompiledFromVariableName == null)
             {
                 return firstPass;
@@ -2397,26 +2398,49 @@ namespace WC3MapDeprotector
                                 }
                                 newName = $"{newName}{baseName}";
 
-
-                                var counter = 1;
-                                while (uniqueNames.Contains($"{newName}_{counter}"))
+                                var uniqueName = $"{newName}";
+                                if (originalName != uniqueName)
                                 {
-                                    counter++;
+                                    var counter = 2;
+                                    while (uniqueNames.Contains(uniqueName))
+                                    {
+                                        counter++;
+                                        uniqueName = $"{newName}_{counter}";
+                                    }
+                                    uniqueNames.Add(uniqueName);
+                                    globalVariableRenames[originalName] = new JassIdentifierNameSyntax(uniqueName);
                                 }
-                                var uniqueName = $"{newName}_{counter}";
-                                uniqueNames.Add(uniqueName);
-                                globalVariableRenames[originalName] = new JassIdentifierNameSyntax(uniqueName);
                             }
                         }
                     }
 
-                    foreach (var uniqueName in uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length - 2) + "_2")))
+                    bool renamed;
+                    do
                     {
-                        var oldRename = globalVariableRenames.FirstOrDefault(x => string.Equals(x.Value.Name, uniqueName, StringComparison.InvariantCultureIgnoreCase));
-                        if (oldRename.Key != null)
+                        renamed = false;
+                        var unnecessarySuffixes = uniqueNames.Where(x => x.EndsWith("_1") && !uniqueNames.Contains(x.Substring(0, x.Length - 2) + "_2")).ToList();
+                        foreach (var uniqueName in unnecessarySuffixes)
                         {
-                            globalVariableRenames[oldRename.Key] = new JassIdentifierNameSyntax(oldRename.Value.Name.Substring(0, uniqueName.Length - 2));
+                            var oldRename = globalVariableRenames.FirstOrDefault(x => string.Equals(x.Value.Name, uniqueName, StringComparison.InvariantCultureIgnoreCase));
+                            if (oldRename.Key != null)
+                            {
+                                var newUniqueName = oldRename.Value.Name.Substring(0, uniqueName.Length - 2);
+                                if (!uniqueNames.Contains(newUniqueName))
+                                {
+                                    uniqueNames.Remove(uniqueName);
+                                    uniqueNames.Add(newUniqueName);
+                                    globalVariableRenames[oldRename.Key] = new JassIdentifierNameSyntax(newUniqueName);
+                                    renamed = true;
+                                    break;
+                                }
+                            }
                         }
+                    } while (renamed);
+
+                    var redundantRenames = globalVariableRenames.Where(x => x.Key == x.Value.Name).ToList();
+                    foreach (var redundant in redundantRenames)
+                    {
+                        globalVariableRenames.Remove(redundant.Key);
                     }
 
                     var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), globalVariableRenames);
@@ -2666,6 +2690,7 @@ namespace WC3MapDeprotector
                     });
                 }
             }
+
             var typecounts = new Dictionary<string, int>();
             var globalVarReplacements = new Dictionary<string, string>();
             foreach (var globalVariable in globalvars)
