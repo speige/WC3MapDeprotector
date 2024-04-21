@@ -518,7 +518,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns)
                 {
-                inMPQArchive.ProcessDefaultListFile();
+                    inMPQArchive.ProcessDefaultListFile();
                 }
 
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
@@ -572,10 +572,6 @@ namespace WC3MapDeprotector
                                 _deprotectionResult.CountOfProtectionsFound++;
                             }
 
-                            File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), true);
-
-                            /*
-                            //TODO: Research if there are any maps where "merging" is valuable. So far in my testing overwrite seems correct.
                             if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
                             {
                                 SLKType slkType = SLKParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
@@ -583,12 +579,13 @@ namespace WC3MapDeprotector
                                 SetMapFile(map, recoveredFile, true);
                                 var newObjectData = map.GetObjectDataBySLKType(slkType);
 
-                                var baseKeys = new HashSet<string>(newObjectData.BaseValues.Select(x => x.ToString()), StringComparer.Ordinal);
-                                var missingBaseValues = oldObjectData.BaseValues.Where(x => !baseKeys.Contains(x.ToString())).ToList();
+                                //NOTE: ObjectEditorID in BaseValues are formatted as FourCC (OldId property). NewValues are formatted as FourCC:FourCC (NewId:OldId properties).
+
+                                var newObjectDataIds = new HashSet<string>(newObjectData.BaseValues.Select(x => x.ToString()).Concat(newObjectData.NewValues.Select(x => x.ToString())).Concat(newObjectData.NewValues.Select(x => x.NewId.ToRawcode())), StringComparer.Ordinal);
+                                var missingBaseValues = oldObjectData.BaseValues.Where(x => !newObjectDataIds.Contains(x.ToString())).ToList();
                                 newObjectData.BaseValues = newObjectData.BaseValues.Concat(missingBaseValues).ToList();
 
-                                var newKeys = new HashSet<string>(newObjectData.NewValues.Select(x => x.ToString()), StringComparer.Ordinal);
-                                var missingNewValues = oldObjectData.NewValues.Where(x => !newKeys.Contains(x.ToString())).ToList();
+                                var missingNewValues = oldObjectData.NewValues.Where(x => !newObjectDataIds.Contains(x.ToString()) && !newObjectDataIds.Contains(x.NewId.ToRawcode())).ToList();
                                 newObjectData.NewValues = newObjectData.NewValues.Concat(missingNewValues).ToList();
 
                                 File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), newObjectData.Serialize());
@@ -597,7 +594,6 @@ namespace WC3MapDeprotector
                             {
                                 File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), false);
                             }
-                            */
                         }
                     }
 
@@ -609,7 +605,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
-                ProcessGlobalListFile(inMPQArchive);
+                    ProcessGlobalListFile(inMPQArchive);
                 }
 
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
@@ -2577,7 +2573,7 @@ namespace WC3MapDeprotector
                         var arraySize = 1;
                         if (isArray)
                         {
-                            //todo: parse from InitGlobals exitwhen (i > 0)
+                            arraySize = 2; //todo: parse from InitGlobals exitwhen (i > 0)
                         }
 
                         if (hasInitializer)
