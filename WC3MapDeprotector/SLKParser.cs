@@ -1,8 +1,8 @@
-﻿using CSharpLua;
-using System.Text;
+﻿using System.Text;
 using War3Net.Build;
 using War3Net.Build.Extensions;
 using War3Net.Build.Object;
+using War3Net.Common.Extensions;
 using War3Net.Common.Providers;
 using War3Net.IO.Slk;
 
@@ -665,12 +665,41 @@ namespace WC3MapDeprotector
             }
         }
 
+        public static SLKType? GetObjectDataTypeForID(this Map map, string fourCCRawCode)
+        {
+            var ids = new List<string>();
+            if (fourCCRawCode.Length == 4)
+            {
+                ids.Add(fourCCRawCode);
+            }
+            if (fourCCRawCode.Length == 9 && fourCCRawCode[4] == ':')
+            {
+                ids.Add(fourCCRawCode.Substring(0, 4));
+                ids.Add(fourCCRawCode.Substring(5, 4));
+            }
+
+            foreach (var id in ids)
+            {
+                foreach (var slkType in Enum.GetValues(typeof(SLKType)).Cast<SLKType>())
+                {
+                    var objectData = map.GetObjectDataBySLKType(slkType);
+                    var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == id) ?? objectData.NewValues.FirstOrDefault(x => x.OldId.ToRawcode() == id || x.NewId.ToRawcode() == id);
+                    if (value != null)
+                    {
+                        return slkType;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public static War3NetObjectDataWrapper GetObjectDataBySLKType(this Map map, SLKType slkType)
         {
             //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
             switch (slkType)
-            {
-                case SLKType.Ability:
+                {
+                    case SLKType.Ability:
                     map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.AbilityObjectData);
                 case SLKType.Buff:

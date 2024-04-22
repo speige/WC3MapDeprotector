@@ -1799,6 +1799,51 @@ namespace WC3MapDeprotector
                                 break;
                             }
                         }
+
+                        var sortedTriggerItems = result.Triggers.TriggerItems.OrderBy(x => x.Id).ToList();
+                        result.Triggers.TriggerItems.Clear();
+                        result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
+
+                        foreach (var variable in result.Triggers.Variables)
+                        {
+                            if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
+                            {
+                                var fromRawCode = variable.InitialValue.FromRawcode().ToString();
+                                if (fromRawCode == "0")
+                                {
+                                    continue;
+                                }
+
+                                var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
+                                switch (slkType)
+                                {
+                                    case null:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                    case SLKType.Ability:
+                                        variable.Type = "abilcode";
+                                        break;
+                                    case SLKType.Buff:
+                                        variable.Type = "buffcode";
+                                        break;
+                                    case SLKType.Destructable:
+                                        variable.Type = "destructablecode";
+                                        break;
+                                    case SLKType.Doodad:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                    case SLKType.Item:
+                                        variable.Type = "itemcode";
+                                        break;
+                                    case SLKType.Unit:
+                                        variable.Type = "unitcode";
+                                        break;
+                                    case SLKType.Upgrade:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                }
+                            }
+                        }
                     }
 
                     if (result.Units == null)
