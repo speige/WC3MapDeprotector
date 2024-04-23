@@ -1804,6 +1804,24 @@ namespace WC3MapDeprotector
                         result.Triggers.TriggerItems.Clear();
                         result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
 
+                        foreach (var triggerItem in result.Triggers.TriggerItems)
+                        {
+                            if (triggerItem is TriggerDefinition trigger) {
+                                var tooLong = trigger.Functions.Where(x => x.ToString().Length >= 1023).ToList();                                
+                                foreach (var function in tooLong)
+                                {
+                                    var index = trigger.Functions.IndexOf(function);
+                                    trigger.Functions.RemoveAt(index);
+                                    trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                    var chunks = function.ToString().Chunk(1020).Select(x => new string(x)).ToList();
+                                    foreach (var chunk in chunks)
+                                    {
+                                        trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                    }
+                                }
+                            }
+                        }
+
                         foreach (var variable in result.Triggers.Variables)
                         {
                             if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
