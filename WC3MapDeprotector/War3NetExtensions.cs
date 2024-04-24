@@ -9,13 +9,30 @@ using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
 using War3Net.Common.Extensions;
 using NuGet.Packaging;
-using War3Net.Build.Object;
+using War3Net.Build.Audio;
+using War3Net.Build.Widget;
 using War3Net.Build.Extensions;
 
 namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static string GetVariableName_BugFixPendingPR(this UnitData unitData)
+        {
+            var result = unitData.GetVariableName();
+            if (unitData.IsItem())
+            {
+                return result.Replace("gg_unit_", "gg_item_");
+            }
+
+            return result;
+        }
+
+        public static string GetVariableName(this Sound sound)
+        {
+            return $"gg_rct_{sound.Name.Replace(' ', '_')}";
+        }
+
         public static string RenderScriptAsString(this JassCompilationUnitSyntax compilationUnit)
         {
             using (var writer = new StringWriter())

@@ -67,7 +67,6 @@ namespace WC3MapDeprotector
         protected readonly Action<string> _logEvent;
         protected DeprotectionResult _deprotectionResult;
 
-
         protected void AddToGlobalListFile(string fileName)
         {
             AddToGlobalListFile(new List<string>() { fileName });
@@ -1800,67 +1799,100 @@ namespace WC3MapDeprotector
                             }
                         }
 
-                        var sortedTriggerItems = result.Triggers.TriggerItems.OrderBy(x => x.Id).ToList();
-                        result.Triggers.TriggerItems.Clear();
-                        result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
-
-                        foreach (var triggerItem in result.Triggers.TriggerItems)
+                        if (result.Triggers != null)
                         {
-                            if (triggerItem is TriggerDefinition trigger) {
-                                var tooLong = trigger.Functions.Where(x => x.ToString().Length >= 1023).ToList();                                
-                                foreach (var function in tooLong)
+                            var sortedTriggerItems = result.Triggers.TriggerItems.OrderBy(x => x.Id).ToList();
+                            result.Triggers.TriggerItems.Clear();
+                            result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
+
+                            foreach (var triggerItem in result.Triggers.TriggerItems)
+                            {
+                                if (triggerItem is TriggerDefinition trigger)
                                 {
-                                    var index = trigger.Functions.IndexOf(function);
-                                    trigger.Functions.RemoveAt(index);
-                                    trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
-                                    var chunks = function.ToString().Chunk(1020).Select(x => new string(x)).ToList();
-                                    foreach (var chunk in chunks)
+                                    var tooLong = trigger.Functions.Where(x => x.ToString().Length >= 1023).ToList();
+                                    foreach (var function in tooLong)
                                     {
-                                        trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                        var index = trigger.Functions.IndexOf(function);
+                                        trigger.Functions.RemoveAt(index);
+                                        trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                        var chunks = function.ToString().Chunk(1020).Select(x => new string(x)).ToList();
+                                        foreach (var chunk in chunks)
+                                        {
+                                            trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        foreach (var variable in result.Triggers.Variables)
-                        {
-                            if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
+                            foreach (var variable in result.Triggers.Variables)
                             {
-                                var fromRawCode = variable.InitialValue.FromRawcode().ToString();
-                                if (fromRawCode == "0")
+                                if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
                                 {
-                                    continue;
-                                }
+                                    var fromRawCode = variable.InitialValue.FromRawcode().ToString();
+                                    if (fromRawCode == "0")
+                                    {
+                                        continue;
+                                    }
 
-                                var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
-                                switch (slkType)
-                                {
-                                    case null:
-                                        variable.InitialValue = fromRawCode;
-                                        break;
-                                    case SLKType.Ability:
-                                        variable.Type = "abilcode";
-                                        break;
-                                    case SLKType.Buff:
-                                        variable.Type = "buffcode";
-                                        break;
-                                    case SLKType.Destructable:
-                                        variable.Type = "destructablecode";
-                                        break;
-                                    case SLKType.Doodad:
-                                        variable.InitialValue = fromRawCode;
-                                        break;
-                                    case SLKType.Item:
-                                        variable.Type = "itemcode";
-                                        break;
-                                    case SLKType.Unit:
-                                        variable.Type = "unitcode";
-                                        break;
-                                    case SLKType.Upgrade:
-                                        variable.InitialValue = fromRawCode;
-                                        break;
+                                    var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
+                                    switch (slkType)
+                                    {
+                                        case null:
+                                            variable.InitialValue = fromRawCode;
+                                            break;
+                                        case SLKType.Ability:
+                                            variable.Type = "abilcode";
+                                            break;
+                                        case SLKType.Buff:
+                                            variable.Type = "buffcode";
+                                            break;
+                                        case SLKType.Destructable:
+                                            variable.Type = "destructablecode";
+                                            break;
+                                        case SLKType.Doodad:
+                                            variable.InitialValue = fromRawCode;
+                                            break;
+                                        case SLKType.Item:
+                                            variable.Type = "itemcode";
+                                            break;
+                                        case SLKType.Unit:
+                                            variable.Type = "unitcode";
+                                            break;
+                                        case SLKType.Upgrade:
+                                            variable.InitialValue = fromRawCode;
+                                            break;
+                                    }
                                 }
                             }
+
+                            bool changed;
+                            do
+                            {
+                                changed = false;
+
+                                foreach (var variable in result.Triggers.Variables)
+                                {
+                                    if (variable.IsInitialized && !string.IsNullOrWhiteSpace(variable.InitialValue))
+                                    {
+                                        var otherVariable = result.Triggers.Variables.FirstOrDefault(x => x.Name == variable.InitialValue) ?? result.Triggers.Variables.FirstOrDefault(x => x.Name == $"udg_{variable.InitialValue}");
+                                        if (otherVariable != null)
+                                        {
+                                            if (!otherVariable.IsInitialized || variable.Name == otherVariable.InitialValue || variable.Name == $"udg_{otherVariable.InitialValue}")
+                                            {
+                                                variable.IsInitialized = false;
+                                                variable.InitialValue = "";
+                                            }
+                                            else
+                                            {
+                                                variable.InitialValue = otherVariable.InitialValue;
+                                            }
+
+                                            changed = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            } while (changed);
                         }
                     }
 
@@ -1948,7 +1980,7 @@ namespace WC3MapDeprotector
                 return firstPass;
             }
 
-            var correctedUnitVariableNames = firstPass.UnitsDecompiledFromVariableName.Where(x => x.Value.StartsWith("gg_")).Select(x => new KeyValuePair<string, JassIdentifierNameSyntax>(x.Value, new JassIdentifierNameSyntax(x.Key.GetVariableName()))).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Last().Value);
+            var correctedUnitVariableNames = firstPass.UnitsDecompiledFromVariableName.Where(x => x.Value.StartsWith("gg_")).Select(x => new KeyValuePair<string, JassIdentifierNameSyntax>(x.Value, new JassIdentifierNameSyntax(x.Key.GetVariableName_BugFixPendingPR()))).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Last().Value);
             if (!correctedUnitVariableNames.Any())
             {
                 return firstPass;

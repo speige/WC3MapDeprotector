@@ -454,7 +454,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     Scale = Vector3.One,
                                     Flags = 2,
                                     GoldAmount = 12500,
-                                    HeroLevel = 1,
+                                    HeroLevel = 0,
                                     CreationNumber = CreationNumber++
                                 };
 
@@ -510,7 +510,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 Scale = Vector3.One,
                                 Flags = 2,
                                 GoldAmount = 12500,
-                                HeroLevel = 1,
+                                HeroLevel = 0,
                                 CreationNumber = CreationNumber++
                             };
 
