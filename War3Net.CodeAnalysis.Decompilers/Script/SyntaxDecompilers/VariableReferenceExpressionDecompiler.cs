@@ -130,6 +130,17 @@ namespace War3Net.CodeAnalysis.Decompilers
                     }
                 }
             }
+            else if (variableName.StartsWith("bj_"))
+            {
+                functionParameter = new TriggerFunctionParameter
+                {
+                    Type = TriggerFunctionParameterType.Variable,
+                    Value = variableName,
+                    ArrayIndexer = arrayIndexer,
+                };
+
+                return true;
+            }
 
             functionParameter = null;
             return false;
