@@ -19,7 +19,16 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler
     {
-        protected readonly HashSet<string> _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
+        public static readonly HashSet<string> NATIVE_EDITOR_FUNCTIONS;
+        static JassScriptDecompiler()
+        {
+            NATIVE_EDITOR_FUNCTIONS = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreateNeutralHostileBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
+            for (var playerIdx = 0; playerIdx <= 23; playerIdx++)
+            {
+                NATIVE_EDITOR_FUNCTIONS.Add($"CreateBuildingsForPlayer{playerIdx}");
+                NATIVE_EDITOR_FUNCTIONS.Add($"CreateUnitsForPlayer{playerIdx}");
+            }
+        }
 
         public bool TryDecompileMapTriggers(MapTriggersFormatVersion formatVersion, MapTriggersSubVersion? subVersion, [NotNullWhen(true)] out MapTriggers? mapTriggers, out string globalCustomScript)
         {
@@ -232,7 +241,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 var sortedFunctionDeclarations = Context.FunctionDeclarations.OrderBy(x => Context.CompilationUnit.Declarations.IndexOf(x.Value.FunctionDeclaration)).ToList();
                 foreach (var function in sortedFunctionDeclarations)
                 {
-                    if (!allTriggerFunctionNames.Contains(function.Key) && !_nativeEditorFunctions.Contains(function.Key))
+                    if (!allTriggerFunctionNames.Contains(function.Key) && !NATIVE_EDITOR_FUNCTIONS.Contains(function.Key))
                     {
                         renderer.Render(function.Value.FunctionDeclaration);
                         renderer.RenderNewLine();

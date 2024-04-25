@@ -56,8 +56,6 @@ namespace WC3MapDeprotector
             }).Where(x => x != null).OrderBy(x => x == Encoding.ASCII ? 0 : 1).ThenBy(x => x == Encoding.UTF8 ? 0 : 1).ToList();
         }
 
-        protected readonly List<string> _nativeEditorFunctions = new List<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
-
         protected const string ATTRIB = "Map deprotected by WC3MapDeprotector https://github.com/speige/WC3MapDeprotector\r\n\r\n";
         protected readonly HashSet<string> _commonFileExtensions = new HashSet<string>((new[] { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "otf", "woff", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3f", "w3v", "w3z", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts", "mgv", "mg", "sav" }).Select(x => $".{x.Trim('.')}"), StringComparer.InvariantCultureIgnoreCase);
 
@@ -1686,6 +1684,9 @@ namespace WC3MapDeprotector
             }
         }
 
+        [GeneratedRegex("^", RegexOptions.Multiline)]
+        protected static partial Regex Regex_StartOfAllLines();
+
         [GeneratedRegex(@"^[0-9a-z]{4}$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptFourCC();
 
@@ -1694,6 +1695,7 @@ namespace WC3MapDeprotector
             var DecompileJassScriptMetaData_Internal = (string editorSpecificJassScript) =>
             {
                 var result = new ScriptMetaData();
+                result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
 
                 var map = DecompileMap();
                 result.Info = map.Info;
@@ -1818,10 +1820,7 @@ namespace WC3MapDeprotector
 
                                             _logEvent("map triggers recovered");
                                             result.Triggers = triggers;
-                                            if (!string.IsNullOrWhiteSpace(globalCustomScript))
-                                            {
-                                                result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = globalCustomScript }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
-                                            }
+                                            result.CustomTextTriggers.GlobalCustomScriptCode.Code = globalCustomScript ?? "";
                                         }
                                         break;
                                     }
@@ -1987,21 +1986,30 @@ namespace WC3MapDeprotector
 
             var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
 
-            var renamed = new IndexedJassCompilationUnitSyntax(RenameJassFunctions(inlined.CompilationUnit, _nativeEditorFunctions.ToDictionary(x => x, x =>
+            var commentedNativeFunctions = new List<JassFunctionDeclarationSyntax>();
+            string commentScript;
+            using (var scriptWriter = new StringWriter())
             {
-                var newName = x;
-                while (true)
+                var renderer = new JassRenderer(scriptWriter);
+                foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
                 {
-                    newName = $"{newName}_old";
-                    if (!inlined.IndexedFunctions.ContainsKey(newName))
+                    if (inlined.IndexedFunctions.TryGetValue(nativeEditorFunction, out var functionDeclaration))
                     {
-                        return newName;
+                        commentedNativeFunctions.Add(functionDeclaration);
+                        renderer.Render(functionDeclaration);
+                        renderer.RenderNewLine();
+                        renderer.RenderNewLine();
                     }
                 }
-            })));
+                commentScript = scriptWriter.GetStringBuilder().ToString();
+            }
+            if (!string.IsNullOrWhiteSpace(commentScript))
+            {
+                commentScript = "//OLD Auto-Generated Native Editor Functions. Review for any lost code which may have occurred during deprotection. \r\n" + Regex_StartOfAllLines().Replace(commentScript, "// ");
+            }
 
-            var newDeclarations = renamed.CompilationUnit.Declarations.ToList();
-            foreach (var nativeEditorFunction in _nativeEditorFunctions)
+            var newDeclarations = inlined.CompilationUnit.Declarations.Except(commentedNativeFunctions).ToList();
+            foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
             {
                 newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
             }
@@ -2011,18 +2019,38 @@ namespace WC3MapDeprotector
 
             var firstPass = DecompileJassScriptMetaData_Internal(editorSpecificJassScript);
 
-            if (firstPass?.UnitsDecompiledFromVariableName == null)
+            if (firstPass == null)
             {
-                return firstPass;
+                return null;
             }
 
-            var correctedUnitVariableNames = firstPass.UnitsDecompiledFromVariableName.Where(x => x.Value.StartsWith("gg_")).Select(x => new KeyValuePair<string, JassIdentifierNameSyntax>(x.Value, new JassIdentifierNameSyntax(x.Key.GetVariableName_BugFixPendingPR()))).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Last().Value);
+            if (!string.IsNullOrWhiteSpace(commentScript))
+            {
+                firstPass.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
+            }
+
+            var correctedUnitVariableNames = new List<KeyValuePair<string, string>>();
+
+            var globalGenerateds = jassParsed.CompilationUnit.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name).Where(x => x.StartsWith("gg_")).ToList();
+            var decompiled = new List<string>();
+            decompiled.AddRange(firstPass.Cameras?.Cameras?.Select(x => $"gg_cam_{x.Name}")?.ToList() ?? new List<string>());
+            decompiled.AddRange(firstPass.Regions?.Regions?.Select(x => $"gg_rct_{x.Name}")?.ToList() ?? new List<string>());
+            decompiled.AddRange(firstPass.Triggers?.TriggerItems?.OfType<TriggerDefinition>()?.Select(x => $"gg_trg_{x.Name}")?.ToList() ?? new List<string>());
+            decompiled.AddRange(firstPass.Sounds?.Sounds?.Select(x => x.Name)?.ToList() ?? new List<string>()); //NOTE: War3Net doesn't remove gg_snd_ from name for some reason
+            decompiled = decompiled.Select(x => x.Replace(" ", "_")).ToList();
+            var notDecompiledGlobalGenerateds = globalGenerateds.Except(decompiled).ToList();
+            correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
+            if (firstPass.UnitsDecompiledFromVariableName != null)
+            {
+                correctedUnitVariableNames.AddRange(firstPass.UnitsDecompiledFromVariableName.Where(x => x.Value.StartsWith("gg_")).Select(x => new KeyValuePair<string, string>(x.Value, x.Key.GetVariableName_BugFixPendingPR())));
+            }
+
             if (!correctedUnitVariableNames.Any())
             {
                 return firstPass;
             }
 
-            var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), correctedUnitVariableNames);
+            var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), correctedUnitVariableNames.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => new JassIdentifierNameSyntax(x.Last().Value)));
             if (!renamer.TryRenameCompilationUnit(editorSpecificCompilationUnit, out var secondPass))
             {
                 return firstPass;
@@ -2032,10 +2060,16 @@ namespace WC3MapDeprotector
             _logEvent("Starting decompile war3map script 2nd pass.");
 
             var result = DecompileJassScriptMetaData_Internal(secondPass.RenderScriptAsString());
-            if (result != null)
+            if (result == null)
             {
-                result.UnitsDecompiledFromVariableName = null;
+                return firstPass;
             }
+
+            if (!string.IsNullOrWhiteSpace(commentScript))
+            {
+                result.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
+            }
+            result.UnitsDecompiledFromVariableName = null;
             return result;
         }
 
@@ -2787,7 +2821,7 @@ namespace WC3MapDeprotector
 
             var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitCustomTriggers" };
             var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
-            foreach (var nativeEditorFunction in _nativeEditorFunctions)
+            foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
             {
                 var renamed = nativeEditorFunction;
                 do
@@ -2850,7 +2884,7 @@ namespace WC3MapDeprotector
             _logEvent("Renaming reserved functions...");
             int reservedFunctionReplacementCount = 0;
             Dictionary<string, string> reservedFunctionReplacements = new Dictionary<string, string>();
-            foreach (string func in _nativeEditorFunctions)
+            foreach (string func in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
             {
                 if (func == "main")
                 {
