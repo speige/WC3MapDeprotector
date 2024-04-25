@@ -263,13 +263,14 @@ namespace WC3MapDeprotector
             public MapCameras Cameras { get; set; }
             public MapRegions Regions { get; set; }
             public MapTriggers Triggers { get; set; }
+            public MapCustomTextTriggers CustomTextTriggers { get; set; }
             public TriggerStrings TriggerStrings { get; set; }
             public MapUnits Units { get; set; }
             public Dictionary<UnitData, string> UnitsDecompiledFromVariableName { get; set; }
 
             public List<MpqKnownFile> ConvertToFiles()
             {
-                var map = new Map() { Info = Info, Units = Units, Sounds = Sounds, Cameras = Cameras, Regions = Regions, Triggers = Triggers, TriggerStrings = TriggerStrings };
+                var map = new Map() { Info = Info, Units = Units, Sounds = Sounds, Cameras = Cameras, Regions = Regions, Triggers = Triggers, TriggerStrings = TriggerStrings, CustomTextTriggers = CustomTextTriggers };
                 try
                 {
                     return map.GetAllFiles();
@@ -1755,9 +1756,10 @@ namespace WC3MapDeprotector
                             foreach (var subEnumValue in Enum.GetValues(typeof(MapTriggersSubVersion)).Cast<MapTriggersSubVersion?>().Concat(new[] { (MapTriggersSubVersion?)null }).OrderBy(x => x == map?.Triggers?.SubVersion ? 0 : 1).ThenByDescending(x => x == null ? int.MaxValue : (int)x))
                             {
                                 MapTriggers triggers;
+                                string globalCustomScript;
                                 try
                                 {
-                                    if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers))
+                                    if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers, out globalCustomScript))
                                     {
                                         var triggerDefinitions = triggers.TriggerItems.Where(x => x is TriggerDefinition).Cast<TriggerDefinition>().ToList();
                                         if (triggerDefinitions.Count > 1)
@@ -1786,6 +1788,10 @@ namespace WC3MapDeprotector
 
                                             _logEvent("map triggers recovered");
                                             result.Triggers = triggers;
+                                            if (!string.IsNullOrWhiteSpace(globalCustomScript))
+                                            {
+                                                result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = globalCustomScript }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
+                                            }
                                         }
                                         break;
                                     }

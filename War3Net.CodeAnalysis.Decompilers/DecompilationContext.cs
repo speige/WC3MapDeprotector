@@ -44,13 +44,13 @@ namespace War3Net.CodeAnalysis.Decompilers
             ObjectData = new ObjectDataContext(map, campaign);
             TriggerData = new TriggerDataContext(triggerData);
 
-            var compilationUnit = JassSyntaxFactory.ParseCompilationUnit(map.Script);
+            CompilationUnit = JassSyntaxFactory.ParseCompilationUnit(map.Script);
 
             var comments = new List<JassCommentSyntax>();
             var functionDeclarationsBuilder = ImmutableDictionary.CreateBuilder<string, FunctionDeclarationContext>(StringComparer.Ordinal);
             var variableDeclarationsBuilder = ImmutableDictionary.CreateBuilder<string, VariableDeclarationContext>(StringComparer.Ordinal);
 
-            foreach (var declaration in compilationUnit.Declarations)
+            foreach (var declaration in CompilationUnit.Declarations)
             {
                 if (declaration is JassCommentSyntax comment)
                 {
@@ -84,6 +84,8 @@ namespace War3Net.CodeAnalysis.Decompilers
 
             MaxPlayerSlots = map.Info.EditorVersion >= EditorVersion.v6060 ? 24 : 12;
         }
+
+        public JassCompilationUnitSyntax CompilationUnit { get; }
 
         public ObjectDataContext ObjectData { get; }
 

@@ -8,9 +8,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
-
 using War3Net.Build.Script;
+using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Extensions;
 using War3Net.CodeAnalysis.Jass.Syntax;
 
@@ -18,7 +19,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler
     {
-        public bool TryDecompileMapTriggers(MapTriggersFormatVersion formatVersion, MapTriggersSubVersion? subVersion, [NotNullWhen(true)] out MapTriggers? mapTriggers)
+        protected readonly HashSet<string> _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
+
+        public bool TryDecompileMapTriggers(MapTriggersFormatVersion formatVersion, MapTriggersSubVersion? subVersion, [NotNullWhen(true)] out MapTriggers? mapTriggers, out string globalCustomScript)
         {
             var initGlobals = GetFunction("InitGlobals");
             var initCustomTriggers = GetFunction("InitCustomTriggers");
@@ -30,7 +33,8 @@ namespace War3Net.CodeAnalysis.Decompilers
                 runInitializationTriggers?.FunctionDeclaration,
                 formatVersion,
                 subVersion,
-                out mapTriggers))
+                out mapTriggers,
+                out globalCustomScript))
             {
                 if (initGlobals is not null)
                 {
@@ -60,13 +64,16 @@ namespace War3Net.CodeAnalysis.Decompilers
             JassFunctionDeclarationSyntax? runInitializationTriggersFunction,
             MapTriggersFormatVersion formatVersion,
             MapTriggersSubVersion? subVersion,
-            [NotNullWhen(true)] out MapTriggers? mapTriggers)
+            [NotNullWhen(true)] out MapTriggers? mapTriggers,
+            out string globalCustomScript)
         {
             const int RootCategoryId = (int)TriggerItemTypeId.RootCategory << 24;
 
             var categoryId = subVersion.HasValue ? (int)TriggerItemTypeId.Category << 24 : 0;
             var variableId = (int)TriggerItemTypeId.Variable << 24;
             var triggerId = (int)TriggerItemTypeId.Gui << 24;
+
+            var allTriggerFunctionNames = new HashSet<string>();
 
             mapTriggers = new MapTriggers(formatVersion, subVersion)
             {
@@ -182,7 +189,12 @@ namespace War3Net.CodeAnalysis.Decompilers
                     ParentId = RootCategoryId,
                 });
 
-                var decompiledTriggers = TryDecompileTriggerDefinitions(initCustomTriggersFunction);
+                var decompiledTriggers = TryDecompileTriggerDefinitions(initCustomTriggersFunction, out var triggerFunctionNames);
+                foreach (var triggerFunctionName in triggerFunctionNames)
+                {
+                    allTriggerFunctionNames.Add(triggerFunctionName);
+                }
+                
                 decompiledTriggers.ForEach(x =>
                 {
                     x.Id = triggerId++;
@@ -214,11 +226,29 @@ namespace War3Net.CodeAnalysis.Decompilers
                 }
             }
 
+            using (var scriptWriter = new StringWriter())
+            {
+                var renderer = new JassRenderer(scriptWriter);
+                var sortedFunctionDeclarations = Context.FunctionDeclarations.OrderBy(x => Context.CompilationUnit.Declarations.IndexOf(x.Value.FunctionDeclaration)).ToList();
+                foreach (var function in sortedFunctionDeclarations)
+                {
+                    if (!allTriggerFunctionNames.Contains(function.Key) && !_nativeEditorFunctions.Contains(function.Key))
+                    {
+                        renderer.Render(function.Value.FunctionDeclaration);
+                        renderer.RenderNewLine();
+                        renderer.RenderNewLine();
+                    }
+                }
+                globalCustomScript = scriptWriter.GetStringBuilder().ToString();
+            }
+
             return true;
         }
 
-        private List<TriggerDefinition> TryDecompileTriggerDefinitions(JassFunctionDeclarationSyntax initTrigFunction)
+        private List<TriggerDefinition> TryDecompileTriggerDefinitions(JassFunctionDeclarationSyntax initTrigFunction, out HashSet<string> triggerFunctionNames)
         {
+            triggerFunctionNames = new HashSet<string>();
+
             if (initTrigFunction is null)
             {
                 throw new ArgumentNullException(nameof(initTrigFunction));
@@ -226,6 +256,8 @@ namespace War3Net.CodeAnalysis.Decompilers
 
             var result = new List<TriggerDefinition>();
             TriggerDefinition currentTrigger = null;
+            
+            triggerFunctionNames.Add(initTrigFunction.FunctionDeclarator.IdentifierName.Name);
 
             foreach (var statement in initTrigFunction.Body.Statements)
             {
@@ -263,6 +295,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         {
                             var actionsFunction = actionsFunctionDeclaration.FunctionDeclaration;
 
+                            triggerFunctionNames.Add(actionsFunction.FunctionDeclarator.IdentifierName.Name);
                             if (TryDecompileActionStatementList(actionsFunction.Body, out var actionFunctions))
                             {
                                 currentTrigger.Functions.AddRange(actionFunctions);
@@ -283,6 +316,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         {
                             var conditionsFunction = conditionsFunctionDeclaration.FunctionDeclaration;
 
+                            triggerFunctionNames.Add(conditionsFunction.FunctionDeclarator.IdentifierName.Name);
                             if (TryDecompileConditionStatementList(conditionsFunction.Body, out var conditionFunctions))
                             {
                                 currentTrigger.Functions.AddRange(conditionFunctions);
