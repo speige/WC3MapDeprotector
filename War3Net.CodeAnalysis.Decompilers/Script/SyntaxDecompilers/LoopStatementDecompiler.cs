@@ -33,7 +33,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             functions.AddRange(loopActions);
             functions.Add(DecompileCustomScriptAction(JassEndLoopCustomScriptAction.Value));
 
-            return false;
+            return true;
         }
     }
 }

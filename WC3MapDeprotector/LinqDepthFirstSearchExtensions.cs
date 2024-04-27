@@ -29,20 +29,46 @@
                 yield break;
             }
 
-            foreach (T child in source)
+            var stack = new Stack<IEnumerator<T>>();
+            var enumerator = source.GetEnumerator();
+
+            try
             {
-                if (child == null)
+                while (true)
                 {
-                    continue;
+                    if (enumerator.MoveNext())
+                    {
+                        T element = enumerator.Current;
+                        yield return element;
+
+                        stack.Push(enumerator);
+                        var nextSource = getChildren(element);
+                        if (nextSource != null)
+                        {
+                            enumerator = nextSource.GetEnumerator();
+                        }
+                    }
+                    else if (stack.Count > 0)
+                    {
+                        enumerator.Dispose();
+                        enumerator = stack.Pop();
+                    }
+                    else
+                    {
+                        yield break;
+                    }
                 }
+            }
+            finally
+            {
+                enumerator.Dispose();
 
-                yield return child;
-
-                foreach (var subChild in getChildren(child).DFS_Flatten<T>(getChildren))
+                while (stack.Count > 0)
                 {
-                    yield return subChild;
+                    enumerator = stack.Pop();
+                    enumerator.Dispose();
                 }
             }
         }
-   }
+    }
 }

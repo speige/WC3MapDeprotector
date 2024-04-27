@@ -42,9 +42,18 @@ namespace WC3MapDeprotector
 
     public partial class Deprotector : IDisposable
     {
-        protected static List<Encoding> _allEncodings;
+        protected static readonly HashSet<string> _nativeEditorFunctions;
+        protected static readonly List<Encoding> _allEncodings;
         static Deprotector()
         {
+            _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreateNeutralHostileBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
+            for (var playerIdx = 0; playerIdx <= 23; playerIdx++)
+            {
+                _nativeEditorFunctions.Add($"InitTechTree_Player{playerIdx}");
+                _nativeEditorFunctions.Add($"CreateBuildingsForPlayer{playerIdx}");
+                _nativeEditorFunctions.Add($"CreateUnitsForPlayer{playerIdx}");
+            }
+
             _allEncodings = Encoding.GetEncodings().Select(x =>
             {
                 try
@@ -236,7 +245,7 @@ namespace WC3MapDeprotector
             public IndexedJassCompilationUnitSyntax(JassCompilationUnitSyntax compilationUnit)
             {
                 CompilationUnit = compilationUnit;
-                IndexedFunctions = CompilationUnit.Declarations.Where(x => x is JassFunctionDeclarationSyntax).Cast<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
+                IndexedFunctions = CompilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
             }
         }
 
@@ -1633,7 +1642,7 @@ namespace WC3MapDeprotector
         {
             var jassParsed = new IndexedJassCompilationUnitSyntax(ParseJassScript(jassScript));
 
-            var globals = jassParsed.CompilationUnit.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
+            var globals = jassParsed.CompilationUnit.Declarations.OfType<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
 
             var probablyUserDefined = new HashSet<string>();
             var mainStatements = ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions);
@@ -1663,7 +1672,7 @@ namespace WC3MapDeprotector
             var initGlobalsStatements = mainStatements.GetRange(initBlizzardIndex + 1, initGlobalsIndex + longestStreak - initBlizzardIndex - 1);
             foreach (var udgStatement in initGlobalsStatements)
             {
-                probablyUserDefined.AddRange(War3NetExtensions.GetAllChildSyntaxNodes_Recursive(udgStatement).Where(x => x is JassIdentifierNameSyntax).Cast<JassIdentifierNameSyntax>().Select(x => x.Name));
+                probablyUserDefined.AddRange(War3NetExtensions.GetAllChildSyntaxNodes_Recursive(udgStatement).OfType<JassIdentifierNameSyntax>().Select(x => x.Name));
             }
 
             userDefinedGlobals = new List<string>();
@@ -1788,12 +1797,11 @@ namespace WC3MapDeprotector
                             foreach (var subEnumValue in Enum.GetValues(typeof(MapTriggersSubVersion)).Cast<MapTriggersSubVersion?>().Concat(new[] { (MapTriggersSubVersion?)null }).OrderBy(x => x == map?.Triggers?.SubVersion ? 0 : 1).ThenByDescending(x => x == null ? int.MaxValue : (int)x))
                             {
                                 MapTriggers triggers;
-                                string globalCustomScript;
                                 try
                                 {
-                                    if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers, out globalCustomScript))
+                                    if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers))
                                     {
-                                        var triggerDefinitions = triggers.TriggerItems.Where(x => x is TriggerDefinition).Cast<TriggerDefinition>().ToList();
+                                        var triggerDefinitions = triggers.TriggerItems.OfType<TriggerDefinition>().ToList();
                                         if (triggerDefinitions.Count > 1)
                                         {
                                             triggerDefinitions[0].Description = ATTRIB + (triggerDefinitions[0].Description ?? "");
@@ -1818,9 +1826,44 @@ namespace WC3MapDeprotector
                                                 }
                                             }
 
+                                            var customScriptFunctions = triggerDefinitions.SelectMany(x => x.Functions).SelectMany(x => x.RecurseNestedTriggerFunctions()).Where(x => x.Name == "CustomScriptCode").SelectMany(x => jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(x.Parameters[0].Value)).ToHashSet();
+                                            var nonRecursedFunctions = customScriptFunctions.ToList();
+                                            do
+                                            {
+                                                foreach (var function in nonRecursedFunctions.ToList())
+                                                {
+                                                    nonRecursedFunctions.Remove(function);
+
+                                                    var nestedFunctions = jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(function.RenderFunctionAsString());
+                                                    foreach (var nestedFunction in nestedFunctions)
+                                                    {
+                                                        if (!customScriptFunctions.Contains(nestedFunction))
+                                                        {
+                                                            customScriptFunctions.Add(nestedFunction);
+                                                            nonRecursedFunctions.Add(nestedFunction);
+                                                        }
+                                                    }
+                                                }
+                                            } while (nonRecursedFunctions.Count > 0);
+
+                                            var sortedFunctionDeclarations = jassScriptDecompiler.Context.FunctionDeclarations.OrderBy(x => jassScriptDecompiler.Context.CompilationUnit.Declarations.IndexOf(x.Value.FunctionDeclaration)).ToList();
+                                            var nonGuiScripts = new StringBuilder();
+                                            foreach (var function in sortedFunctionDeclarations)
+                                            {
+                                                var script = function.Value.RenderFunctionAsString();
+                                                if (!customScriptFunctions.Contains(function.Value))
+                                                {
+                                                    script = string.Join("\r\n", script.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).Select(x => "// " + x));
+                                                }
+                                                nonGuiScripts.Append(script);
+                                                nonGuiScripts.AppendLine();
+                                                nonGuiScripts.AppendLine();
+                                            }
+
+
                                             _logEvent("map triggers recovered");
                                             result.Triggers = triggers;
-                                            result.CustomTextTriggers.GlobalCustomScriptCode.Code = globalCustomScript ?? "";
+                                            result.CustomTextTriggers.GlobalCustomScriptCode.Code = nonGuiScripts.ToString();
                                         }
                                         break;
                                     }
@@ -1991,7 +2034,7 @@ namespace WC3MapDeprotector
             using (var scriptWriter = new StringWriter())
             {
                 var renderer = new JassRenderer(scriptWriter);
-                foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
+                foreach (var nativeEditorFunction in _nativeEditorFunctions)
                 {
                     if (inlined.IndexedFunctions.TryGetValue(nativeEditorFunction, out var functionDeclaration))
                     {
@@ -2009,7 +2052,7 @@ namespace WC3MapDeprotector
             }
 
             var newDeclarations = inlined.CompilationUnit.Declarations.Except(commentedNativeFunctions).ToList();
-            foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
+            foreach (var nativeEditorFunction in _nativeEditorFunctions)
             {
                 newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
             }
@@ -2031,7 +2074,7 @@ namespace WC3MapDeprotector
 
             var correctedUnitVariableNames = new List<KeyValuePair<string, string>>();
 
-            var globalGenerateds = jassParsed.CompilationUnit.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name).Where(x => x.StartsWith("gg_")).ToList();
+            var globalGenerateds = jassParsed.CompilationUnit.Declarations.OfType<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name).Where(x => x.StartsWith("gg_")).ToList();
             var decompiled = new List<string>();
             decompiled.AddRange(firstPass.Cameras?.Cameras?.Select(x => $"gg_cam_{x.Name}")?.ToList() ?? new List<string>());
             decompiled.AddRange(firstPass.Regions?.Regions?.Select(x => $"gg_rct_{x.Name}")?.ToList() ?? new List<string>());
@@ -2291,7 +2334,7 @@ namespace WC3MapDeprotector
             _logEvent("Inlining functions...");
             var inlineCount = 0;
             var oldInlineCount = inlineCount;
-            var functions = compilationUnit.Declarations.Where(x => x is JassFunctionDeclarationSyntax).Cast<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
+            var functions = compilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
             var newDeclarations = compilationUnit.Declarations.ToList();
             do
             {
@@ -2518,13 +2561,13 @@ namespace WC3MapDeprotector
                 using (var writer = new StringWriter())
                 {
                     var globalVariableRenames = new Dictionary<string, JassIdentifierNameSyntax>();
-                    var uniqueNames = new HashSet<string>(parsed.Declarations.Where(x => x is JassGlobalDeclarationListSyntax).Cast<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name), StringComparer.InvariantCultureIgnoreCase);
+                    var uniqueNames = new HashSet<string>(parsed.Declarations.OfType<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().Select(x => x.Declarator.IdentifierName.Name), StringComparer.InvariantCultureIgnoreCase);
                     foreach (var declaration in parsed.Declarations)
                     {
                         if (declaration is JassGlobalDeclarationListSyntax)
                         {
                             var globalDeclaration = (JassGlobalDeclarationListSyntax)declaration;
-                            foreach (var global in globalDeclaration.Globals.Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>())
+                            foreach (var global in globalDeclaration.Globals.OfType<JassGlobalDeclarationSyntax>())
                             {
                                 var isArray = global.Declarator is JassArrayDeclaratorSyntax;
                                 var originalName = global.Declarator.IdentifierName.Name;
@@ -2821,7 +2864,7 @@ namespace WC3MapDeprotector
 
             var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitCustomTriggers" };
             var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
-            foreach (var nativeEditorFunction in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
+            foreach (var nativeEditorFunction in _nativeEditorFunctions)
             {
                 var renamed = nativeEditorFunction;
                 do
@@ -2884,7 +2927,7 @@ namespace WC3MapDeprotector
             _logEvent("Renaming reserved functions...");
             int reservedFunctionReplacementCount = 0;
             Dictionary<string, string> reservedFunctionReplacements = new Dictionary<string, string>();
-            foreach (string func in JassScriptDecompiler.NATIVE_EDITOR_FUNCTIONS)
+            foreach (string func in _nativeEditorFunctions)
             {
                 if (func == "main")
                 {

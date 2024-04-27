@@ -36,7 +36,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             Context = new DecompilationContext(map, campaign, triggerData);
         }
 
-        internal DecompilationContext Context { get; }
+        public DecompilationContext Context { get; }
 
         private FunctionDeclarationContext? GetFunction(string functionName)
         {

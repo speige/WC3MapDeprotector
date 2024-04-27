@@ -12,6 +12,8 @@ using NuGet.Packaging;
 using War3Net.Build.Audio;
 using War3Net.Build.Widget;
 using War3Net.Build.Extensions;
+using War3Net.Build.Script;
+using War3Net.CodeAnalysis.Decompilers;
 
 namespace WC3MapDeprotector
 {
@@ -181,8 +183,56 @@ namespace WC3MapDeprotector
                 return methods.Select(x =>
                 {
                     return x.Invoke(null, new object[] { map, null }) as MpqFile;
-                }).Where(x => x is MpqKnownFile).Cast<MpqKnownFile>().ToList();
+                }).OfType<MpqKnownFile>().ToList();
             }).ToList();
+        }
+
+        public static List<FunctionDeclarationContext> ParseScriptForNestedFunctionCalls(this IDictionary<string, FunctionDeclarationContext> contextFunctionDeclarations, string customText)
+        {
+            var keywords = customText.Split(new char[] { ',', '(', ')', ' ', '\t' }).Select(x => x.Trim()).Distinct().ToList();
+            return keywords.Select(x => contextFunctionDeclarations.TryGetValue(x, out var function) ? function : null).Where(x => x != null).Distinct().ToList();
+        }
+
+        public static string RenderFunctionAsString(this FunctionDeclarationContext function)
+        {
+            using (var scriptWriter = new StringWriter())
+            {
+                var renderer = new JassRenderer(scriptWriter);
+                renderer.Render(function.FunctionDeclaration);
+                renderer.RenderNewLine();
+                return scriptWriter.GetStringBuilder().ToString();
+            }
+        }
+
+        public static IEnumerable<TriggerFunction> RecurseNestedTriggerFunctions(this TriggerFunction triggerFunction)
+        {
+            if (triggerFunction == null)
+            {
+                yield break;
+            }
+
+            yield return triggerFunction;
+            if (triggerFunction.ChildFunctions != null)
+            {
+                foreach (var childFunction in triggerFunction.ChildFunctions)
+                {
+                    foreach (var nestedChildFunction in RecurseNestedTriggerFunctions(childFunction))
+                    {
+                        yield return nestedChildFunction;
+                    }
+                }
+            }
+
+            if (triggerFunction.Parameters != null)
+            {
+                foreach (var parameter in triggerFunction.Parameters)
+                {
+                    foreach (var nestedChildFunction in RecurseNestedTriggerFunctions(parameter.Function))
+                    {
+                        yield return nestedChildFunction;
+                    }
+                }
+            }
         }
     }
 }
