@@ -814,6 +814,8 @@ namespace WC3MapDeprotector
                 }
             }
 
+            Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData); ;
+
             PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
@@ -889,7 +891,7 @@ namespace WC3MapDeprotector
                 jassScript = $"// {ATTRIB}{ReadAllTextAscii(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
-                    jassScript = DeObfuscateJassScript(jassScript);
+                    jassScript = DeObfuscateJassScript(map_ObjectDataOnly, jassScript);
                     scriptMetaData = DecompileJassScriptMetaData(jassScript);
                 }
                 catch { }
@@ -1528,13 +1530,13 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"'([^']{4})'\s*\+\s*'([^']{4})'", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptMathObfuscatedFourCC();
 
-        protected string DeObfuscateFourCC(string script, string prefix, string suffix)
+        protected string DeObfuscateFourCC(Map map_ObjectDataOnly, string script, string prefix, string suffix)
         {
             var result = Regex_ScriptHexObfuscatedFourCC().Replace(script, x =>
             {
                 var intValue = Convert.ToInt32(x.Value.Substring(1), 16);
                 var rawCode = intValue.ToFourCC();
-                if (rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+                if (map_ObjectDataOnly?.GetObjectDataTypeForID(rawCode) == null || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
                 {
                     return intValue.ToString();
                 }
@@ -1547,7 +1549,7 @@ namespace WC3MapDeprotector
                 var right = x.Groups[2].Value;
                 var intValue = left.FromFourCCToInt() + right.FromFourCCToInt();
                 var rawCode = intValue.ToFourCC();
-                if (rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+                if (map_ObjectDataOnly?.GetObjectDataTypeForID(rawCode) == null || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
                 {
                     return intValue.ToString();
                 }
@@ -1563,14 +1565,14 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        protected string DeObfuscateFourCCJass(string jassScript)
+        protected string DeObfuscateFourCCJass(Map map_ObjectDataOnly, string jassScript)
         {
-            return DeObfuscateFourCC(jassScript, "'", "'");
+            return DeObfuscateFourCC(map_ObjectDataOnly, jassScript, "'", "'");
         }
 
-        protected string DeObfuscateFourCCLua(string jassScript)
+        protected string DeObfuscateFourCCLua(Map map_ObjectDataOnly, string jassScript)
         {
-            return DeObfuscateFourCC(jassScript, "FourCC(\"", "\")");
+            return DeObfuscateFourCC(map_ObjectDataOnly, jassScript, "FourCC(\"", "\")");
         }
 
         protected List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out List<string> inlinedFunctions)
@@ -1814,7 +1816,7 @@ namespace WC3MapDeprotector
                                                     if (function.Name == "SetVariable" && function.Parameters[1].Type == TriggerFunctionParameterType.String)
                                                     {
                                                         var stringValue = function.Parameters[1].Value;
-                                                        if (Regex_ScriptFourCC().IsMatch(stringValue) && !string.Equals(stringValue, "true", StringComparison.InvariantCultureIgnoreCase))
+                                                        if (Regex_ScriptFourCC().IsMatch(stringValue) && map.GetObjectDataTypeForID(stringValue) != null)
                                                         {
                                                             var correctedText = $"set udg_{function.Parameters[0].Value}{(function.Parameters[0].ArrayIndexer != null ? $"[{function.Parameters[0].ArrayIndexer.Value}]" : "")} = '{stringValue}'";
                                                             function.Type = TriggerFunctionType.Action;
@@ -2549,9 +2551,9 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"\s+function\s+main\s+takes\s+nothing\s+returns\s+nothing\s+((local\s+|//).*\s*)*", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_JassScriptFunctionMain();
 
-        protected string DeObfuscateJassScript(string jassScript)
+        protected string DeObfuscateJassScript(Map map_ObjectDataOnly, string jassScript)
         {
-            var result = DeObfuscateFourCCJass(jassScript);
+            var result = DeObfuscateFourCCJass(map_ObjectDataOnly, jassScript);
 
             try
             {
