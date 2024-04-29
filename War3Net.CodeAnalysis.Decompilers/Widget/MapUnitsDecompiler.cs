@@ -364,14 +364,40 @@ namespace War3Net.CodeAnalysis.Decompilers
                             units[^1].HeroIntelligence = value;
                         }
                     }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "SelectHeroSkill", StringComparison.Ordinal))
+                    else if (string.Equals(callStatement.IdentifierName.Name, "SelectHeroSkill", StringComparison.Ordinal) && callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var heroSkillAbilityId))
                     {
-                        // TODO
-                        continue;
+                        var ability = units[^1].AbilityData.FirstOrDefault(x => x.AbilityId == heroSkillAbilityId.InvertEndianness());
+                        if (ability == null)
+                        {
+                            ability = new ModifiedAbilityData() { AbilityId = heroSkillAbilityId.InvertEndianness(), HeroAbilityLevel = 0, IsAutocastActive = false };
+                            units[^1].AbilityData.Add(ability);
+                        }
+
+                        ability.HeroAbilityLevel++;
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "IssueImmediateOrder", StringComparison.Ordinal))
                     {
-                        // TODO
+                        var abilityName = (callStatement.Arguments.Arguments[1] as JassStringLiteralExpressionSyntax)?.Value;
+                        var matchingAbilityIds = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => y.Id == "aord".FromRawcode() && y.Value.ToString() == abilityName)).Select(x => x.OldId).
+                            Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => y.Id == "aord".FromRawcode() && y.Value.ToString() == abilityName)).Select(x => x.NewId)).ToList();
+                        if (string.IsNullOrWhiteSpace(abilityName))
+                        {
+                            continue;
+                        }
+
+                        var unit = units[^1];
+                        foreach (var abilityId in matchingAbilityIds)
+                        {
+                            var ability = unit.AbilityData.FirstOrDefault(x => x.AbilityId == abilityId);
+                            if (ability == null)
+                            {
+                                ability = new ModifiedAbilityData() { AbilityId = abilityId, HeroAbilityLevel = 0, IsAutocastActive = false };
+                                unit.AbilityData.Add(ability);
+                            }
+
+                            ability.IsAutocastActive = true;
+                        }
+
                         continue;
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "RandomDistReset", StringComparison.Ordinal))
@@ -417,6 +443,13 @@ namespace War3Net.CodeAnalysis.Decompilers
                         continue;
                     }
                 }
+            }
+
+            foreach (var unit in units)
+            {
+                var filteredAbilityData = unit.AbilityData.Where(x => x.HeroAbilityLevel != 0).ToList();
+                unit.AbilityData.Clear();
+                unit.AbilityData.AddRange(filteredAbilityData);
             }
 
             return true;

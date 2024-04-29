@@ -14,11 +14,149 @@ using War3Net.Build.Widget;
 using War3Net.Build.Extensions;
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Decompilers;
+using War3Net.Build.Object;
 
 namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static Map Clone_Shallow(this Map map)
+        {
+            return new Map()
+            {
+                Sounds = map.Sounds,
+                Cameras = map.Cameras,
+                Environment = map.Environment,
+                PathingMap = map.PathingMap,
+                PreviewIcons = map.PreviewIcons,
+                Regions = map.Regions,
+                ShadowMap = map.ShadowMap,
+                ImportedFiles = map.ImportedFiles,
+                Info = map.Info,
+                AbilityObjectData = map.AbilityObjectData,
+                BuffObjectData = map.BuffObjectData,
+                DestructableObjectData = map.DestructableObjectData,
+                DoodadObjectData = map.DoodadObjectData,
+                ItemObjectData = map.ItemObjectData,
+                UnitObjectData = map.UnitObjectData,
+                UpgradeObjectData = map.UpgradeObjectData,
+                AbilitySkinObjectData = map.AbilitySkinObjectData,
+                BuffSkinObjectData = map.BuffSkinObjectData,
+                DestructableSkinObjectData = map.DestructableSkinObjectData,
+                DoodadSkinObjectData = map.DoodadSkinObjectData,
+                ItemSkinObjectData = map.ItemSkinObjectData,
+                UnitSkinObjectData = map.UnitSkinObjectData,
+                UpgradeSkinObjectData = map.UpgradeSkinObjectData,
+                CustomTextTriggers = map.CustomTextTriggers,
+                Script = map.Script,
+                Triggers = map.Triggers,
+                TriggerStrings = map.TriggerStrings,
+                Doodads = map.Doodads,
+                Units = map.Units
+            };
+        }
+
+        public static void ConcatObjectData(this Map map, Map otherMap)
+        {
+            map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.AbilityObjectData != null)
+            {
+                map.AbilityObjectData.BaseAbilities.AddRange(otherMap.AbilityObjectData.BaseAbilities);
+                map.AbilityObjectData.NewAbilities.AddRange(otherMap.AbilityObjectData.NewAbilities);
+            }
+
+            map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.BuffObjectData != null)
+            {
+                map.BuffObjectData.BaseBuffs.AddRange(otherMap.BuffObjectData.BaseBuffs);
+                map.BuffObjectData.NewBuffs.AddRange(otherMap.BuffObjectData.NewBuffs);
+            }
+
+            map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.DestructableObjectData != null)
+            {
+                map.DestructableObjectData.BaseDestructables.AddRange(otherMap.DestructableObjectData.BaseDestructables);
+                map.DestructableObjectData.NewDestructables.AddRange(otherMap.DestructableObjectData.NewDestructables);
+            }
+
+            map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.DoodadObjectData != null)
+            {
+                map.DoodadObjectData.BaseDoodads.AddRange(otherMap.DoodadObjectData.BaseDoodads);
+                map.DoodadObjectData.NewDoodads.AddRange(otherMap.DoodadObjectData.NewDoodads);
+            }
+
+            map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.ItemObjectData != null)
+            {
+                map.ItemObjectData.BaseItems.AddRange(otherMap.ItemObjectData.BaseItems);
+                map.ItemObjectData.NewItems.AddRange(otherMap.ItemObjectData.NewItems);
+            }
+
+            map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.UnitObjectData != null)
+            {
+                map.UnitObjectData.BaseUnits.AddRange(otherMap.UnitObjectData.BaseUnits);
+                map.UnitObjectData.NewUnits.AddRange(otherMap.UnitObjectData.NewUnits);
+            }
+
+            map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.UpgradeObjectData != null)
+            {
+                map.UpgradeObjectData.BaseUpgrades.AddRange(otherMap.UpgradeObjectData.BaseUpgrades);
+                map.UpgradeObjectData.NewUpgrades.AddRange(otherMap.UpgradeObjectData.NewUpgrades);
+            }
+
+            map.AbilitySkinObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.AbilitySkinObjectData != null)
+            {
+                map.AbilitySkinObjectData.BaseAbilities.AddRange(otherMap.AbilitySkinObjectData.BaseAbilities);
+                map.AbilitySkinObjectData.NewAbilities.AddRange(otherMap.AbilitySkinObjectData.NewAbilities);
+            }
+
+            map.BuffSkinObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.BuffSkinObjectData != null)
+            {
+                map.BuffSkinObjectData.BaseBuffs.AddRange(otherMap.BuffSkinObjectData.BaseBuffs);
+                map.BuffSkinObjectData.NewBuffs.AddRange(otherMap.BuffSkinObjectData.NewBuffs);
+            }
+
+            map.DestructableSkinObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.DestructableSkinObjectData != null)
+            {
+                map.DestructableSkinObjectData.BaseDestructables.AddRange(otherMap.DestructableSkinObjectData.BaseDestructables);
+                map.DestructableSkinObjectData.NewDestructables.AddRange(otherMap.DestructableSkinObjectData.NewDestructables);
+            }
+
+            map.DoodadSkinObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.DoodadSkinObjectData != null)
+            {
+                map.DoodadSkinObjectData.BaseDoodads.AddRange(otherMap.DoodadSkinObjectData.BaseDoodads);
+                map.DoodadSkinObjectData.NewDoodads.AddRange(otherMap.DoodadSkinObjectData.NewDoodads);
+            }
+
+            map.ItemSkinObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.ItemSkinObjectData != null)
+            {
+                map.ItemSkinObjectData.BaseItems.AddRange(otherMap.ItemSkinObjectData.BaseItems);
+                map.ItemSkinObjectData.NewItems.AddRange(otherMap.ItemSkinObjectData.NewItems);
+            }
+
+            map.UnitSkinObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.UnitSkinObjectData != null)
+            {
+                map.UnitSkinObjectData.BaseUnits.AddRange(otherMap.UnitSkinObjectData.BaseUnits);
+                map.UnitSkinObjectData.NewUnits.AddRange(otherMap.UnitSkinObjectData.NewUnits);
+            }
+
+            map.UpgradeSkinObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+            if (otherMap?.UpgradeSkinObjectData != null)
+            {
+                map.UpgradeSkinObjectData.BaseUpgrades.AddRange(otherMap.UpgradeSkinObjectData.BaseUpgrades);
+                map.UpgradeSkinObjectData.NewUpgrades.AddRange(otherMap.UpgradeSkinObjectData.NewUpgrades);
+            }
+        }
+
         public static string GetVariableName_BugFixPendingPR(this UnitData unitData)
         {
             var result = unitData.GetVariableName();

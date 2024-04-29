@@ -73,6 +73,8 @@ namespace WC3MapDeprotector
         public DeprotectionSettings Settings { get; private set; }
         protected readonly Action<string> _logEvent;
         protected DeprotectionResult _deprotectionResult;
+        protected SLKParser _slkParser = new SLKParser();
+        protected Map _defaultSLKData;
 
         protected void AddToGlobalListFile(string fileName)
         {
@@ -476,6 +478,25 @@ namespace WC3MapDeprotector
                 ZipFile.ExtractToDirectory(baseMapFilesZip, BaseMapFilesPath, true);
             }
 
+            var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
+            if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
+            {
+                ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
+            }
+
+            var test = Map.Open(@"c:\temp\mapTest.w3x");
+            _defaultSLKData = new Map();
+            var defaultSLKFiles = Directory.GetFiles(Path.Combine(SLKRecoverPath, "STD")).ToList();
+            if (defaultSLKFiles.Count > 0)
+            {
+                var slkData = _slkParser.ParseSLKObjectsFromFiles(defaultSLKFiles);
+                var objectDatas = _slkParser.ToObjectData(slkData);
+                foreach (var objectData in objectDatas)
+                {
+                    _defaultSLKData.GetObjectDataBySLKType(objectData.SLKType).BaseValues = objectData.BaseValues;
+                }
+            }
+
             if (!File.Exists(_inMapFile))
             {
                 throw new FileNotFoundException($"Cannot find source map file: {_inMapFile}");
@@ -533,14 +554,8 @@ namespace WC3MapDeprotector
                 var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
                 if (slkFiles.Count > 0)
                 {
-                    var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
-                    if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
-                    {
-                        ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
-                    }
-
                     var slkRecoverableFiles = new List<string>() { "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q", "war3map.w3t", "war3map.w3u" };
-
+                    
                     _logEvent("Generating temporary map for SLK Recover: slk.w3x");
                     var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
                     var minimumExtraRequiredFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories)).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !slkRecoverableFiles.Contains(Path.GetFileName(x))).ToList();
@@ -557,8 +572,7 @@ namespace WC3MapDeprotector
                     _logEvent("SilkObjectOptimizer completed");
 
 
-                    var slkParser = new SLKParser();
-                    var slkDataPerObjectId = slkParser.ParseSLKObjectsFromFiles(slkFiles);
+                    var slkDataPerObjectId = _slkParser.ParseSLKObjectsFromFiles(slkFiles);
                     //NOTE: SLKRecover generates corrupted files for any SLK files that are missing, this excludes them
                     var validFiles = slkDataPerObjectId.Values.Select(x => x.SLKType).Distinct().Select(x => $"war3map{x.GetMPQFileExtension()}").Distinct().ToHashSet(StringComparer.InvariantCultureIgnoreCase);
 
@@ -1727,7 +1741,11 @@ namespace WC3MapDeprotector
                     try
                     {
                         _logEvent("Decompiling war3map script file");
-                        jassScriptDecompiler = new JassScriptDecompiler(new Map() { Script = editorSpecificJassScript, Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass } });
+                        var tempMap = map.Clone_Shallow();
+                        tempMap.Script = editorSpecificJassScript;
+                        tempMap.Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass };
+                        tempMap.ConcatObjectData(_defaultSLKData);
+                        jassScriptDecompiler = new JassScriptDecompiler(tempMap);
                     }
                     catch
                     {
