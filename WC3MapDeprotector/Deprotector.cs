@@ -1718,6 +1718,7 @@ namespace WC3MapDeprotector
 
         protected ScriptMetaData DecompileJassScriptMetaData_Internal(string jassScript, string editorSpecificJassScript)
         {
+            //todo: JassScriptDecompiler sets functions to "handled" which throws exception on repeat, so running extra times in foreach with different versions doesn't help. Re-create JassScriptDecompiler each time.
             var result = new ScriptMetaData();
             result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
 
@@ -1943,6 +1944,44 @@ namespace WC3MapDeprotector
                                     {
                                         trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
                                     }
+
+                                    /*
+                                    //Todo: Fix this, causing editor to crash while opening
+                                    var GUI_MAX_LINE_LENGTH = 255;
+                                    var allFunctions = trigger.Functions.SelectMany(x => x.RecurseNestedTriggerFunctions()).ToList();
+                                    var tooLong = allFunctions.Where(x => x.ToString().Length >= GUI_MAX_LINE_LENGTH).ToList();
+                                    foreach (var function in tooLong)
+                                    {
+                                        var replacementFunction = new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() };
+                                        var chunks = function.ToString().Chunk(GUI_MAX_LINE_LENGTH - 20).Select(x => new string(x)).Select(x => new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {x}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() }).ToList();
+
+                                        var childFunctions = trigger.Functions.Contains(function) ? trigger.Functions : allFunctions.Where(x => x.ChildFunctions.Contains(function)).Select(x => x.ChildFunctions).FirstOrDefault();
+                                        if (childFunctions != null)
+                                        {
+                                            var index = childFunctions.IndexOf(function);
+                                            childFunctions.RemoveAt(index);
+                                            childFunctions.Insert(index++, replacementFunction);
+                                            foreach (var chunk in chunks)
+                                            {
+                                                childFunctions.Insert(index++, chunk);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            var parameters = allFunctions.Where(x => x.Parameters.Any(y => y.Function == function)).Select(x => x.Parameters).FirstOrDefault();
+                                            if (parameters != null)
+                                            {
+                                                var index = parameters.IndexOf(x => x.Function == function);
+                                                parameters.RemoveAt(index);
+                                                parameters.Insert(index++, new TriggerFunctionParameter() { Function = replacementFunction, Type = TriggerFunctionParameterType.Function });
+                                                foreach (var chunk in chunks)
+                                                {
+                                                    parameters.Insert(index++, new TriggerFunctionParameter() { Function = chunk, Type = TriggerFunctionParameterType.Function });
+                                                }
+                                            }
+                                        }
+                                    }
+                                    */
                                 }
                             }
                         }
