@@ -49,6 +49,7 @@ namespace WC3MapDeprotector
             _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreateNeutralHostileBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
             for (var playerIdx = 0; playerIdx <= 23; playerIdx++)
             {
+                _nativeEditorFunctions.Add($"InitUpgrades_Player{playerIdx}");
                 _nativeEditorFunctions.Add($"InitTechTree_Player{playerIdx}");
                 _nativeEditorFunctions.Add($"CreateBuildingsForPlayer{playerIdx}");
                 _nativeEditorFunctions.Add($"CreateUnitsForPlayer{playerIdx}");
@@ -1715,324 +1716,404 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"^[0-9a-z]{4}$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptFourCC();
 
-        protected ScriptMetaData DecompileJassScriptMetaData(string jassScript)
+        protected ScriptMetaData DecompileJassScriptMetaData_Internal(string jassScript, string editorSpecificJassScript)
         {
-            var DecompileJassScriptMetaData_Internal = (string editorSpecificJassScript) =>
+            var result = new ScriptMetaData();
+            result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
+
+            var map = DecompileMap();
+            result.Info = map.Info;
+
+            result.TriggerStrings = map.TriggerStrings;
+
+            foreach (var mapInfoFormatVersion in Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderBy(x => x == map?.Info?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
             {
-                var result = new ScriptMetaData();
-                result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
+                var useNewFormat = map.Info.FormatVersion >= MapInfoFormatVersion.v28;
 
-                var map = DecompileMap();
-                result.Info = map.Info;
-
-                result.TriggerStrings = map.TriggerStrings;
-
-                foreach (var mapInfoFormatVersion in Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderBy(x => x == map?.Info?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                if (result.Sounds != null && result.Cameras != null && result.Regions != null && result.Triggers != null && result.Units != null)
                 {
-                    var useNewFormat = map.Info.FormatVersion >= MapInfoFormatVersion.v28;
+                    _logEvent("Decompiling script finished");
+                    break;
+                }
 
-                    if (result.Sounds != null && result.Cameras != null && result.Regions != null && result.Triggers != null && result.Units != null)
-                    {
-                        _logEvent("Decompiling script finished");
-                        break;
-                    }
+                JassScriptDecompiler jassScriptDecompiler;
+                try
+                {
+                    _logEvent("Decompiling war3map script file");
+                    var tempMap = map.Clone_Shallow();
+                    tempMap.Script = editorSpecificJassScript;
+                    tempMap.Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass };
+                    tempMap.ConcatObjectData(_defaultSLKData);
+                    jassScriptDecompiler = new JassScriptDecompiler(tempMap);
+                }
+                catch
+                {
+                    return null;
+                }
 
-                    JassScriptDecompiler jassScriptDecompiler;
-                    try
+                if (result.Sounds == null)
+                {
+                    _logEvent("Decompiling map sounds");
+                    foreach (var enumValue in Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
                     {
-                        _logEvent("Decompiling war3map script file");
-                        var tempMap = map.Clone_Shallow();
-                        tempMap.Script = editorSpecificJassScript;
-                        tempMap.Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass };
-                        tempMap.ConcatObjectData(_defaultSLKData);
-                        jassScriptDecompiler = new JassScriptDecompiler(tempMap);
-                    }
-                    catch
-                    {
-                        return null;
-                    }
-
-                    if (result.Sounds == null)
-                    {
-                        _logEvent("Decompiling map sounds");
-                        foreach (var enumValue in Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                        MapSounds sounds;
+                        try
                         {
-                            MapSounds sounds;
-                            try
+                            if (jassScriptDecompiler.TryDecompileMapSounds(enumValue, out sounds))
                             {
-                                if (jassScriptDecompiler.TryDecompileMapSounds(enumValue, out sounds))
-                                {
-                                    _logEvent("map sounds recovered");
-                                    result.Sounds = sounds;
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-
-                    if (result.Cameras == null)
-                    {
-                        _logEvent("Decompiling map cameras");
-                        foreach (var enumValue in Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
-                        {
-                            MapCameras cameras;
-                            try
-                            {
-                                if (jassScriptDecompiler.TryDecompileMapCameras(enumValue, useNewFormat, out cameras))
-                                {
-                                    _logEvent("map cameras recovered");
-                                    result.Cameras = cameras;
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-
-                    if (result.Regions == null)
-                    {
-                        _logEvent("Decompiling map regions");
-                        foreach (var enumValue in Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
-                        {
-                            MapRegions regions;
-                            try
-                            {
-                                if (jassScriptDecompiler.TryDecompileMapRegions(enumValue, out regions))
-                                {
-                                    _logEvent("map regions recovered");
-                                    result.Regions = regions;
-                                    break;
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-
-                    if (result.Triggers == null && Settings.CreateVisualTriggers)
-                    {
-                        _logEvent("Decompiling map triggers");
-                        foreach (var enumValue in Enum.GetValues(typeof(MapTriggersFormatVersion)).Cast<MapTriggersFormatVersion>().OrderBy(x => x == map?.Triggers?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
-                        {
-                            foreach (var subEnumValue in Enum.GetValues(typeof(MapTriggersSubVersion)).Cast<MapTriggersSubVersion?>().Concat(new[] { (MapTriggersSubVersion?)null }).OrderBy(x => x == map?.Triggers?.SubVersion ? 0 : 1).ThenByDescending(x => x == null ? int.MaxValue : (int)x))
-                            {
-                                MapTriggers triggers;
-                                try
-                                {
-                                    if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers))
-                                    {
-                                        var triggerDefinitions = triggers.TriggerItems.OfType<TriggerDefinition>().ToList();
-                                        if (triggerDefinitions.Count > 1)
-                                        {
-                                            triggerDefinitions[0].Description = ATTRIB + (triggerDefinitions[0].Description ?? "");
-
-                                            foreach (var trigger in triggerDefinitions)
-                                            {
-                                                trigger.Functions.RemoveAll(x => string.Equals(x.ToString(), "CustomScriptCode(\"\")", StringComparison.InvariantCultureIgnoreCase));
-                                                foreach (var function in trigger.Functions)
-                                                {
-                                                    if (function.Name == "SetVariable" && function.Parameters[1].Type == TriggerFunctionParameterType.String)
-                                                    {
-                                                        var stringValue = function.Parameters[1].Value;
-                                                        if (Regex_ScriptFourCC().IsMatch(stringValue) && map.GetObjectDataTypeForID(stringValue) != null)
-                                                        {
-                                                            var correctedText = $"set udg_{function.Parameters[0].Value}{(function.Parameters[0].ArrayIndexer != null ? $"[{function.Parameters[0].ArrayIndexer.Value}]" : "")} = '{stringValue}'";
-                                                            function.Type = TriggerFunctionType.Action;
-                                                            function.Name = "CustomScriptCode";
-                                                            function.Parameters.Clear();
-                                                            function.Parameters.Add(new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = correctedText });
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            var customScriptFunctions = triggerDefinitions.SelectMany(x => x.Functions).SelectMany(x => x.RecurseNestedTriggerFunctions()).Where(x => x.Name == "CustomScriptCode").SelectMany(x => jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(x.Parameters[0].Value)).ToHashSet();
-                                            var nonRecursedFunctions = customScriptFunctions.ToList();
-                                            do
-                                            {
-                                                foreach (var function in nonRecursedFunctions.ToList())
-                                                {
-                                                    nonRecursedFunctions.Remove(function);
-
-                                                    var nestedFunctions = jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(function.RenderFunctionAsString());
-                                                    foreach (var nestedFunction in nestedFunctions)
-                                                    {
-                                                        if (!customScriptFunctions.Contains(nestedFunction))
-                                                        {
-                                                            customScriptFunctions.Add(nestedFunction);
-                                                            nonRecursedFunctions.Add(nestedFunction);
-                                                        }
-                                                    }
-                                                }
-                                            } while (nonRecursedFunctions.Count > 0);
-
-                                            var sortedFunctionDeclarations = jassScriptDecompiler.Context.FunctionDeclarations.OrderBy(x => jassScriptDecompiler.Context.CompilationUnit.Declarations.IndexOf(x.Value.FunctionDeclaration)).ToList();
-                                            var nonGuiScripts = new StringBuilder();
-                                            foreach (var function in sortedFunctionDeclarations)
-                                            {
-                                                var script = function.Value.RenderFunctionAsString();
-                                                if (!customScriptFunctions.Contains(function.Value))
-                                                {
-                                                    script = string.Join("\r\n", script.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).Select(x => "// " + x));
-                                                }
-                                                nonGuiScripts.Append(script);
-                                                nonGuiScripts.AppendLine();
-                                                nonGuiScripts.AppendLine();
-                                            }
-
-
-                                            _logEvent("map triggers recovered");
-                                            result.Triggers = triggers;
-                                            result.CustomTextTriggers.GlobalCustomScriptCode.Code = nonGuiScripts.ToString();
-                                        }
-                                        break;
-                                    }
-                                }
-                                catch { }
-                            }
-
-                            if (result.Triggers != null)
-                            {
+                                _logEvent("map sounds recovered");
+                                result.Sounds = sounds;
                                 break;
                             }
+                        }
+                        catch { }
+                    }
+                }
+
+                if (result.Cameras == null)
+                {
+                    _logEvent("Decompiling map cameras");
+                    foreach (var enumValue in Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                    {
+                        MapCameras cameras;
+                        try
+                        {
+                            if (jassScriptDecompiler.TryDecompileMapCameras(enumValue, useNewFormat, out cameras))
+                            {
+                                _logEvent("map cameras recovered");
+                                result.Cameras = cameras;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                if (result.Regions == null)
+                {
+                    _logEvent("Decompiling map regions");
+                    foreach (var enumValue in Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                    {
+                        MapRegions regions;
+                        try
+                        {
+                            if (jassScriptDecompiler.TryDecompileMapRegions(enumValue, out regions))
+                            {
+                                _logEvent("map regions recovered");
+                                result.Regions = regions;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                if (result.Triggers == null && Settings.CreateVisualTriggers)
+                {
+                    _logEvent("Decompiling map triggers");
+                    foreach (var enumValue in Enum.GetValues(typeof(MapTriggersFormatVersion)).Cast<MapTriggersFormatVersion>().OrderBy(x => x == map?.Triggers?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                    {
+                        foreach (var subEnumValue in Enum.GetValues(typeof(MapTriggersSubVersion)).Cast<MapTriggersSubVersion?>().Concat(new[] { (MapTriggersSubVersion?)null }).OrderBy(x => x == map?.Triggers?.SubVersion ? 0 : 1).ThenByDescending(x => x == null ? int.MaxValue : (int)x))
+                        {
+                            MapTriggers triggers;
+                            try
+                            {
+                                if (jassScriptDecompiler.TryDecompileMapTriggers(enumValue, subEnumValue, out triggers))
+                                {
+                                    var triggerDefinitions = triggers.TriggerItems.OfType<TriggerDefinition>().ToList();
+                                    if (triggerDefinitions.Count > 1)
+                                    {
+                                        triggerDefinitions[0].Description = ATTRIB + (triggerDefinitions[0].Description ?? "");
+
+                                        foreach (var trigger in triggerDefinitions)
+                                        {
+                                            trigger.Functions.RemoveAll(x => string.Equals(x.ToString(), "CustomScriptCode(\"\")", StringComparison.InvariantCultureIgnoreCase));
+                                            foreach (var function in trigger.Functions)
+                                            {
+                                                if (function.Name == "SetVariable" && function.Parameters[1].Type == TriggerFunctionParameterType.String)
+                                                {
+                                                    var stringValue = function.Parameters[1].Value;
+                                                    if (Regex_ScriptFourCC().IsMatch(stringValue) && map.GetObjectDataTypeForID(stringValue) != null)
+                                                    {
+                                                        var correctedText = $"set udg_{function.Parameters[0].Value}{(function.Parameters[0].ArrayIndexer != null ? $"[{function.Parameters[0].ArrayIndexer.Value}]" : "")} = '{stringValue}'";
+                                                        function.Type = TriggerFunctionType.Action;
+                                                        function.Name = "CustomScriptCode";
+                                                        function.Parameters.Clear();
+                                                        function.Parameters.Add(new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = correctedText });
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        var customScriptFunctions = triggerDefinitions.SelectMany(x => x.Functions).SelectMany(x => x.RecurseNestedTriggerFunctions()).Where(x => x.Name == "CustomScriptCode").SelectMany(x => jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(x.Parameters[0].Value)).ToHashSet();
+                                        var nonRecursedFunctions = customScriptFunctions.ToList();
+                                        do
+                                        {
+                                            foreach (var function in nonRecursedFunctions.ToList())
+                                            {
+                                                nonRecursedFunctions.Remove(function);
+
+                                                var nestedFunctions = jassScriptDecompiler.Context.FunctionDeclarations.ParseScriptForNestedFunctionCalls(function.RenderFunctionAsString());
+                                                foreach (var nestedFunction in nestedFunctions)
+                                                {
+                                                    if (!customScriptFunctions.Contains(nestedFunction))
+                                                    {
+                                                        customScriptFunctions.Add(nestedFunction);
+                                                        nonRecursedFunctions.Add(nestedFunction);
+                                                    }
+                                                }
+                                            }
+                                        } while (nonRecursedFunctions.Count > 0);
+
+                                        var compilationUnit = jassScriptDecompiler.Context.CompilationUnit;
+                                        if (JassSyntaxFactory.TryParseCompilationUnit(jassScript, out var originalCompilationUnit))
+                                        {
+                                            compilationUnit = originalCompilationUnit;
+                                        }
+
+                                        var sortedFunctionDeclarations = compilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().OrderBy(x => compilationUnit.Declarations.IndexOf(x)).ToList();
+
+                                        var triggerNames = triggerDefinitions.Select(x => x.Name).ToHashSet(StringComparer.InvariantCultureIgnoreCase);
+                                        var autoGeneratedTriggerFunctions = sortedFunctionDeclarations.Where(x =>
+                                        {
+                                            var name = x.FunctionDeclarator.IdentifierName.Name;
+                                            name = name.TrimStart("Init");
+                                            name = name.TrimStart("Trig_");
+                                            name = name.TrimEnd("_Actions");
+                                            name = name.TrimEnd("_Conditions");
+                                            var funcIndex = name.LastIndexOf("_Func");
+                                            if (funcIndex != -1)
+                                            {
+                                                name = name.Substring(0, funcIndex);
+                                            }
+                                            name = name.Replace("_", " ");
+                                            return triggerNames.Contains(name);
+                                        }).ToList();
+
+                                        var customScriptFunctionNames = customScriptFunctions.Select(x => x.FunctionDeclaration.FunctionDeclarator.IdentifierName.Name).ToHashSet();
+                                        var nonGuiScripts = new StringBuilder();
+                                        foreach (var function in sortedFunctionDeclarations)
+                                        {
+                                            var script = function.RenderFunctionAsString();
+                                            var functionName = function.FunctionDeclarator.IdentifierName.Name;
+                                            if (_nativeEditorFunctions.Contains(functionName) || (autoGeneratedTriggerFunctions.Contains(function) && !customScriptFunctionNames.Contains(functionName)))
+                                            {
+                                                script = string.Join("\r\n", script.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).Select(x => "// " + x));
+                                            }
+                                            nonGuiScripts.Append(script);
+                                            nonGuiScripts.AppendLine();
+                                            nonGuiScripts.AppendLine();
+                                        }
+
+
+                                        _logEvent("map triggers recovered");
+                                        result.Triggers = triggers;
+                                        result.CustomTextTriggers.GlobalCustomScriptCode.Code = nonGuiScripts.ToString();
+                                    }
+                                    break;
+                                }
+                            }
+                            catch { }
                         }
 
                         if (result.Triggers != null)
                         {
-                            var sortedTriggerItems = result.Triggers.TriggerItems.OrderBy(x => x.Id).ToList();
-                            result.Triggers.TriggerItems.Clear();
-                            result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
+                            break;
+                        }
+                    }
 
-                            foreach (var triggerItem in result.Triggers.TriggerItems)
+                    if (result.Triggers != null)
+                    {
+                        var sortedTriggerItems = result.Triggers.TriggerItems.OrderBy(x => x.Id).ToList();
+                        result.Triggers.TriggerItems.Clear();
+                        result.Triggers.TriggerItems.AddRange(sortedTriggerItems);
+
+                        foreach (var triggerItem in result.Triggers.TriggerItems)
+                        {
+                            if (triggerItem is TriggerDefinition trigger)
                             {
-                                if (triggerItem is TriggerDefinition trigger)
+                                var tooLong = trigger.Functions.Where(x => x.ToString().Length >= 1023).ToList();
+                                foreach (var function in tooLong)
                                 {
-                                    var tooLong = trigger.Functions.Where(x => x.ToString().Length >= 1023).ToList();
-                                    foreach (var function in tooLong)
+                                    var index = trigger.Functions.IndexOf(function);
+                                    trigger.Functions.RemoveAt(index);
+                                    trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
+                                    var chunks = function.ToString().Chunk(1020).Select(x => new string(x)).ToList();
+                                    foreach (var chunk in chunks)
                                     {
-                                        var index = trigger.Functions.IndexOf(function);
-                                        trigger.Functions.RemoveAt(index);
-                                        trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = "** WAR3MAP.J LINE TOO LONG TO IMPORT INTO GUI MUST BE RE-CODED BY HAND **", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
-                                        var chunks = function.ToString().Chunk(1020).Select(x => new string(x)).ToList();
-                                        foreach (var chunk in chunks)
-                                        {
-                                            trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
-                                        }
+                                        trigger.Functions.Insert(index++, new TriggerFunction() { IsEnabled = true, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Value = $"// {chunk}", Type = TriggerFunctionParameterType.String } }, Type = TriggerFunctionType.Action, ChildFunctions = new List<TriggerFunction>() });
                                     }
                                 }
                             }
+                        }
+
+                        foreach (var variable in result.Triggers.Variables)
+                        {
+                            if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
+                            {
+                                var fromRawCode = variable.InitialValue.FromRawcode().ToString();
+                                if (fromRawCode == "0")
+                                {
+                                    continue;
+                                }
+
+                                var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
+                                switch (slkType)
+                                {
+                                    case null:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                    case SLKType.Ability:
+                                        variable.Type = "abilcode";
+                                        break;
+                                    case SLKType.Buff:
+                                        variable.Type = "buffcode";
+                                        break;
+                                    case SLKType.Destructable:
+                                        variable.Type = "destructablecode";
+                                        break;
+                                    case SLKType.Doodad:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                    case SLKType.Item:
+                                        variable.Type = "itemcode";
+                                        break;
+                                    case SLKType.Unit:
+                                        variable.Type = "unitcode";
+                                        break;
+                                    case SLKType.Upgrade:
+                                        variable.InitialValue = fromRawCode;
+                                        break;
+                                }
+                            }
+                        }
+
+                        bool changed;
+                        do
+                        {
+                            changed = false;
 
                             foreach (var variable in result.Triggers.Variables)
                             {
-                                if ((variable.Type ?? "").Trim().Equals("integer", StringComparison.InvariantCultureIgnoreCase) && variable.InitialValue != "" && !int.TryParse(variable.InitialValue, out var _))
+                                if (variable.IsInitialized && !string.IsNullOrWhiteSpace(variable.InitialValue))
                                 {
-                                    var fromRawCode = variable.InitialValue.FromRawcode().ToString();
-                                    if (fromRawCode == "0")
+                                    var otherVariable = result.Triggers.Variables.FirstOrDefault(x => x.Name == variable.InitialValue) ?? result.Triggers.Variables.FirstOrDefault(x => x.Name == $"udg_{variable.InitialValue}");
+                                    if (otherVariable != null)
                                     {
-                                        continue;
-                                    }
-
-                                    var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
-                                    switch (slkType)
-                                    {
-                                        case null:
-                                            variable.InitialValue = fromRawCode;
-                                            break;
-                                        case SLKType.Ability:
-                                            variable.Type = "abilcode";
-                                            break;
-                                        case SLKType.Buff:
-                                            variable.Type = "buffcode";
-                                            break;
-                                        case SLKType.Destructable:
-                                            variable.Type = "destructablecode";
-                                            break;
-                                        case SLKType.Doodad:
-                                            variable.InitialValue = fromRawCode;
-                                            break;
-                                        case SLKType.Item:
-                                            variable.Type = "itemcode";
-                                            break;
-                                        case SLKType.Unit:
-                                            variable.Type = "unitcode";
-                                            break;
-                                        case SLKType.Upgrade:
-                                            variable.InitialValue = fromRawCode;
-                                            break;
-                                    }
-                                }
-                            }
-
-                            bool changed;
-                            do
-                            {
-                                changed = false;
-
-                                foreach (var variable in result.Triggers.Variables)
-                                {
-                                    if (variable.IsInitialized && !string.IsNullOrWhiteSpace(variable.InitialValue))
-                                    {
-                                        var otherVariable = result.Triggers.Variables.FirstOrDefault(x => x.Name == variable.InitialValue) ?? result.Triggers.Variables.FirstOrDefault(x => x.Name == $"udg_{variable.InitialValue}");
-                                        if (otherVariable != null)
+                                        if (!otherVariable.IsInitialized || variable.Name == otherVariable.InitialValue || variable.Name == $"udg_{otherVariable.InitialValue}")
                                         {
-                                            if (!otherVariable.IsInitialized || variable.Name == otherVariable.InitialValue || variable.Name == $"udg_{otherVariable.InitialValue}")
-                                            {
-                                                variable.IsInitialized = false;
-                                                variable.InitialValue = "";
-                                            }
-                                            else
-                                            {
-                                                variable.InitialValue = otherVariable.InitialValue;
-                                            }
-
-                                            changed = true;
-                                            break;
+                                            variable.IsInitialized = false;
+                                            variable.InitialValue = "";
                                         }
-                                    }
-                                }
-                            } while (changed);
-                        }
-                    }
-
-                    if (result.Units == null)
-                    {
-                        _logEvent("Decompiling map units");
-                        foreach (var enumValue in Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderBy(x => x == map?.Doodads?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
-                        {
-                            foreach (var subEnumValue in Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderBy(x => x == map?.Doodads?.SubVersion ? 0 : 1).ThenByDescending(x => x))
-                            {
-                                MapUnits units;
-                                try
-                                {
-                                    if (jassScriptDecompiler.TryDecompileMapUnits(enumValue, subEnumValue, useNewFormat, out units, out var unitsDecompiledFromVariableName) && units?.Units?.Any() == true)
-                                    {
-                                        result.Units = units;
-                                        result.UnitsDecompiledFromVariableName = unitsDecompiledFromVariableName;
-
-                                        _logEvent("map units recovered");
-                                        if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
+                                        else
                                         {
-                                            _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                                            variable.InitialValue = otherVariable.InitialValue;
                                         }
 
+                                        changed = true;
                                         break;
                                     }
                                 }
-                                catch { }
                             }
-
-                            if (result.Units != null)
-                            {
-                                break;
-                            }
-                        }
+                        } while (changed);
                     }
                 }
 
-                return result;
-            };
+                if (result.Units == null)
+                {
+                    _logEvent("Decompiling map units");
+                    foreach (var enumValue in Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderBy(x => x == map?.Doodads?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
+                    {
+                        foreach (var subEnumValue in Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderBy(x => x == map?.Doodads?.SubVersion ? 0 : 1).ThenByDescending(x => x))
+                        {
+                            MapUnits units;
+                            try
+                            {
+                                if (jassScriptDecompiler.TryDecompileMapUnits(enumValue, subEnumValue, useNewFormat, out units, out var unitsDecompiledFromVariableName) && units?.Units?.Any() == true)
+                                {
+                                    result.Units = units;
+                                    result.UnitsDecompiledFromVariableName = unitsDecompiledFromVariableName;
 
+                                    _logEvent("map units recovered");
+                                    if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
+                                    {
+                                        _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                                    }
 
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+
+                        if (result.Units != null)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (result.UnitsDecompiledFromVariableName?.Any() == true)
+            {
+                result.Triggers ??= new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4) { GameVersion = 2 };
+                var maxTriggerItemId = result.Triggers.TriggerItems?.Any() == true ? result.Triggers.TriggerItems.Select(x => x.Id).Max()+1 : 0;
+                var rootCategory = result.Triggers.TriggerItems.FirstOrDefault(x => x.Type == TriggerItemType.RootCategory);
+                if (rootCategory == null)
+                {
+                    rootCategory = new TriggerCategoryDefinition(TriggerItemType.RootCategory) { Id = maxTriggerItemId++, ParentId = -1, Name = "script.w3x" };
+                    result.Triggers.TriggerItems.Add(rootCategory);
+                }
+                var category = result.Triggers.TriggerItems.FirstOrDefault(x => x.Type == TriggerItemType.Category);
+                if (category == null)
+                {
+                    category = new TriggerCategoryDefinition(TriggerItemType.Category) { Id = maxTriggerItemId++, ParentId = rootCategory.Id, Name = "Deprotect ObjectManager Variables", IsExpanded = true };
+                    result.Triggers.TriggerItems.Add(category);
+                }
+
+                var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = false, IsInitiallyOn = false };
+                var variables = result.Units.Units.Select(x => x.GetVariableName_BugFixPendingPR()).Concat(result.Cameras.Cameras.Select(x => x.GetVariableName())).ToList();
+                foreach (var variable in variables)
+                {
+                    var isUnit = variable.StartsWith("gg_unit_");
+                    var isItem = variable.StartsWith("gg_item_");
+
+                    var jassVariableSearchString = isUnit || isItem ? variable.Substring(0, variable.Length - 5) : variable; // Remove _#### (CreationNumber) suffix since it changes after deprotection & having extra variables won't break anything
+
+                    if (!jassScript.Contains(jassVariableSearchString))
+                    {
+                        continue;
+                    }
+
+                    if (isUnit)
+                    {
+                        var triggerFunction = new TriggerFunction() { Name = "ResetUnitAnimation", Type = TriggerFunctionType.Action };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
+                        emptyVariableTrigger.Functions.Add(triggerFunction);
+                    }
+                    else if (isItem)
+                    {
+                        var triggerFunction = new TriggerFunction() { Name = "UnitDropItemSlotBJ", Type = TriggerFunctionType.Action };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Function, Value = "GetLastCreatedUnit", Function = new TriggerFunction() { Name = "GetLastCreatedUnit", Type = TriggerFunctionType.Call, IsEnabled = true } } });
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "1" } });
+                        emptyVariableTrigger.Functions.Add(triggerFunction);
+                    }
+                    else if (variable.StartsWith("gg_cam_"))
+                    {
+                        var triggerFunction = new TriggerFunction() { Name = "BlzCameraSetupGetLabel", Type = TriggerFunctionType.Action };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
+                        emptyVariableTrigger.Functions.Add(triggerFunction);
+                    }
+                }
+                result.Triggers.TriggerItems.Add(emptyVariableTrigger);
+            }
+
+            return result;
+        }
+
+        protected ScriptMetaData DecompileJassScriptMetaData(string jassScript)
+        {
             /*
                 Algorithm Note: decompiler looks for patterns of specific function names. Obfuscation may have moved the code around, but call stack must start from main or config function or game would break.
                 Do DepthFirstSearch of all recursive lines of code executing from config/main (ignoring undefined functions assuming they're blizzard natives) & copy/paste them at the bottom of each native editor function
@@ -2080,7 +2161,7 @@ namespace WC3MapDeprotector
             var editorSpecificCompilationUnit = new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray());
             var editorSpecificJassScript = editorSpecificCompilationUnit.RenderScriptAsString();
 
-            var firstPass = DecompileJassScriptMetaData_Internal(editorSpecificJassScript);
+            var firstPass = DecompileJassScriptMetaData_Internal(jassScript, editorSpecificJassScript);
 
             if (firstPass == null)
             {
@@ -2113,8 +2194,9 @@ namespace WC3MapDeprotector
                 return firstPass;
             }
 
+            // _#### (CreationNumber) suffix changes for everything in ObjectManager during deprotection so we have to rename the variables in script to match
             var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), correctedUnitVariableNames.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => new JassIdentifierNameSyntax(x.Last().Value)));
-            if (!renamer.TryRenameCompilationUnit(editorSpecificCompilationUnit, out var secondPass))
+            if (!renamer.TryRenameCompilationUnit(jassParsed.CompilationUnit, out var secondPass) || !renamer.TryRenameCompilationUnit(editorSpecificCompilationUnit, out var editorSpecificSecondPass))
             {
                 return firstPass;
             }
@@ -2122,7 +2204,7 @@ namespace WC3MapDeprotector
             _logEvent("Global generated variables renamed.");
             _logEvent("Starting decompile war3map script 2nd pass.");
 
-            var result = DecompileJassScriptMetaData_Internal(secondPass.RenderScriptAsString());
+            var result = DecompileJassScriptMetaData_Internal(secondPass.RenderScriptAsString(), editorSpecificSecondPass.RenderScriptAsString());
             if (result == null)
             {
                 return firstPass;
@@ -2854,7 +2936,7 @@ namespace WC3MapDeprotector
                                 userDefinedGlobalVariableInitializationExpressions.Add($"set {name} = {initializerString}");
                             }
                         }
-                        else if(name.StartsWith("gg_", StringComparison.InvariantCultureIgnoreCase))
+                        else if (name.StartsWith("gg_", StringComparison.InvariantCultureIgnoreCase))
                         {
                             if (name.StartsWith("gg_trg_"))
                             {

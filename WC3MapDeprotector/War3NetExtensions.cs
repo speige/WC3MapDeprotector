@@ -333,10 +333,15 @@ namespace WC3MapDeprotector
 
         public static string RenderFunctionAsString(this FunctionDeclarationContext function)
         {
+            return function.FunctionDeclaration.RenderFunctionAsString();
+        }
+
+        public static string RenderFunctionAsString(this JassFunctionDeclarationSyntax function)
+        {
             using (var scriptWriter = new StringWriter())
             {
                 var renderer = new JassRenderer(scriptWriter);
-                renderer.Render(function.FunctionDeclaration);
+                renderer.Render(function);
                 renderer.RenderNewLine();
                 return scriptWriter.GetStringBuilder().ToString();
             }

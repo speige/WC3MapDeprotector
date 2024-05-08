@@ -11,5 +11,25 @@ namespace WC3MapDeprotector
                 return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-", "");
             }
         }
+
+        public static string TrimStart(this string text, string trim)
+        {
+            if (text.StartsWith(trim))
+            {
+                return text.Substring(trim.Length);
+            }
+
+            return text;
+        }
+
+        public static string TrimEnd(this string text, string trim)
+        {
+            if (text.EndsWith(trim))
+            {
+                return text.Substring(0, text.Length - trim.Length);
+            }
+
+            return text;
+        }
     }
 }
