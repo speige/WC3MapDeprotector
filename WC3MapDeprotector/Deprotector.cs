@@ -485,7 +485,6 @@ namespace WC3MapDeprotector
                 ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
             }
 
-            var test = Map.Open(@"c:\temp\mapTest.w3x");
             _defaultSLKData = new Map();
             var defaultSLKFiles = Directory.GetFiles(Path.Combine(SLKRecoverPath, "STD")).ToList();
             if (defaultSLKFiles.Count > 0)
