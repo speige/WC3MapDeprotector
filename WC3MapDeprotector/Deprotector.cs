@@ -1932,7 +1932,7 @@ namespace WC3MapDeprotector
 
                     if (userDefinedGlobalVariableInitializationExpressions.Any())
                     {
-                        jassScript += $"\r\nfunction {initGlobalsDeprotected} takes nothing returns nothing\r\ncall {mainRenamed}()\r\n\r\n{userDefinedGlobalVariableInitializationExpressions.Aggregate((x, y) => $"{x}\r\n{y}")}\r\nendfunction\r\n";
+                        jassScript += $"\r\nfunction {initGlobalsDeprotected} takes nothing returns nothing\r\n{userDefinedGlobalVariableInitializationExpressions.Aggregate((x, y) => $"{x}\r\n{y}")}\r\n\r\ncall {mainRenamed}()\r\n\r\nendfunction\r\n";
                     }
 
                     result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = jassScript }, GlobalCustomScriptComment = "Deprotected global script. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
@@ -2245,7 +2245,7 @@ namespace WC3MapDeprotector
                     result.Triggers.TriggerItems.Add(category);
                 }
 
-                var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = false, IsInitiallyOn = false };
+                var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = true, IsInitiallyOn = false };
                 var variables = result.Units.Units.Select(x => x.GetVariableName_BugFixPendingPR()).Concat(result.Cameras.Cameras.Select(x => x.GetVariableName())).ToList();
                 foreach (var variable in variables)
                 {
@@ -2261,13 +2261,13 @@ namespace WC3MapDeprotector
 
                     if (isUnit)
                     {
-                        var triggerFunction = new TriggerFunction() { Name = "ResetUnitAnimation", Type = TriggerFunctionType.Action };
+                        var triggerFunction = new TriggerFunction() { Name = "ResetUnitAnimation", Type = TriggerFunctionType.Action, IsEnabled = true };
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
                         emptyVariableTrigger.Functions.Add(triggerFunction);
                     }
                     else if (isItem)
                     {
-                        var triggerFunction = new TriggerFunction() { Name = "UnitDropItemSlotBJ", Type = TriggerFunctionType.Action };
+                        var triggerFunction = new TriggerFunction() { Name = "UnitDropItemSlotBJ", Type = TriggerFunctionType.Action, IsEnabled = true };
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Function, Value = "GetLastCreatedUnit", Function = new TriggerFunction() { Name = "GetLastCreatedUnit", Type = TriggerFunctionType.Call, IsEnabled = true } } });
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "1" } });
@@ -2275,7 +2275,7 @@ namespace WC3MapDeprotector
                     }
                     else if (variable.StartsWith("gg_cam_"))
                     {
-                        var triggerFunction = new TriggerFunction() { Name = "BlzCameraSetupGetLabel", Type = TriggerFunctionType.Action };
+                        var triggerFunction = new TriggerFunction() { Name = "BlzCameraSetupGetLabel", Type = TriggerFunctionType.Action, IsEnabled = true };
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
                         emptyVariableTrigger.Functions.Add(triggerFunction);
                     }
