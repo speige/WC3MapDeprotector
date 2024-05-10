@@ -1908,7 +1908,7 @@ namespace WC3MapDeprotector
                         }
                     }
 
-                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitCustomTriggers" };
+                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "InitGlobals", "InitCustomTriggers", "CreateAllDestructables" };
                     var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
                     foreach (var nativeEditorFunction in _nativeEditorFunctions)
                     {
