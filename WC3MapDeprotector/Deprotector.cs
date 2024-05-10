@@ -1686,6 +1686,9 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"^[0-9a-z]{4}$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptFourCC();
 
+        [GeneratedRegex(@"set\s+(\w+)\s*=\s*0[\r\n\s]+loop[\r\n\s]+exitwhen\s*\(\1\s*>\s*([0-9]+)\)[\r\n\s]+set\s+(\w+)\[\1\]\s*=\s*[^\r\n]*[\r\n\s]+set\s+\1\s*=\s*\1\s*\+\s*1[\r\n\s]+endloop[\r\n\s]+", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+        protected static partial Regex Regex_GetArraySize();
+
         protected ScriptMetaData DecompileJassScriptMetaData_Internal(string jassScript, string editorSpecificJassScript)
         {
             var result = new ScriptMetaData();
@@ -1798,6 +1801,8 @@ namespace WC3MapDeprotector
                     var withoutGlobals = lines.Take(startGlobalsLineIdx).Concat(lines.Skip(endGlobalsLineIdx + 1)).ToArray();
                     jassScript = new StringBuilder().AppendJoin("\r\n", withoutGlobals).ToString();
 
+                    var arraySizeMatches = Regex_GetArraySize().Matches(jassScript).ToDictionary(x => x.Groups[3].Value, x => x);
+
                     var userDefinedGlobalVariableInitializationExpressions = new List<string>(); //todo: also include all code from InitGlobals function?
                     var globalLines = lines.Skip(startGlobalsLineIdx + 1).Take(endGlobalsLineIdx - startGlobalsLineIdx - 1).ToArray();
                     foreach (var globalLine in globalLines)
@@ -1817,7 +1822,14 @@ namespace WC3MapDeprotector
                                 var arraySize = 1;
                                 if (isArray)
                                 {
-                                    arraySize = 2; //todo: parse from InitGlobals exitwhen (i > 0)
+                                    if (arraySizeMatches.TryGetValue(name, out var arraySizeMatch) && int.TryParse(arraySizeMatch.Groups[2].Value, out var arraySizeParsed))
+                                    {
+                                        arraySize = arraySizeParsed + 1;
+                                    }
+                                    else
+                                    {
+                                        arraySize = 2;
+                                    }
                                 }
 
                                 if (hasInitializer)
