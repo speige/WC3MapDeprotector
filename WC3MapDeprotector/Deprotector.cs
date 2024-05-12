@@ -436,9 +436,9 @@ namespace WC3MapDeprotector
             }
         }
 
-        public string ReadAllTextAscii(string fileName)
+        public string ReadAllText(string fileName)
         {
-            return ConvertBytesToAscii(File.ReadAllBytes(fileName));
+            return File.ReadAllText(fileName);
         }
 
         public string ConvertBytesToAscii(byte[] bytes)
@@ -884,7 +884,7 @@ namespace WC3MapDeprotector
                 var basePathScriptFileName = Path.Combine(DiscoveredFilesPath, Path.GetFileName(scriptFile));
                 if (File.Exists(basePathScriptFileName) && !string.Equals(scriptFile, basePathScriptFileName, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (ReadAllTextAscii(scriptFile) != ReadAllTextAscii(basePathScriptFileName))
+                    if (ReadAllText(scriptFile) != ReadAllText(basePathScriptFileName))
                     {
                         _deprotectionResult.CriticalWarningCount++;
                         _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor or use MPQ tool to replace war3map.j or war3map.lua file");
@@ -902,7 +902,7 @@ namespace WC3MapDeprotector
             ScriptMetaData scriptMetaData = null;
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                jassScript = $"// {ATTRIB}{ReadAllTextAscii(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
+                jassScript = $"// {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
                     jassScript = DeObfuscateJassScript(map_ObjectDataOnly, jassScript);
@@ -914,7 +914,7 @@ namespace WC3MapDeprotector
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
                 _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. It will open in the editor, but the render screen will be missing units/items/regions/cameras/sounds.");
-                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadAllTextAscii(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
+                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
                 var temporaryScriptMetaData = DecompileLuaScriptMetaData(luaScript);
                 if (scriptMetaData == null)
                 {
@@ -1056,8 +1056,8 @@ namespace WC3MapDeprotector
                 transpiler.IgnoreEmptyStatements = true;
                 transpiler.KeepFunctionsSeparated = true;
 
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllTextAscii(Path.Combine(ExeFolderPath, "common.j"))));
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllTextAscii(Path.Combine(ExeFolderPath, "blizzard.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllText(Path.Combine(ExeFolderPath, "common.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllText(Path.Combine(ExeFolderPath, "blizzard.j"))));
                 var jassParsed = JassSyntaxFactory.ParseCompilationUnit(jassScript);
 
                 var luaCompilationUnit = transpiler.Transpile(jassParsed);
@@ -1100,7 +1100,7 @@ namespace WC3MapDeprotector
 
             if (File.Exists(Path.Combine(baseFolder, "war3map.j")))
             {
-                var script = ReadAllTextAscii(Path.Combine(baseFolder, "war3map.j"));
+                var script = ReadAllText(Path.Combine(baseFolder, "war3map.j"));
                 var blz = Regex_JassScriptInitBlizzard().Match(script);
                 if (blz.Success)
                 {
@@ -1111,7 +1111,7 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                File.WriteAllBytes(Path.Combine(baseFolder, "war3map.j"), script.ToCharArray().Select(x => (byte)x).ToArray());
+                File.WriteAllText(Path.Combine(baseFolder, "war3map.j"), script);
             }
             else if (File.Exists(Path.Combine(baseFolder, "war3map.lua")))
             {
@@ -2851,7 +2851,7 @@ namespace WC3MapDeprotector
         {
             using (var v8 = new V8ScriptEngine())
             {
-                v8.Execute(ReadAllTextAscii(Path.Combine(ExeFolderPath, "luaparse.js")));
+                v8.Execute(ReadAllText(Path.Combine(ExeFolderPath, "luaparse.js")));
                 v8.Script.luaScript = luaScript;
                 v8.Execute("ast = JSON.stringify(luaparse.parse(luaScript, { luaVersion: '5.3' }));");
                 return JsonConvert.DeserializeObject<LuaAST>((string)v8.Script.ast, new JsonSerializerSettings() { MissingMemberHandling = MissingMemberHandling.Ignore, MaxDepth = Int32.MaxValue });
