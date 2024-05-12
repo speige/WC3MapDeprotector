@@ -18,6 +18,12 @@ using War3Net.Common.Extensions;
 
 namespace War3Net.CodeAnalysis.Decompilers
 {
+    public class UnitDataDecompilationMetaData
+    {
+        public string DecompiledFromVariableName { get; set; }
+        public string WaygateDestinationRegionName { get; set; }
+    }
+
     public partial class JassScriptDecompiler
     {
         int CreationNumber = 0;
@@ -27,7 +33,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             MapWidgetsSubVersion subVersion,
             bool useNewFormat,
             [NotNullWhen(true)] out MapUnits? mapUnits,
-            [NotNullWhen(true)] out Dictionary<UnitData, string>? decompiledFromVariableName)
+            [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             var createAllUnits = GetFunction("CreateAllUnits");
             var createAllItems = GetFunction("CreateAllItems");
@@ -40,7 +46,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 initCustomPlayerSlots is null)
             {
                 mapUnits = null;
-                decompiledFromVariableName = null;
+                decompilationMetaData = null;
                 return false;
             }
 
@@ -53,7 +59,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 subVersion,
                 useNewFormat,
                 out mapUnits,
-                out decompiledFromVariableName))
+                out decompilationMetaData))
             {
                 createAllUnits.Handled = true;
                 createAllItems.Handled = true;
@@ -63,7 +69,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapUnits = null;
-            decompiledFromVariableName = null;
+            decompilationMetaData = null;
             return false;
         }
 
@@ -76,7 +82,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             MapWidgetsSubVersion subVersion,
             bool useNewFormat,
             [NotNullWhen(true)] out MapUnits? mapUnits,
-            [NotNullWhen(true)] out Dictionary<UnitData, string>? decompiledFromVariableName)
+            [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             if (createAllUnitsFunction is null)
             {
@@ -104,7 +110,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 TryDecompileInitCustomPlayerSlotsFunction(initCustomPlayerSlotsFunction, startLocationPositions, out var startLocations))
             {
                 mapUnits = new MapUnits(formatVersion, subVersion, useNewFormat);
-                decompiledFromVariableName = unitsDecompiledFromVariableName.Concat(itemsDecompiledFromVariableName).ToDictionary(x => x.Key, x => x.Value);
+                decompilationMetaData = unitsDecompiledFromVariableName.Concat(itemsDecompiledFromVariableName).ToDictionary(x => x.Key, x => x.Value);
 
                 mapUnits.Units.AddRange(units);
                 mapUnits.Units.AddRange(items);
@@ -114,17 +120,17 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapUnits = null;
-            decompiledFromVariableName = null;
+            decompilationMetaData = null;
             return false;
         }
 
-        private bool TryDecompileCreateUnitsFunction(JassFunctionDeclarationSyntax createUnitsFunction, [NotNullWhen(true)] out List<UnitData>? units, [NotNullWhen(true)] out Dictionary<UnitData, string>? decompiledFromVariableName)
+        private bool TryDecompileCreateUnitsFunction(JassFunctionDeclarationSyntax createUnitsFunction, [NotNullWhen(true)] out List<UnitData>? units, [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             var localPlayerVariableName = (string?)null;
             var localPlayerVariableValue = (int?)null;
 
             units = new List<UnitData>();
-            decompiledFromVariableName = new Dictionary<UnitData, string>();
+            decompilationMetaData = new Dictionary<UnitData, UnitDataDecompilationMetaData>();
 
             foreach (var statement in createUnitsFunction.Body.Statements)
             {
@@ -196,7 +202,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                     unit.SkinId = unit.TypeId;
 
-                                    decompiledFromVariableName[unit] = setStatement.IdentifierName.Name;
+                                    if (!decompilationMetaData.ContainsKey(unit))
+                                    {
+                                        decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
+                                    }
+                                    decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                     units.Add(unit);
                                 }
                             }
@@ -225,7 +235,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                                         CreationNumber = CreationNumber++
                                     };
 
-                                    decompiledFromVariableName[unit] = setStatement.IdentifierName.Name;
+                                    if (!decompilationMetaData.ContainsKey(unit))
+                                    {
+                                        decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
+                                    }
+                                    decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                     units.Add(unit);
                                 }
                             }
@@ -420,6 +434,24 @@ namespace War3Net.CodeAnalysis.Decompilers
                         // TODO
                         continue;
                     }
+                    else if (string.Equals(callStatement.IdentifierName.Name, "WaygateSetDestination", StringComparison.Ordinal))
+                    {
+                        var argument = callStatement.Arguments?.Arguments.Length >= 1 ? callStatement.Arguments.Arguments[1] as JassInvocationExpressionSyntax : null;
+                        if (argument?.Arguments?.Arguments.Length > 0)
+                        {
+                            var region = argument.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax;
+                            if (region != null)
+                            {
+                                var unit = units[^1];
+                                if (!decompilationMetaData.ContainsKey(unit))
+                                {
+                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
+                                }
+                                decompilationMetaData[unit].WaygateDestinationRegionName = region?.IdentifierName?.Name;
+                            }
+                        }
+                        continue;
+                    }
                     /*
                     else if (callStatement.Arguments.Arguments.IsEmpty)
                     {
@@ -455,10 +487,10 @@ namespace War3Net.CodeAnalysis.Decompilers
             return true;
         }
 
-        private bool TryDecompileCreateItemsFunction(JassFunctionDeclarationSyntax createItemsFunction, [NotNullWhen(true)] out List<UnitData>? items, [NotNullWhen(true)] out Dictionary<UnitData, string>? decompiledFromVariableName)
+        private bool TryDecompileCreateItemsFunction(JassFunctionDeclarationSyntax createItemsFunction, [NotNullWhen(true)] out List<UnitData>? items, [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             items = new List<UnitData>();
-            decompiledFromVariableName = new Dictionary<UnitData, string>();
+            decompilationMetaData = new Dictionary<UnitData, UnitDataDecompilationMetaData>();
 
             foreach (var statement in createItemsFunction.Body.Statements)
             {
@@ -493,7 +525,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                 unit.SkinId = unit.TypeId;
 
-                                decompiledFromVariableName[unit] = setStatement.IdentifierName.Name;
+                                if (!decompilationMetaData.ContainsKey(unit))
+                                {
+                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
+                                }
+                                decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                 items.Add(unit);
                             }
                         }
@@ -519,7 +555,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     CreationNumber = CreationNumber++
                                 };
 
-                                decompiledFromVariableName[unit] = setStatement.IdentifierName.Name;
+                                if (!decompilationMetaData.ContainsKey(unit))
+                                {
+                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
+                                }
+                                decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                 items.Add(unit);
                             }
                         }

@@ -15,6 +15,7 @@ using War3Net.Build.Extensions;
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.Build.Object;
+using War3Net.Build.Environment;
 
 namespace WC3MapDeprotector
 {
@@ -183,9 +184,14 @@ namespace WC3MapDeprotector
             return result;
         }
 
+        public static string GetVariableName(this War3Net.Build.Environment.Region region)
+        {
+            return $"gg_rct_{region.Name.Replace(' ', '_')}";
+        }
+
         public static string GetVariableName(this Sound sound)
         {
-            return $"gg_rct_{sound.Name.Replace(' ', '_')}";
+            return $"gg_snd_{sound.Name.Replace(' ', '_')}";
         }
 
         public static string RenderScriptAsString(this JassCompilationUnitSyntax compilationUnit)

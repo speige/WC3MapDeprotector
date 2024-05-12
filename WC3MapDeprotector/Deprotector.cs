@@ -276,7 +276,7 @@ namespace WC3MapDeprotector
             public MapCustomTextTriggers CustomTextTriggers { get; set; }
             public TriggerStrings TriggerStrings { get; set; }
             public MapUnits Units { get; set; }
-            public Dictionary<UnitData, string> UnitsDecompiledFromVariableName { get; set; }
+            public Dictionary<UnitData, UnitDataDecompilationMetaData> UnitDecompilationMetaData { get; set; }
 
             public List<MpqKnownFile> ConvertToFiles()
             {
@@ -2207,7 +2207,7 @@ namespace WC3MapDeprotector
                                 if (jassScriptDecompiler.TryDecompileMapUnits(enumValue, subEnumValue, useNewFormat, out units, out var unitsDecompiledFromVariableName) && units?.Units?.Any() == true)
                                 {
                                     result.Units = units;
-                                    result.UnitsDecompiledFromVariableName = unitsDecompiledFromVariableName;
+                                    result.UnitDecompilationMetaData = unitsDecompiledFromVariableName;
 
                                     _logEvent("map units recovered");
                                     if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
@@ -2229,7 +2229,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            if (result.UnitsDecompiledFromVariableName?.Any() == true)
+            if (result.UnitDecompilationMetaData?.Any() == true)
             {
                 result.Triggers ??= new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4) { GameVersion = 2 };
                 var maxTriggerItemId = result.Triggers.TriggerItems?.Any() == true ? result.Triggers.TriggerItems.Select(x => x.Id).Max()+1 : 0;
@@ -2282,6 +2282,21 @@ namespace WC3MapDeprotector
                     }
                 }
                 result.Triggers.TriggerItems.Add(emptyVariableTrigger);
+            }
+
+            if (result.Units != null && result.UnitDecompilationMetaData != null && result.Regions != null)
+            {
+                foreach (var unit in result.Units.Units)
+                {
+                    if (result.UnitDecompilationMetaData.TryGetValue(unit, out var decompilationMetaData))
+                    {
+                        var region = result.Regions.Regions.FirstOrDefault(x => x.GetVariableName() == decompilationMetaData.WaygateDestinationRegionName);
+                        if (region != null)
+                        {
+                            unit.WaygateDestinationRegionId = region.CreationNumber;
+                        }
+                    }
+                }
             }
 
             return result;
@@ -2359,9 +2374,9 @@ namespace WC3MapDeprotector
             decompiled = decompiled.Select(x => x.Replace(" ", "_")).ToList();
             var notDecompiledGlobalGenerateds = globalGenerateds.Except(decompiled).ToList();
             correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
-            if (firstPass.UnitsDecompiledFromVariableName != null)
+            if (firstPass.UnitDecompilationMetaData != null)
             {
-                correctedUnitVariableNames.AddRange(firstPass.UnitsDecompiledFromVariableName.Where(x => x.Value.StartsWith("gg_")).Select(x => new KeyValuePair<string, string>(x.Value, x.Key.GetVariableName_BugFixPendingPR())));
+                correctedUnitVariableNames.AddRange(firstPass.UnitDecompilationMetaData.Where(x => x.Value.DecompiledFromVariableName.StartsWith("gg_")).Select(x => new KeyValuePair<string, string>(x.Value.DecompiledFromVariableName, x.Key.GetVariableName_BugFixPendingPR())));
             }
 
             if (!correctedUnitVariableNames.Any())
@@ -2389,7 +2404,7 @@ namespace WC3MapDeprotector
             {
                 result.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
             }
-            result.UnitsDecompiledFromVariableName = null;
+            result.UnitDecompilationMetaData = null;
             return result;
         }
 
@@ -3527,7 +3542,7 @@ endfunction
             var matches = Regex.Matches(escapingRemoved, $"{quoteCharacter}[^${quoteCharacter}]*{quoteCharacter}").Cast<Match>().ToList();
             foreach (var match in matches)
             {
-                result.Add(match.Value.Replace(temporaryEscapeReplacement, quoteCharacter.ToString()));
+                result.Add(match.Value.Trim(quoteCharacter).Replace(temporaryEscapeReplacement, quoteCharacter.ToString()));
             }
 
             return result;
