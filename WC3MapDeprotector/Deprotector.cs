@@ -1686,6 +1686,12 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"^[0-9a-z]{4}$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptFourCC();
 
+        [GeneratedRegex(@"^\s*function\s+(\w+)\s+takes", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_JassFunctionDeclaration();
+
+        [GeneratedRegex(@"^\s*call\s+(\w+)\s*\(", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_JassFunctionCall();
+
         [GeneratedRegex(@"set\s+(\w+)\s*=\s*0[\r\n\s]+loop[\r\n\s]+exitwhen\s*\(\1\s*>\s*([0-9]+)\)[\r\n\s]+set\s+(\w+)\[\1\]\s*=\s*[^\r\n]*[\r\n\s]+set\s+\1\s*=\s*\1\s*\+\s*1[\r\n\s]+endloop[\r\n\s]+", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
         protected static partial Regex Regex_GetArraySize();
 
@@ -1795,12 +1801,71 @@ namespace WC3MapDeprotector
                     result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition(TriggerItemType.RootCategory) { Id = rootCategoryItemIdx, ParentId = -1, Name = "script.w3x" });
                     result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition() { Id = variablesCategoryItemIdx, ParentId = rootCategoryItemIdx, Name = "Variables", IsExpanded = true });
 
-                    var lines = jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                    var lines = jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+
+                    var functionDeclarations = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionDeclaration().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
+                    var functionCalls = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionCall().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
+                    var functions = functionDeclarations.Keys.Concat(functionCalls.Keys).ToHashSet();
+
+                    //todo: decompile "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree"
+                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree" };
+                    var nativeEditorFunctionIndexes = new Dictionary<string, Tuple<int, int>>();
+                    var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
+                    foreach (var nativeEditorFunction in _nativeEditorFunctions)
+                    {
+                        var renamed = nativeEditorFunction;
+                        do
+                        {
+                            renamed += "_old";
+                        } while (functions.Contains(renamed));
+
+                        nativeEditorFunctionsRenamed[nativeEditorFunction] = renamed;
+
+                        var executeFunction = oldNativeEditorFunctionsToExecute.Contains(nativeEditorFunction);
+                        if (functionDeclarations.TryGetValue(nativeEditorFunction, out var declarationMatches))
+                        {
+                            foreach (var declaration in declarationMatches)
+                            {
+                                lines[declaration.lineIdx] = lines[declaration.lineIdx].Replace(nativeEditorFunction, renamed);
+
+                                if (!executeFunction)
+                                {
+                                    var idx = declaration.lineIdx;
+                                    while (true)
+                                    {
+                                        var isEndFunction = lines[idx].Trim().StartsWith("endfunction");
+                                        lines[idx] = "// " + lines[idx];
+                                        if (isEndFunction)
+                                        {
+                                            break;
+                                        }
+                                        idx++;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (functionCalls.TryGetValue(nativeEditorFunction, out var callMatches))
+                        {
+                            foreach (var call in callMatches)
+                            {
+                                if (executeFunction)
+                                {
+                                    lines[call.lineIdx] = lines[call.lineIdx].Replace(nativeEditorFunction, renamed);
+                                }
+                                else
+                                {
+                                    lines[call.lineIdx] = "// " + lines[call.lineIdx];
+                                }
+                            }
+                        }
+                    }
+
                     var startGlobalsLineIdx = lines.FindIndex(x => x.Trim() == "globals");
                     var endGlobalsLineIdx = lines.FindIndex(x => x.Trim() == "endglobals");
                     var withoutGlobals = lines.Take(startGlobalsLineIdx).Concat(lines.Skip(endGlobalsLineIdx + 1)).ToArray();
-                    jassScript = new StringBuilder().AppendJoin("\r\n", withoutGlobals).ToString();
 
+                    jassScript = new StringBuilder().AppendJoin("\r\n", withoutGlobals).ToString();
                     var arraySizeMatches = Regex_GetArraySize().Matches(jassScript).ToDictionary(x => x.Groups[3].Value, x => x);
 
                     var userDefinedGlobalVariableInitializationExpressions = new List<string>(); //todo: also include all code from InitGlobals function?
@@ -1908,22 +1973,6 @@ namespace WC3MapDeprotector
                         }
                     }
 
-                    //todo: decompile "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree"
-                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "InitGlobals", "InitCustomTriggers", "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree" };
-                    var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
-                    foreach (var nativeEditorFunction in _nativeEditorFunctions)
-                    {
-                        var renamed = nativeEditorFunction;
-                        do
-                        {
-                            renamed += "_old";
-                        } while (jassScript.Contains(renamed));
-
-                        nativeEditorFunctionsRenamed[nativeEditorFunction] = renamed;
-
-                        jassScript = Regex.Replace(jassScript, $"function\\s+({nativeEditorFunction})\\s+takes", $"function {renamed} takes", RegexOptions.IgnoreCase);
-                        jassScript = Regex.Replace(jassScript, $"(call {nativeEditorFunction})\\s*\\(", oldNativeEditorFunctionsToExecute.Contains(nativeEditorFunction) ? "$1_old(" : "// $1(", RegexOptions.IgnoreCase);
-                    }
                     var mainRenamed = nativeEditorFunctionsRenamed["main"];
                     var initGlobalsDeprotected = "InitGlobalsDeprotected";
                     while (jassScript.Contains(initGlobalsDeprotected))

@@ -194,6 +194,16 @@ namespace WC3MapDeprotector
             return $"gg_snd_{sound.Name.Replace(' ', '_')}";
         }
 
+        public static string GetVariableName(this Camera camera)
+        {
+            return $"gg_cam_{camera.Name.Replace(' ', '_')}";
+        }
+
+        public static string GetVariableName(this TriggerDefinition trigger)
+        {
+            return $"gg_trg_{trigger.Name.Replace(' ', '_')}";
+        }
+
         public static string RenderScriptAsString(this JassCompilationUnitSyntax compilationUnit)
         {
             using (var writer = new StringWriter())
