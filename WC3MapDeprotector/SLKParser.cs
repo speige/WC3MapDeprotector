@@ -18,6 +18,16 @@ namespace WC3MapDeprotector
             ObjectDataModification = objectDataModification;
         }
 
+        public override int GetHashCode()
+        {
+            return ObjectDataModification?.GetHashCode() ?? 0;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return ObjectDataModification?.Equals((obj as War3NetObjectDataModificationWrapper)?.ObjectDataModification) ?? false;
+        }
+
         public int Level
         {
             get
@@ -140,6 +150,16 @@ namespace WC3MapDeprotector
         public War3NetObjectModificationWrapper(object objectModification)
         {
             ObjectModification = objectModification;
+        }
+
+        public override int GetHashCode()
+        {
+            return ObjectModification?.GetHashCode() ?? 0;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return ObjectModification?.Equals((obj as War3NetObjectModificationWrapper)?.ObjectModification) ?? false;
         }
 
         public override string ToString()
@@ -280,6 +300,16 @@ namespace WC3MapDeprotector
         public War3NetObjectDataWrapper(object objectData)
         {
             ObjectData = objectData;
+        }
+
+        public override int GetHashCode()
+        {
+            return ObjectData?.GetHashCode() ?? 0;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return ObjectData?.Equals((obj as War3NetObjectDataWrapper)?.ObjectData) ?? false;
         }
 
         public byte[] Serialize(Encoding encoding = null)

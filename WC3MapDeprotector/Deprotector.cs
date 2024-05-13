@@ -595,21 +595,70 @@ namespace WC3MapDeprotector
 
                             if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
                             {
+                                //NOTE: ObjectEditorID in BaseValues are formatted as FourCC (OldId property). NewValues are formatted as FourCC:FourCC (NewId:OldId properties). This merges & moves data after decompiling SLK because there can be data in .w3a/etc ObjectEditor files also.
                                 SLKType slkType = SLKParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
-                                var oldObjectData = map.GetObjectDataBySLKType(slkType);
+                                var objectData = map.GetObjectDataBySLKType(slkType);
                                 SetMapFile(map, recoveredFile, true);
-                                var newObjectData = map.GetObjectDataBySLKType(slkType);
+                                var slkObjectData = map.GetObjectDataBySLKType(slkType);
 
-                                //NOTE: ObjectEditorID in BaseValues are formatted as FourCC (OldId property). NewValues are formatted as FourCC:FourCC (NewId:OldId properties).
+                                foreach (var slkValue in slkObjectData.BaseValues)
+                                {
+                                    var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
+                                    if (value == null)
+                                    {
+                                        objectData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList();
+                                    }
+                                    else
+                                    {
+                                        foreach (var slkModification in slkValue.Modifications)
+                                        {
+                                            if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
+                                            {
+                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList();
+                                            }
+                                        }
+                                    }
+                                }
+                                foreach (var slkValue in slkObjectData.NewValues)
+                                {
+                                    var value = objectData.NewValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
+                                    if (value == null)
+                                    {
+                                        objectData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList();
+                                    }
+                                    else
+                                    {
+                                        foreach (var slkModification in slkValue.Modifications)
+                                        {
+                                            if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
+                                            {
+                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList();
+                                            }
+                                        }
+                                    }
+                                }
 
-                                var newObjectDataIds = new HashSet<string>(newObjectData.BaseValues.Select(x => x.ToString()).Concat(newObjectData.NewValues.Select(x => x.ToString())).Concat(newObjectData.NewValues.Select(x => x.NewId.ToRawcode())), StringComparer.Ordinal);
-                                var missingBaseValues = oldObjectData.BaseValues.Where(x => !newObjectDataIds.Contains(x.ToString())).ToList();
-                                newObjectData.BaseValues = newObjectData.BaseValues.Concat(missingBaseValues).ToList();
+                                var toRemoveBaseValues = new List<War3NetObjectModificationWrapper>();
+                                foreach (var baseValue in objectData.BaseValues)
+                                {
+                                    var newValue = objectData.NewValues.FirstOrDefault(x => x.NewId == baseValue.OldId);
+                                    if (newValue != null)
+                                    {
+                                        toRemoveBaseValues.Add(baseValue);
+                                        foreach (var baseModification in baseValue.Modifications)
+                                        {
+                                            var newModification = newValue.Modifications.FirstOrDefault(x => x.Id == baseModification.Id && x.Level == baseModification.Level);
+                                            if (newModification != null)
+                                            {
+                                                newValue.Modifications = newValue.Modifications.Except(new[] { newModification }).ToList();
+                                            }
+                                            newValue.Modifications = newValue.Modifications.Concat(new[] { baseModification }).ToList();
+                                        }
+                                    }
+                                }
+                                objectData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList();
 
-                                var missingNewValues = oldObjectData.NewValues.Where(x => !newObjectDataIds.Contains(x.ToString()) && !newObjectDataIds.Contains(x.NewId.ToRawcode())).ToList();
-                                newObjectData.NewValues = newObjectData.NewValues.Concat(missingNewValues).ToList();
-
-                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), newObjectData.Serialize());
+                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), objectData.Serialize());
                             }
                             else
                             {
