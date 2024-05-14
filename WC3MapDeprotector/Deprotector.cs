@@ -1779,7 +1779,7 @@ namespace WC3MapDeprotector
                     return null;
                 }
 
-                if (result.Sounds == null)
+                if (result.Sounds?.Sounds.Count == 1 && result.Sounds?.Sounds[0] != result.Sounds?.Sounds[0])
                 {
                     _logEvent("Decompiling map sounds");
                     foreach (var enumValue in Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x))

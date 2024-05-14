@@ -147,7 +147,13 @@ namespace War3Net.CodeAnalysis.Decompilers
                 {
                     if (string.Equals(callStatement.IdentifierName.Name, "SetSoundParamsFromLabel", StringComparison.Ordinal))
                     {
-                        continue;
+                        if (callStatement.Arguments.Arguments.Length == 2 &&
+                            callStatement.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax variableReferenceExpression &&
+                            callStatement.Arguments.Arguments[1] is JassStringLiteralExpressionSyntax stringLiteralExpression &&
+                            sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
+                        {
+                            sound.SoundName = stringLiteralExpression.Value;
+                        }
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "SetSoundFacialAnimationLabel", StringComparison.Ordinal))
                     {
