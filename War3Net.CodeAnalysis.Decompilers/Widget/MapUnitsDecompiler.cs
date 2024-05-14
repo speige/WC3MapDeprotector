@@ -392,8 +392,8 @@ namespace War3Net.CodeAnalysis.Decompilers
                     else if (string.Equals(callStatement.IdentifierName.Name, "IssueImmediateOrder", StringComparison.Ordinal))
                     {
                         var abilityName = (callStatement.Arguments.Arguments[1] as JassStringLiteralExpressionSyntax)?.Value;
-                        var matchingAbilityIds = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => y.Id == "aord".FromRawcode() && y.Value.ToString() == abilityName)).Select(x => x.OldId).
-                            Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => y.Id == "aord".FromRawcode() && y.Value.ToString() == abilityName)).Select(x => x.NewId)).ToList();
+                        var matchingAbilityIds = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.OldId).
+                               Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.NewId)).Distinct().ToList();
                         if (string.IsNullOrWhiteSpace(abilityName))
                         {
                             continue;
@@ -479,7 +479,7 @@ namespace War3Net.CodeAnalysis.Decompilers
 
             foreach (var unit in units)
             {
-                var filteredAbilityData = unit.AbilityData.Where(x => x.HeroAbilityLevel != 0).ToList();
+                var filteredAbilityData = unit.AbilityData.Where(x => x.HeroAbilityLevel != 0 || x.IsAutocastActive).ToList();
                 unit.AbilityData.Clear();
                 unit.AbilityData.AddRange(filteredAbilityData);
             }
