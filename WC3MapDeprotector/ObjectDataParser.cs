@@ -114,13 +114,13 @@ namespace WC3MapDeprotector
             }
         }
 
-        public ObjectDataType Type
+        public War3Net.Build.Object.ObjectDataType Type
         {
             get
             {
                 return ObjectDataModification.Type;
             }
-            set
+            protected set
             {
                 ObjectDataModification.Type = value;
             }
@@ -134,7 +134,24 @@ namespace WC3MapDeprotector
             }
             set
             {
-                ObjectDataModification.Value = value;
+                SetValue(value);
+            }
+        }
+
+        protected void SetValue(object value)
+        {
+            var valueAsString = value.ToString();
+            Type = War3Net.Build.Object.ObjectDataType.String;
+            ObjectDataModification.Value = valueAsString;
+            if (int.TryParse(valueAsString, out var intValue))
+            {
+                Type = War3Net.Build.Object.ObjectDataType.Int;
+                ObjectDataModification.Value = intValue;
+            }
+            else if (decimal.TryParse(valueAsString, out var decimalValue))
+            {
+                Type = War3Net.Build.Object.ObjectDataType.Real;
+                ObjectDataModification.Value = (float)decimalValue;
             }
         }
 
@@ -150,6 +167,21 @@ namespace WC3MapDeprotector
         public War3NetObjectModificationWrapper(object objectModification)
         {
             ObjectModification = objectModification;
+        }
+
+        public War3NetObjectDataModificationWrapper GetEmptyObjectDataModificationWrapper()
+        {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        return new War3NetObjectDataModificationWrapper(new LevelObjectDataModification());
+                case SimpleObjectModification simple:
+                    return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
+                case VariationObjectModification variation:
+                    return new War3NetObjectDataModificationWrapper(new VariationObjectDataModification());
+            }
+
+            throw new NotImplementedException();
         }
 
         public override int GetHashCode()
@@ -351,26 +383,26 @@ namespace WC3MapDeprotector
             }
         }
 
-        public SLKType SLKType
+        public ObjectDataType ObjectDataType
         {
             get
             {
                 switch (ObjectData)
                 {
                     case AbilityObjectData:
-                        return SLKType.Ability;
+                        return ObjectDataType.Ability;
                     case BuffObjectData:
-                        return SLKType.Buff;
+                        return ObjectDataType.Buff;
                     case DestructableObjectData:
-                        return SLKType.Destructable;
+                        return ObjectDataType.Destructable;
                     case DoodadObjectData:
-                        return SLKType.Doodad;
+                        return ObjectDataType.Doodad;
                     case ItemObjectData:
-                        return SLKType.Item;
+                        return ObjectDataType.Item;
                     case UnitObjectData:
-                        return SLKType.Unit;
+                        return ObjectDataType.Unit;
                     case UpgradeObjectData:
-                        return SLKType.Upgrade;
+                        return ObjectDataType.Upgrade;
                 }
 
                 throw new NotImplementedException();
@@ -678,7 +710,7 @@ namespace WC3MapDeprotector
         }
     }
 
-    public enum SLKType
+    public enum ObjectDataType
     {
         Ability,
         Buff,
@@ -689,43 +721,43 @@ namespace WC3MapDeprotector
         Upgrade
     }
 
-    public class SLKObject
+    public class ObjectData
     {
-        public SLKType SLKType { get; protected set; }
+        public ObjectDataType ObjectDataType { get; protected set; }
         public Dictionary<string, object> Data { get; protected set; } = new Dictionary<string, object>();
 
-        public SLKObject(SLKType slkType)
+        public ObjectData(ObjectDataType objectDataType)
         {
-            SLKType = slkType;
+            ObjectDataType = objectDataType;
         }
     }
 
-    public static class War3Net_SLK_Extensions
+    public static class War3NetObjectDataExtensions
     {
-        public static string GetMPQFileExtension(this SLKType slkType)
+        public static string GetMPQFileExtension(this ObjectDataType objectDataType)
         {
-            switch (slkType)
+            switch (objectDataType)
             {
-                case SLKType.Ability:
+                case ObjectDataType.Ability:
                     return AbilityObjectData.FileExtension;
-                case SLKType.Buff:
+                case ObjectDataType.Buff:
                     return BuffObjectData.FileExtension;
-                case SLKType.Destructable:
+                case ObjectDataType.Destructable:
                     return DestructableObjectData.FileExtension;
-                case SLKType.Doodad:
+                case ObjectDataType.Doodad:
                     return DoodadObjectData.FileExtension;
-                case SLKType.Item:
+                case ObjectDataType.Item:
                     return ItemObjectData.FileExtension;
-                case SLKType.Unit:
+                case ObjectDataType.Unit:
                     return UnitObjectData.FileExtension;
-                case SLKType.Upgrade:
+                case ObjectDataType.Upgrade:
                     return UpgradeObjectData.FileExtension;
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        public static SLKType? GetObjectDataTypeForID(this Map map, string fourCCRawCode)
+        public static ObjectDataType? GetObjectDataTypeForID(this Map map, string fourCCRawCode)
         {
             var ids = new List<string>();
             if (fourCCRawCode.Length == 4)
@@ -740,13 +772,13 @@ namespace WC3MapDeprotector
 
             foreach (var id in ids)
             {
-                foreach (var slkType in Enum.GetValues(typeof(SLKType)).Cast<SLKType>())
+                foreach (var objectDataType in Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>())
                 {
-                    var objectData = map.GetObjectDataBySLKType(slkType);
+                    var objectData = map.GetObjectDataByType(objectDataType);
                     var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == id) ?? objectData.NewValues.FirstOrDefault(x => x.OldId.ToRawcode() == id || x.NewId.ToRawcode() == id);
                     if (value != null)
                     {
-                        return slkType;
+                        return objectDataType;
                     }
                 }
             }
@@ -754,30 +786,30 @@ namespace WC3MapDeprotector
             return null;
         }
 
-        public static War3NetObjectDataWrapper GetObjectDataBySLKType(this Map map, SLKType slkType)
+        public static War3NetObjectDataWrapper GetObjectDataByType(this Map map, ObjectDataType objectDataType)
         {
             //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
-            switch (slkType)
+            switch (objectDataType)
                 {
-                    case SLKType.Ability:
+                    case ObjectDataType.Ability:
                     map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.AbilityObjectData);
-                case SLKType.Buff:
+                case ObjectDataType.Buff:
                     map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.BuffObjectData);
-                case SLKType.Destructable:
+                case ObjectDataType.Destructable:
                     map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.DestructableObjectData);
-                case SLKType.Doodad:
+                case ObjectDataType.Doodad:
                     map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.DoodadObjectData);
-                case SLKType.Item:
+                case ObjectDataType.Item:
                     map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.ItemObjectData);
-                case SLKType.Unit:
+                case ObjectDataType.Unit:
                     map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.UnitObjectData);
-                case SLKType.Upgrade:
+                case ObjectDataType.Upgrade:
                     map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
                     return new War3NetObjectDataWrapper(map.UpgradeObjectData);
                 default:
@@ -786,88 +818,93 @@ namespace WC3MapDeprotector
         }
     }
 
-    public class SLKParser
+    public class ObjectDataParser
     {
-        public static SLKType GetTypeByWar3MapFileExtension(string war3mapFileExtension)
+        public static ObjectDataType GetTypeByWar3MapFileExtension(string war3mapFileExtension)
         {
-            foreach (SLKType slkType in Enum.GetValues(typeof(SLKType)))
+            foreach (ObjectDataType type in Enum.GetValues(typeof(ObjectDataType)))
             {
-                if (war3mapFileExtension.Equals(slkType.GetMPQFileExtension(), StringComparison.InvariantCultureIgnoreCase))
+                if (war3mapFileExtension.Equals(type.GetMPQFileExtension(), StringComparison.InvariantCultureIgnoreCase))
                 {
-                    return slkType;
+                    return type;
                 }
             }
 
             throw new NotImplementedException();
         }
 
-        public static SLKType GetTypeBySLKFileName(string slkFileName)
+        public static ObjectDataType GetObjectDataTypeByFileName(string fileName)
         {
-            slkFileName = Path.GetFileName(slkFileName);
-            if (slkFileName.Contains("ability", StringComparison.InvariantCultureIgnoreCase))
+            fileName = Path.GetFileName(fileName);
+            if (fileName.Contains("ability", StringComparison.InvariantCultureIgnoreCase))
             {
-                if (slkFileName.Contains("buff", StringComparison.InvariantCultureIgnoreCase))
+                if (fileName.Contains("buff", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    return SLKType.Buff;
+                    return ObjectDataType.Buff;
                 }
 
-                return SLKType.Ability;
+                return ObjectDataType.Ability;
             }
-            if (slkFileName.Contains("doodad", StringComparison.InvariantCultureIgnoreCase))
+            if (fileName.Contains("doodad", StringComparison.InvariantCultureIgnoreCase))
             {
-                return SLKType.Doodad;
+                return ObjectDataType.Doodad;
             }
-            if (slkFileName.Contains("destructable", StringComparison.InvariantCultureIgnoreCase))
+            if (fileName.Contains("destructable", StringComparison.InvariantCultureIgnoreCase))
             {
-                return SLKType.Destructable;
+                return ObjectDataType.Destructable;
             }
-            if (slkFileName.Contains("item", StringComparison.InvariantCultureIgnoreCase))
+            if (fileName.Contains("item", StringComparison.InvariantCultureIgnoreCase))
             {
-                return SLKType.Item;
+                return ObjectDataType.Item;
             }
-            if (slkFileName.Contains("unit", StringComparison.InvariantCultureIgnoreCase))
+            if (fileName.Contains("unit", StringComparison.InvariantCultureIgnoreCase))
             {
-                return SLKType.Unit;
+                return ObjectDataType.Unit;
             }
-            if (slkFileName.Contains("upgrade", StringComparison.InvariantCultureIgnoreCase))
+            if (fileName.Contains("upgrade", StringComparison.InvariantCultureIgnoreCase))
             {
-                return SLKType.Upgrade;
+                return ObjectDataType.Upgrade;
             }
 
             throw new NotImplementedException();
         }
 
-        public Dictionary<string, SLKObject> ParseSLKObjectsFromFiles(List<string> fileNames)
+        public Dictionary<string, ObjectData> ParseObjectDataFromTxtFiles(List<string> fileNames)
         {
-            var result = new Dictionary<string, SLKObject>();
+            var result = new Dictionary<string, ObjectData>();
             foreach (var fileName in fileNames.Where(x => Path.GetExtension(x).Equals(".txt", StringComparison.InvariantCultureIgnoreCase)))
             {
                 try
                 {
-                    var slkType = GetTypeBySLKFileName(fileName);
+                    var type = GetObjectDataTypeByFileName(fileName);
 
                     var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
                     var ini = parser.ReadFile(fileName, Encoding.UTF8);
                     ini.Configuration.AssigmentSpacer = "";
                     foreach (var objectEntry in ini.Sections)
                     {
-                        var slkObject = new SLKObject(slkType);
+                        var objectData = new ObjectData(type);
                         foreach (var propertyId in objectEntry.Keys)
                         {
-                            
-                            slkObject.Data[propertyId.KeyName] = propertyId.Value;
+
+                            objectData.Data[propertyId.KeyName] = propertyId.Value;
                         }
-                        result[objectEntry.SectionName] = slkObject;
+                        result[objectEntry.SectionName] = objectData;
                     }
                 }
                 catch { }
             }
 
+            return result;
+        }
+        public Dictionary<string, ObjectData> ParseObjectDataFromSLKFiles(List<string> fileNames)
+        {
+            var result = new Dictionary<string, ObjectData>();
             foreach (var fileName in fileNames.Where(x => Path.GetExtension(x).Equals(".slk", StringComparison.InvariantCultureIgnoreCase)))
             {
                 try
                 {
-                    var slkType = GetTypeBySLKFileName(fileName);
+                    var type = GetObjectDataTypeByFileName(fileName);
                     var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
                     var columnNames = new string[slkTable.Width];
                     for (var columnIdx = 0; columnIdx < slkTable.Width; columnIdx++)
@@ -881,10 +918,10 @@ namespace WC3MapDeprotector
                         try
                         {
                             var objectId = slkTable[0, row]?.ToString();
-                            if (!result.TryGetValue(objectId, out var slkObject))
+                            if (!result.TryGetValue(objectId, out var objectData))
                             {
-                                slkObject = new SLKObject(slkType);
-                                result[objectId] = slkObject;
+                                objectData = new ObjectData(type);
+                                result[objectId] = objectData;
                             }
 
                             for (var columnIdx = 0; columnIdx < slkTable.Width; columnIdx++)
@@ -894,7 +931,7 @@ namespace WC3MapDeprotector
                                     var value = slkTable[columnIdx, row];
                                     if (value != null)
                                     {
-                                        slkObject.Data[columnNames[columnIdx]] = value;
+                                        objectData.Data[columnNames[columnIdx]] = value;
                                     }
                                 }
                                 catch { }
@@ -909,10 +946,10 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        protected Dictionary<SLKType, Dictionary<string, string>> PropertyIdRawCodePerSLKColumn = new Dictionary<SLKType, Dictionary<string, string>>()
+        protected Dictionary<ObjectDataType, Dictionary<string, string>> PropertyIdRawCodePerObjectDataTypeColumn = new Dictionary<ObjectDataType, Dictionary<string, string>>()
         {
             {
-                SLKType.Ability, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Ability, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Animnames", "aani" },
                     { "Area1", "aare" },
@@ -979,7 +1016,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Buff, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Buff, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Buffart", "fart" },
                     { "Bufftip", "ftip" },
@@ -1011,7 +1048,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Destructable, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Destructable, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "EditorSuffix", "bsuf" },
                     { "HP", "bhps" },
@@ -1069,7 +1106,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Doodad, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Doodad, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "MMBlue", "dmmb" },
                     { "MMGreen", "dmmg" },
@@ -1109,7 +1146,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Item, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Item, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Art", "iico" },
                     { "ButtonposX", "ubpx" },
@@ -1156,7 +1193,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Unit, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Unit, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Art", "uico" },
                     { "Attachmentanimprops", "uaap" },
@@ -1360,7 +1397,7 @@ namespace WC3MapDeprotector
                 }
             },
             {
-                SLKType.Upgrade, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
+                ObjectDataType.Upgrade, new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
                 {
                     { "Art", "gar1" },
                     { "ButtonposX", "gbpx" },
@@ -1393,9 +1430,9 @@ namespace WC3MapDeprotector
             }
         };
 
-        public string ConvertToPropertyIdRawCode(SLKType slkType, string columnName)
+        public string ConvertToPropertyIdRawCode(ObjectDataType type, string columnName)
         {
-            if (PropertyIdRawCodePerSLKColumn.TryGetValue(slkType, out var rawCodePerSLKColumn) && rawCodePerSLKColumn.TryGetValue((columnName ?? "").Trim(), out var result))
+            if (PropertyIdRawCodePerObjectDataTypeColumn.TryGetValue(type, out var rawCodePerObjectDataColumn) && rawCodePerObjectDataColumn.TryGetValue((columnName ?? "").Trim(), out var result))
             {
                 return result;
             }
@@ -1403,120 +1440,108 @@ namespace WC3MapDeprotector
             return null;
         }
 
-        public List<War3NetObjectDataWrapper> ToObjectData(Dictionary<string, SLKObject> slkObjects, ObjectDataFormatVersion objectDataFormatVersion = ObjectDataFormatVersion.v3)
+        public List<War3NetObjectDataWrapper> ToWar3NetObjectData(Dictionary<string, ObjectData> objectData, ObjectDataFormatVersion objectDataFormatVersion = ObjectDataFormatVersion.v3)
         {
             var result = new List<War3NetObjectDataWrapper>();
-            foreach (SLKType slkType in Enum.GetValues(typeof(SLKType)))
+            foreach (ObjectDataType type in Enum.GetValues(typeof(ObjectDataType)))
             {
-                var objectData = GetEmptyObjectDataWrapper(slkType, objectDataFormatVersion);
-                var objectEntries = new List<War3NetObjectModificationWrapper>();
+                var war3NetObjectData = GetEmptyObjectDataWrapper(type, objectDataFormatVersion);
+                var war3NetObjectDataModifications = new List<War3NetObjectModificationWrapper>();
 
-                foreach (var slkObject in slkObjects.Where(x => x.Value.SLKType == slkType))
+                foreach (var objectDataRecord in objectData.Where(x => x.Value.ObjectDataType == type))
                 {
                     var dataModifications = new List<War3NetObjectDataModificationWrapper>();
-                    foreach (var data in slkObject.Value.Data)
+                    foreach (var data in objectDataRecord.Value.Data)
                     {
-                        var fourCC = ConvertToPropertyIdRawCode(slkType, data.Key);
+                        var fourCC = ConvertToPropertyIdRawCode(type, data.Key);
                         if (fourCC == null)
                         {
                             continue;
                         }
 
-                        var dataModificationWrapper = GetEmptyObjectDataModificationWrapper(slkType);
+                        var dataModificationWrapper = GetEmptyObjectDataModificationWrapper(type);
                         dataModificationWrapper.Id = fourCC.FromRawcode();
-                        var valueAsString = data.Value.ToString();
-                        dataModificationWrapper.Type = ObjectDataType.String;
-                        dataModificationWrapper.Value = valueAsString;
-                        if (int.TryParse(valueAsString, out var intValue))
-                        {
-                            dataModificationWrapper.Type = ObjectDataType.Int;
-                            dataModificationWrapper.Value = intValue;
-                        }
-                        else if (decimal.TryParse(valueAsString, out var decimalValue))
-                        {
-                            dataModificationWrapper.Type = ObjectDataType.Real;
-                            dataModificationWrapper.Value = (float)decimalValue;
-                        }
+                        dataModificationWrapper.Value = data.Value;
 
                         dataModifications.Add(dataModificationWrapper);
                     }
 
-                    var objectEntry = GetEmptyObjectModificationWrapper(slkType);
-                    objectEntry.OldId = slkObject.Key.FromRawcode();
+                    var objectEntry = GetEmptyObjectModificationWrapper(type);
+                    objectEntry.OldId = objectDataRecord.Key.FromRawcode();
                     objectEntry.Modifications = dataModifications;
-                    objectEntries.Add(objectEntry);
+                    war3NetObjectDataModifications.Add(objectEntry);
                 }
 
-                objectData.BaseValues = objectEntries;
-                result.Add(objectData);
+                war3NetObjectData.BaseValues = war3NetObjectDataModifications;
+                result.Add(war3NetObjectData);
             }
 
             return result;
         }
 
-        public static War3NetObjectDataModificationWrapper GetEmptyObjectDataModificationWrapper(SLKType slkType)
+        public static War3NetObjectDataModificationWrapper GetEmptyObjectDataModificationWrapper(ObjectDataType type)
         {
-            switch (slkType)
+            switch (type)
             {
-                case SLKType.Ability:
+                case ObjectDataType.Ability:
                     return new War3NetObjectDataModificationWrapper(new LevelObjectDataModification());
-                case SLKType.Buff:
+                case ObjectDataType.Buff:
                     return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
-                case SLKType.Destructable:
+                case ObjectDataType.Destructable:
                     return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
-                case SLKType.Doodad:
+                case ObjectDataType.Doodad:
                     return new War3NetObjectDataModificationWrapper(new VariationObjectDataModification());
-                case SLKType.Item:
+                case ObjectDataType.Item:
                     return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
-                case SLKType.Unit:
+                case ObjectDataType.Unit:
                     return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
-                case SLKType.Upgrade:
+                case ObjectDataType.Upgrade:
                     return new War3NetObjectDataModificationWrapper(new LevelObjectDataModification());
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        public static War3NetObjectModificationWrapper GetEmptyObjectModificationWrapper(SLKType slkType)
+        public static War3NetObjectModificationWrapper GetEmptyObjectModificationWrapper(ObjectDataType type)
         {
-            switch (slkType)
+            switch (type)
             {
-                case SLKType.Ability:
+                case ObjectDataType.Ability:
                     return new War3NetObjectModificationWrapper(new LevelObjectModification());
-                case SLKType.Buff:
+                case ObjectDataType.Buff:
                     return new War3NetObjectModificationWrapper(new SimpleObjectModification());
-                case SLKType.Destructable:
+                case ObjectDataType.Destructable:
                     return new War3NetObjectModificationWrapper(new SimpleObjectModification());
-                case SLKType.Doodad:
+                case ObjectDataType.Doodad:
                     return new War3NetObjectModificationWrapper(new VariationObjectModification());
-                case SLKType.Item:
+                case ObjectDataType.Item:
                     return new War3NetObjectModificationWrapper(new SimpleObjectModification());
-                case SLKType.Unit:
+                case ObjectDataType.Unit:
                     return new War3NetObjectModificationWrapper(new SimpleObjectModification());
-                case SLKType.Upgrade:
+                case ObjectDataType.Upgrade:
                     return new War3NetObjectModificationWrapper(new LevelObjectModification());
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        public static War3NetObjectDataWrapper GetEmptyObjectDataWrapper(SLKType slkType, ObjectDataFormatVersion objectDataFormatVersion = ObjectDataFormatVersion.v3)
+        public static War3NetObjectDataWrapper GetEmptyObjectDataWrapper(ObjectDataType type, ObjectDataFormatVersion objectDataFormatVersion = ObjectDataFormatVersion.v3)
         {
-            switch (slkType)
+            switch (type)
             {
-                case SLKType.Ability:
+                case ObjectDataType.Ability:
                     return new War3NetObjectDataWrapper(new AbilityObjectData(objectDataFormatVersion));
-                case SLKType.Buff:
+                case ObjectDataType.Buff:
                     return new War3NetObjectDataWrapper(new BuffObjectData(objectDataFormatVersion));
-                case SLKType.Destructable:
+                case ObjectDataType.Destructable:
                     return new War3NetObjectDataWrapper(new DestructableObjectData(objectDataFormatVersion));
-                case SLKType.Doodad:
+                case ObjectDataType.Doodad:
                     return new War3NetObjectDataWrapper(new DoodadObjectData(objectDataFormatVersion));
-                case SLKType.Item:
+                case ObjectDataType.Item:
                     return new War3NetObjectDataWrapper(new ItemObjectData(objectDataFormatVersion));
-                case SLKType.Unit:
+                case ObjectDataType.Unit:
                     return new War3NetObjectDataWrapper(new UnitObjectData(objectDataFormatVersion));
-                case SLKType.Upgrade:
+                case ObjectDataType.Upgrade:
                     return new War3NetObjectDataWrapper(new UpgradeObjectData(objectDataFormatVersion));
                 default:
                     throw new NotImplementedException();

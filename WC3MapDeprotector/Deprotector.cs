@@ -74,7 +74,7 @@ namespace WC3MapDeprotector
         public DeprotectionSettings Settings { get; private set; }
         protected readonly Action<string> _logEvent;
         protected DeprotectionResult _deprotectionResult;
-        protected SLKParser _slkParser = new SLKParser();
+        protected ObjectDataParser _objectDataParser = new ObjectDataParser();
         protected Map _defaultSLKData;
 
         protected void AddToGlobalListFile(string fileName)
@@ -489,11 +489,11 @@ namespace WC3MapDeprotector
             var defaultSLKFiles = Directory.GetFiles(Path.Combine(SLKRecoverPath, "STD")).ToList();
             if (defaultSLKFiles.Count > 0)
             {
-                var slkData = _slkParser.ParseSLKObjectsFromFiles(defaultSLKFiles);
-                var objectDatas = _slkParser.ToObjectData(slkData);
+                var slkData = _objectDataParser.ParseObjectDataFromSLKFiles(defaultSLKFiles);
+                var objectDatas = _objectDataParser.ToWar3NetObjectData(slkData);
                 foreach (var objectData in objectDatas)
                 {
-                    _defaultSLKData.GetObjectDataBySLKType(objectData.SLKType).BaseValues = objectData.BaseValues;
+                    _defaultSLKData.GetObjectDataByType(objectData.ObjectDataType).BaseValues = objectData.BaseValues;
                 }
             }
 
@@ -556,6 +556,7 @@ namespace WC3MapDeprotector
                 {
                     var slkRecoverableFiles = new List<string>() { "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q", "war3map.w3t", "war3map.w3u" };
                     
+                    //todo: remove SLK Recover EXE & use parsing code instead
                     _logEvent("Generating temporary map for SLK Recover: slk.w3x");
                     var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
                     var minimumExtraRequiredFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories)).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !slkRecoverableFiles.Contains(Path.GetFileName(x))).ToList();
@@ -572,9 +573,9 @@ namespace WC3MapDeprotector
                     _logEvent("SilkObjectOptimizer completed");
 
 
-                    var slkDataPerObjectId = _slkParser.ParseSLKObjectsFromFiles(slkFiles);
+                    var parsedSlkObjectData = _objectDataParser.ParseObjectDataFromSLKFiles(slkFiles);
                     //NOTE: SLKRecover generates corrupted files for any SLK files that are missing, this excludes them
-                    var validFiles = slkDataPerObjectId.Values.Select(x => x.SLKType).Distinct().Select(x => $"war3map{x.GetMPQFileExtension()}").Distinct().ToHashSet(StringComparer.InvariantCultureIgnoreCase);
+                    var validFiles = parsedSlkObjectData.Values.Select(x => x.ObjectDataType).Distinct().Select(x => $"war3map{x.GetMPQFileExtension()}").Distinct().ToHashSet(StringComparer.InvariantCultureIgnoreCase);
 
                     var map = DecompileMap();
                     foreach (var fileName in slkRecoverableFiles)
@@ -596,12 +597,12 @@ namespace WC3MapDeprotector
                             if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
                             {
                                 //NOTE: ObjectEditorID in BaseValues are formatted as FourCC (OldId property). NewValues are formatted as FourCC:FourCC (NewId:OldId properties). This merges & moves data after decompiling SLK because there can be data in .w3a/etc ObjectEditor files also.
-                                SLKType slkType = SLKParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
-                                var objectData = map.GetObjectDataBySLKType(slkType);
+                                ObjectDataType slkType = ObjectDataParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
+                                var objectData = map.GetObjectDataByType(slkType);
                                 SetMapFile(map, recoveredFile, true);
-                                var slkObjectData = map.GetObjectDataBySLKType(slkType);
+                                var recoveredSlkObjectData = map.GetObjectDataByType(slkType);
 
-                                foreach (var slkValue in slkObjectData.BaseValues)
+                                foreach (var slkValue in recoveredSlkObjectData.BaseValues)
                                 {
                                     var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
@@ -619,7 +620,7 @@ namespace WC3MapDeprotector
                                         }
                                     }
                                 }
-                                foreach (var slkValue in slkObjectData.NewValues)
+                                foreach (var slkValue in recoveredSlkObjectData.NewValues)
                                 {
                                     var value = objectData.NewValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
@@ -675,7 +676,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
-                    ProcessGlobalListFile(inMPQArchive);
+                ProcessGlobalListFile(inMPQArchive);
                 }
 
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
@@ -878,6 +879,65 @@ namespace WC3MapDeprotector
             }
 
             Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData); ;
+
+            var unknownObjects = 0;
+            var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
+            if (txtFiles.Any())
+            {
+                var txtObjectData = _objectDataParser.ParseObjectDataFromTxtFiles(txtFiles);
+                foreach (var parsedObjectData in txtObjectData)
+                {
+                    List<War3NetObjectModificationWrapper> matchingObjects = new List<War3NetObjectModificationWrapper>();
+                    foreach (var type in Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>())
+                    {
+                        //note: sometimes ObjectDataType for txt files is misclassified so we try all values. It's safe since IDs are unique.
+                        var objectData = map_ObjectDataOnly.GetObjectDataByType(type);
+                        matchingObjects.AddRange(objectData.BaseValues.Where(x => x.OldId.ToRawcode() == parsedObjectData.Key).Concat(objectData.NewValues.Where(x => x.NewId.ToRawcode() == parsedObjectData.Key)));
+                    }
+
+                    if (!matchingObjects.Any())
+                    {
+                        unknownObjects++;
+                    }
+
+                    foreach (var record in matchingObjects)
+                    {
+                        foreach (var txtModification in parsedObjectData.Value.Data)
+                        {
+                            var property = _objectDataParser.ConvertToPropertyIdRawCode(parsedObjectData.Value.ObjectDataType, txtModification.Key);
+                            if (property == null)
+                            {
+                                DebugSettings.Warn("Missing ObjectEditor Key=>ID mapping");
+                                continue;
+                            }
+
+                            var matchingModifications = record.Modifications.Where(x => x.Id.ToRawcode() == property).ToList();
+                            if (!matchingModifications.Any())
+                            {
+                                var newModification = record.GetEmptyObjectDataModificationWrapper();
+                                newModification.Id = property.FromRawcode();
+                                newModification.Value = txtModification.Value;
+                                record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList();
+                            }
+                            else
+                            {
+                                foreach (var modification in matchingModifications)
+                                {
+                                    modification.Value = txtModification.Value;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
+                {
+                    using (var stream = File.OpenWrite(Path.Combine(DiscoveredFilesPath, file.FileName)))
+                    {
+                        file.MpqStream.CopyTo(stream);
+                    }
+                }
+            }
 
             PatchW3I();
 
@@ -2228,25 +2288,25 @@ namespace WC3MapDeprotector
                                     case null:
                                         variable.InitialValue = fromRawCode;
                                         break;
-                                    case SLKType.Ability:
+                                    case ObjectDataType.Ability:
                                         variable.Type = "abilcode";
                                         break;
-                                    case SLKType.Buff:
+                                    case ObjectDataType.Buff:
                                         variable.Type = "buffcode";
                                         break;
-                                    case SLKType.Destructable:
+                                    case ObjectDataType.Destructable:
                                         variable.Type = "destructablecode";
                                         break;
-                                    case SLKType.Doodad:
+                                    case ObjectDataType.Doodad:
                                         variable.InitialValue = fromRawCode;
                                         break;
-                                    case SLKType.Item:
+                                    case ObjectDataType.Item:
                                         variable.Type = "itemcode";
                                         break;
-                                    case SLKType.Unit:
+                                    case ObjectDataType.Unit:
                                         variable.Type = "unitcode";
                                         break;
-                                    case SLKType.Upgrade:
+                                    case ObjectDataType.Upgrade:
                                         variable.InitialValue = fromRawCode;
                                         break;
                                 }
