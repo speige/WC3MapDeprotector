@@ -1779,7 +1779,7 @@ namespace WC3MapDeprotector
                     return null;
                 }
 
-                if (result.Sounds?.Sounds.Count == 1 && result.Sounds?.Sounds[0] != result.Sounds?.Sounds[0])
+                if (result.Sounds == null || (result.Sounds.Sounds.Count == 1 && result.Sounds?.Sounds[0] != result.Sounds?.Sounds[0]))
                 {
                     _logEvent("Decompiling map sounds");
                     foreach (var enumValue in Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x))
@@ -1934,16 +1934,9 @@ namespace WC3MapDeprotector
                                 var initializerString = (match.Groups[6].Value ?? "").Trim();
                                 string initialValue = null;
                                 var arraySize = 1;
-                                if (isArray)
+                                if (isArray && arraySizeMatches.TryGetValue(name, out var arraySizeMatch) && int.TryParse(arraySizeMatch.Groups[2].Value, out var arraySizeParsed))
                                 {
-                                    if (arraySizeMatches.TryGetValue(name, out var arraySizeMatch) && int.TryParse(arraySizeMatch.Groups[2].Value, out var arraySizeParsed))
-                                    {
-                                        arraySize = arraySizeParsed + 1;
-                                    }
-                                    else
-                                    {
-                                        arraySize = 2;
-                                    }
+                                    arraySize = arraySizeParsed;
                                 }
 
                                 if (hasInitializer)

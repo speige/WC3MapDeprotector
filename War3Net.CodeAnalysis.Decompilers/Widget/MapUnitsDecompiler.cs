@@ -392,16 +392,26 @@ namespace War3Net.CodeAnalysis.Decompilers
                     else if (string.Equals(callStatement.IdentifierName.Name, "IssueImmediateOrder", StringComparison.Ordinal))
                     {
                         var abilityName = (callStatement.Arguments.Arguments[1] as JassStringLiteralExpressionSyntax)?.Value;
-                        var matchingAbilityIds = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.OldId).
-                               Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.NewId)).Distinct().ToList();
                         if (string.IsNullOrWhiteSpace(abilityName))
                         {
                             continue;
                         }
 
+                        var matchingAbilityIdsOn = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.OldId).
+                               Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aoro".FromRawcode() || y.Id == "aord".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.NewId)).Distinct().ToList();
+                        var matchingAbilityIdsOff = Context.ObjectData.map.AbilityObjectData?.BaseAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.OldId).
+                               Concat(Context.ObjectData.map.AbilityObjectData?.NewAbilities.Where(x => x.Modifications.Any(y => (y.Id == "aorf".FromRawcode() || y.Id == "aoru".FromRawcode()) && y.Value.ToString() == abilityName)).Select(x => x.NewId)).Distinct().ToList();
+
                         var unit = units[^1];
-                        foreach (var abilityId in matchingAbilityIds)
+                        var unitTypes = Context.ObjectData.map.UnitObjectData?.BaseUnits.Where(x => x.OldId == unit.TypeId).Concat(Context.ObjectData.map.UnitObjectData?.NewUnits.Where(x => x.NewId == unit.TypeId)).ToList();
+
+                        foreach (var abilityId in matchingAbilityIdsOn.Concat(matchingAbilityIdsOff))
                         {
+                            if (!unitTypes.Any(x => x.Modifications.Any(y => (y.Id == "uabi".FromRawcode() || y.Id == "uabs".FromRawcode()) && y.ValueAsString.Contains(abilityId.ToRawcode()))))
+                            {
+                                continue;
+                            }
+
                             var ability = unit.AbilityData.FirstOrDefault(x => x.AbilityId == abilityId);
                             if (ability == null)
                             {
@@ -409,10 +419,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 unit.AbilityData.Add(ability);
                             }
 
-                            ability.IsAutocastActive = true;
+                            if (matchingAbilityIdsOn.Contains(abilityId))
+                            {
+                                ability.IsAutocastActive = true;
+                            }
                         }
-
-                        continue;
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "RandomDistReset", StringComparison.Ordinal))
                     {
