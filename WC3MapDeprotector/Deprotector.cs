@@ -1856,8 +1856,8 @@ namespace WC3MapDeprotector
                     var functionCalls = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionCall().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
                     var functions = functionDeclarations.Keys.Concat(functionCalls.Keys).ToHashSet();
 
-                    //todo: decompile "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree"
-                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "CreateAllDestructables", "RunInitializationTriggers", "InitTechTree" };
+                    //todo: decompile "CreateAllDestructables", "InitTechTree"
+                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateAllDestructables", "InitTechTree" };
                     var nativeEditorFunctionIndexes = new Dictionary<string, Tuple<int, int>>();
                     var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
                     foreach (var nativeEditorFunction in _nativeEditorFunctions)
@@ -2027,7 +2027,7 @@ namespace WC3MapDeprotector
                         jassScript += $"\r\nfunction {initGlobalsDeprotected} takes nothing returns nothing\r\n{userDefinedGlobalVariableInitializationExpressions.Aggregate((x, y) => $"{x}\r\n{y}")}\r\n\r\ncall {mainRenamed}()\r\n\r\nendfunction\r\n";
                     }
 
-                    result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = jassScript }, GlobalCustomScriptComment = "Deprotected global script. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
+                    result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = jassScript.Replace("%", "%%") }, GlobalCustomScriptComment = "Deprotected global script. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
 
                     result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition() { Id = triggersCategoryItemIdx, ParentId = rootCategoryItemIdx, Name = "Triggers", IsExpanded = true });
 
