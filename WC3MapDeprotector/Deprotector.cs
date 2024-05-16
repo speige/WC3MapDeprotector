@@ -277,6 +277,7 @@ namespace WC3MapDeprotector
             public TriggerStrings TriggerStrings { get; set; }
             public MapUnits Units { get; set; }
             public Dictionary<UnitData, UnitDataDecompilationMetaData> UnitDecompilationMetaData { get; set; }
+            public List<string> Destructables { get; set; }
 
             public List<MpqKnownFile> ConvertToFiles()
             {
@@ -1917,7 +1918,7 @@ namespace WC3MapDeprotector
                     var functions = functionDeclarations.Keys.Concat(functionCalls.Keys).ToHashSet();
 
                     //todo: decompile "CreateAllDestructables", "InitTechTree"
-                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateAllDestructables", "InitTechTree" };
+                    var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "InitTechTree" };
                     var nativeEditorFunctionIndexes = new Dictionary<string, Tuple<int, int>>();
                     var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
                     foreach (var nativeEditorFunction in _nativeEditorFunctions)
@@ -2397,14 +2398,16 @@ namespace WC3MapDeprotector
                     result.Triggers.TriggerItems.Add(category);
                 }
 
+                result.Destructables = new List<string>();
                 var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = true, IsInitiallyOn = false };
-                var variables = (result.Units?.Units?.Select(x => x.GetVariableName_BugFixPendingPR()).ToList() ?? new List<string>()).Concat(result.Cameras?.Cameras?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).ToList();
+                var variables = (result.Units?.Units?.Select(x => x.GetVariableName_BugFixPendingPR()).ToList() ?? new List<string>()).Concat(result.Cameras?.Cameras?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).Concat(map.Doodads?.Doodads.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).ToList();
                 foreach (var variable in variables)
                 {
                     var isUnit = variable.StartsWith("gg_unit_");
                     var isItem = variable.StartsWith("gg_item_");
+                    var isDestructable = variable.StartsWith("gg_dest_");
 
-                    var jassVariableSearchString = isUnit || isItem ? variable.Substring(0, variable.Length - 5) : variable; // Remove _#### (CreationNumber) suffix since it changes after deprotection & having extra variables won't break anything
+                    var jassVariableSearchString = isUnit || isItem ? variable.Substring(0, variable.Length - 5) : variable; // Removes _#### (CreationNumber) suffix since it changes after deprotection & having extra variables won't break anything
 
                     if (!jassScript.Contains(jassVariableSearchString))
                     {
@@ -2416,6 +2419,14 @@ namespace WC3MapDeprotector
                         var triggerFunction = new TriggerFunction() { Name = "ResetUnitAnimation", Type = TriggerFunctionType.Action, IsEnabled = true };
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
                         emptyVariableTrigger.Functions.Add(triggerFunction);
+                    }
+                    else if (isDestructable)
+                    {
+                        var triggerFunction = new TriggerFunction() { Name = "SetDestAnimationSpeedPercent", Type = TriggerFunctionType.Action, IsEnabled = true };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "100" } });
+                        emptyVariableTrigger.Functions.Add(triggerFunction);
+                        result.Destructables.Add(variable);
                     }
                     else if (isItem)
                     {
@@ -2522,6 +2533,7 @@ namespace WC3MapDeprotector
             decompiled.AddRange(firstPass.Regions?.Regions?.Select(x => $"gg_rct_{x.Name}")?.ToList() ?? new List<string>());
             decompiled.AddRange(firstPass.Triggers?.TriggerItems?.OfType<TriggerDefinition>()?.Select(x => $"gg_trg_{x.Name}")?.ToList() ?? new List<string>());
             decompiled.AddRange(firstPass.Sounds?.Sounds?.Select(x => x.Name)?.ToList() ?? new List<string>()); //NOTE: War3Net doesn't remove gg_snd_ from name for some reason
+            decompiled.AddRange(firstPass.Destructables ?? new List<string>());
             decompiled = decompiled.Select(x => x.Replace(" ", "_")).ToList();
             var notDecompiledGlobalGenerateds = globalGenerateds.Except(decompiled).ToList();
             correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
