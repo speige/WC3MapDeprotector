@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Numerics;
-
+using War3Net.Build.Common;
 using War3Net.Build.Widget;
 using War3Net.CodeAnalysis.Jass.Extensions;
 using War3Net.CodeAnalysis.Jass.Syntax;
@@ -425,25 +425,37 @@ namespace War3Net.CodeAnalysis.Decompilers
                             }
                         }
                     }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "RandomDistReset", StringComparison.Ordinal))
-                    {
-                        // TODO
-                        continue;
-                    }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "RandomDistAddItem", StringComparison.Ordinal))
-                    {
-                        // TODO
-                        continue;
-                    }
                     else if (string.Equals(callStatement.IdentifierName.Name, "TriggerRegisterUnitEvent", StringComparison.Ordinal))
                     {
-                        // TODO
-                        continue;
-                    }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "TriggerAddAction", StringComparison.Ordinal))
-                    {
-                        // TODO
-                        continue;
+                        var eventName = (callStatement.Arguments.Arguments[2] as JassVariableReferenceExpressionSyntax)?.IdentifierName?.Name;
+                        if (eventName == "EVENT_UNIT_DEATH" || eventName == "EVENT_UNIT_CHANGE_OWNER")
+                        {
+                            var unit = units[^1];
+                            if (!unit.ItemTableSets.Any() && decompilationMetaData[unit].DecompiledFromVariableName == (callStatement.Arguments.Arguments[1] as JassVariableReferenceExpressionSyntax)?.IdentifierName?.Name)
+                            {
+                                var lookaheadStatementIndex = createUnitsFunction.Body.Statements.IndexOf(statement);
+                                while (createUnitsFunction.Body.Statements.Length > lookaheadStatementIndex)
+                                {
+                                    lookaheadStatementIndex++;
+                                    var lookaheadStatement = createUnitsFunction.Body.Statements[lookaheadStatementIndex] as JassCallStatementSyntax;
+                                    if (lookaheadStatement?.IdentifierName.Name.Contains("Trigger", StringComparison.InvariantCultureIgnoreCase) != true)
+                                    {
+                                        break;
+                                    }
+
+                                    if (string.Equals(lookaheadStatement?.IdentifierName.Name, "TriggerAddAction", StringComparison.Ordinal))
+                                    {
+                                        var actionFunctionName = (lookaheadStatement.Arguments.Arguments[1] as JassFunctionReferenceExpressionSyntax)?.IdentifierName.Name;
+                                        var actionFunction = actionFunctionName != null ? GetFunction(actionFunctionName) : null;
+                                        if (actionFunction != null && TryDecompileDropItemsFunction(actionFunction, out var itemTableSets))
+                                        {
+                                            unit.ItemTableSets.AddRange(itemTableSets);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "WaygateSetDestination", StringComparison.Ordinal))
                     {
@@ -741,6 +753,62 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             return true;
+        }
+
+        public List<IStatementSyntax> GetAllNestedStatements(JassStatementListSyntax body)
+        {
+            var result = new List<IStatementSyntax>();
+            foreach (var statement in body.Statements)
+            {
+                result.Add(statement);
+                if (statement is JassLoopStatementSyntax loopStatement)
+                {
+                    result.AddRange(GetAllNestedStatements(loopStatement.Body));
+                }
+                else if (statement is JassIfStatementSyntax ifStatement)
+                {
+                    result.AddRange(GetAllNestedStatements(ifStatement.Body));
+                    foreach (var elseIfClause in ifStatement.ElseIfClauses)
+                    {
+                        result.AddRange(GetAllNestedStatements(elseIfClause.Body));
+                    }
+                    if (ifStatement.ElseClause != null)
+                    {
+                        result.AddRange(GetAllNestedStatements(ifStatement.ElseClause.Body));
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        public bool TryDecompileDropItemsFunction(FunctionDeclarationContext functionDeclarationContext, out List<RandomItemSet> result)
+        {
+            result = new List<RandomItemSet>();
+            result.Add(new RandomItemSet());
+
+            var statements = GetAllNestedStatements(functionDeclarationContext.FunctionDeclaration.Body);
+            foreach (var statement in statements)
+            {
+                if (statement is JassCallStatementSyntax callStatement)
+                {
+                    if (string.Equals(callStatement.IdentifierName.Name, "RandomDistReset", StringComparison.Ordinal))
+                    {
+                        result.Add(new RandomItemSet());
+                    }
+                    else if (string.Equals(callStatement.IdentifierName.Name, "RandomDistAddItem", StringComparison.Ordinal))
+                    {
+                        if (callStatement.Arguments.Arguments[0].TryGetIntegerExpressionValue_New(out int itemId) && callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out int chance))
+                        {
+                            var itemSet = result[^1];
+                            itemSet.Items.Add(new RandomItemSetItem() { ItemId = itemId.InvertEndianness(), Chance = chance });
+                        }
+                    }
+                }
+            }
+
+            result.RemoveAll(x => !x.Items.Any());
+            return result.Any();
         }
     }
 }
