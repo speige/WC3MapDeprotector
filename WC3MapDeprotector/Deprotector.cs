@@ -677,7 +677,7 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BenchmarkUnknownRecovery)
                 {
-                ProcessGlobalListFile(inMPQArchive);
+                    ProcessGlobalListFile(inMPQArchive);
                 }
 
                 foreach (var scriptFile in Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories))
@@ -881,11 +881,12 @@ namespace WC3MapDeprotector
 
             Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData); ;
 
-            var unknownObjects = 0;
             var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
-            if (txtFiles.Any())
+            foreach (var txtFile in txtFiles)
             {
-                var txtObjectData = _objectDataParser.ParseObjectDataFromTxtFiles(txtFiles);
+                var txtObjectData = _objectDataParser.ParseObjectDataFromTxtFiles(new List<string>() { txtFile });
+                var unknownObjects = 0;
+                var containsObjectData = false;
                 foreach (var parsedObjectData in txtObjectData)
                 {
                     List<War3NetObjectModificationWrapper> matchingObjects = new List<War3NetObjectModificationWrapper>();
@@ -900,6 +901,8 @@ namespace WC3MapDeprotector
                     {
                         unknownObjects++;
                     }
+
+                    containsObjectData = true;
 
                     foreach (var record in matchingObjects)
                     {
@@ -931,12 +934,30 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
+                if (containsObjectData)
                 {
-                    using (var stream = File.OpenWrite(Path.Combine(DiscoveredFilesPath, file.FileName)))
-                    {
-                        file.MpqStream.CopyTo(stream);
-                    }
+                    File.Delete(txtFile);
+                }
+
+                if (containsObjectData && unknownObjects > 0)
+                {
+                    DebugSettings.Warn("Unable to decompile some object data");
+                }
+            }
+
+            map_ObjectDataOnly.AbilitySkinObjectData = map_ObjectDataOnly.AbilityObjectData;
+            map_ObjectDataOnly.BuffSkinObjectData = map_ObjectDataOnly.BuffObjectData;
+            map_ObjectDataOnly.DestructableSkinObjectData = map_ObjectDataOnly.DestructableObjectData;
+            map_ObjectDataOnly.DoodadSkinObjectData = map_ObjectDataOnly.DoodadObjectData;
+            map_ObjectDataOnly.ItemSkinObjectData = map_ObjectDataOnly.ItemObjectData;
+            map_ObjectDataOnly.UnitSkinObjectData = map_ObjectDataOnly.UnitObjectData;
+            map_ObjectDataOnly.UpgradeSkinObjectData = map_ObjectDataOnly.UpgradeObjectData;
+
+            foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
+            {
+                using (var stream = File.OpenWrite(Path.Combine(DiscoveredFilesPath, file.FileName)))
+                {
+                    file.MpqStream.CopyTo(stream);
                 }
             }
 
