@@ -32,7 +32,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return _fileIndexToMd5.Values.Any(x => !_md5ToPredictedExtension.TryGetValue(x, out var extension) || string.IsNullOrWhiteSpace(extension));
+                return _fileIndexToMd5.Values.Any(x => string.IsNullOrWhiteSpace(Path.GetExtension(_discoveredFileNameToMD5.FirstOrDefault(y => y.Value == x).Key ?? "")) && (!_md5ToPredictedExtension.TryGetValue(x, out var extension) || string.IsNullOrWhiteSpace(extension)));
             }
         }
 
