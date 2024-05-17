@@ -3470,7 +3470,7 @@ endfunction
             }
         }
 
-        [GeneratedRegex(@"^war3(map|campaign)(\.(w[a-zA-Z0-9]{2}|doo|shd|mmp|j|imp)|misc\.txt|skin\.txt|map\.blp|units\.doo|extra\.txt)$", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"^war3(map|campaign)(skin)?((\.(w[a-zA-Z0-9]{2}|doo|shd|mmp|j|imp))|misc\.txt|\.txt|map\.blp|units\.doo|extra\.txt)$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_NonImportedNativeEditorFileName();
 
         protected void BuildImportList()
