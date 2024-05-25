@@ -881,6 +881,7 @@ namespace WC3MapDeprotector
 
             Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData); ;
 
+            var perLevelCSVProperties = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "atp1", "aub1" };
             var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
             foreach (var txtFile in txtFiles)
             {
@@ -906,28 +907,50 @@ namespace WC3MapDeprotector
 
                     foreach (var record in matchingObjects)
                     {
-                        foreach (var txtModification in parsedObjectData.Value.Data)
+                        foreach (var txtModification in parsedObjectData.Value.Data.OrderBy(x => string.Equals(x.Key, "levels", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1))
                         {
-                            var property = _objectDataParser.ConvertToPropertyIdRawCode(parsedObjectData.Value.ObjectDataType, txtModification.Key);
-                            if (property == null)
+                            var properties = _objectDataParser.ConvertToPropertyIdPossibleRawCodes(parsedObjectData.Value.ObjectDataType, txtModification.Key);
+                            if (!properties.Any())
                             {
                                 DebugSettings.Warn("Missing ObjectEditor Key=>ID mapping");
-                                continue;
                             }
 
-                            var matchingModifications = record.Modifications.Where(x => x.Id.ToRawcode() == property).ToList();
-                            if (!matchingModifications.Any())
+                            foreach (var property in properties)
                             {
-                                var newModification = record.GetEmptyObjectDataModificationWrapper();
-                                newModification.Id = property.FromRawcode();
-                                newModification.Value = txtModification.Value;
-                                record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList();
-                            }
-                            else
-                            {
-                                foreach (var modification in matchingModifications)
+                                var propertyValues = new object[] { txtModification.Value };
+
+                                if (perLevelCSVProperties.Contains(property))
                                 {
-                                    modification.Value = txtModification.Value;
+                                    var split = txtModification.Value.ToString().Split(',');
+                                    if (!int.TryParse(record.Modifications.FirstOrDefault(x => x.Id.ToRawcode() == "alev")?.Value?.ToString() ?? "1", out var levels))
+                                    {
+                                        levels = 1;
+                                    }
+                                    if (levels > 1 && split.Length > 1)
+                                    {
+                                        propertyValues = split;
+                                    }
+                                }
+
+                                var matchingModifications = record.Modifications.Where(x => x.Id.ToRawcode() == property).ToList();
+                                if (!matchingModifications.Any())
+                                {
+                                    foreach (var propertyValue in propertyValues)
+                                    {
+                                        var newModification = record.GetEmptyObjectDataModificationWrapper();
+                                        newModification.Id = property.FromRawcode();
+                                        newModification.Value = propertyValue;
+                                        record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList();
+                                    }
+                                }
+                                else
+                                {
+                                    for (var i = 0; i < matchingModifications.Count; i++)
+                                    {
+                                        var modification = matchingModifications[i];
+                                        var value = propertyValues.Length > i ? propertyValues[i] : modification.Value;
+                                        modification.Value = value;
+                                    }
                                 }
                             }
                         }
