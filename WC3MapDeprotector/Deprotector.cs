@@ -453,6 +453,9 @@ namespace WC3MapDeprotector
             return result.ToString();
         }
 
+        [GeneratedRegex(@"(<[^>]*>)|(.)", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_ObjectDataPropertyReferenceCSV();
+
         public async Task<DeprotectionResult> Deprotect()
         {
             _logEvent($"Processing map: {MapBaseName}");
@@ -917,18 +920,36 @@ namespace WC3MapDeprotector
 
                             foreach (var property in properties)
                             {
-                                var propertyValues = new object[] { txtModification.Value };
+                                var propertyValues = new List<object>();
 
                                 if (perLevelCSVProperties.Contains(property))
                                 {
-                                    var split = txtModification.Value.ToString().Split(',');
-                                    if (!int.TryParse(record.Modifications.FirstOrDefault(x => x.Id.ToRawcode() == "alev")?.Value?.ToString() ?? "1", out var levels))
+                                    const string TEMP_CSV_REPLACEMENT = "###TEMP_CSV_REPLACEMENT###";
+                                    var value = txtModification.Value.ToString();
+                                    var matches = Regex_ObjectDataPropertyReferenceCSV().Matches(value);
+                                    if (matches.Any())
                                     {
-                                        levels = 1;
+                                        value = matches.Select(x => x.Value.Length == 1 ? x.Value : x.Value.Replace(",", TEMP_CSV_REPLACEMENT)).Aggregate((x, y) => x + y);
                                     }
-                                    if (levels > 1 && split.Length > 1)
+                                    var isQuoted = value.StartsWith('"') && value.EndsWith('"');
+                                    var split = isQuoted ? value.Trim('"').Split("\",\"") : value.Split(',');
+                                    if (split.Length > 1)
                                     {
-                                        propertyValues = split;
+                                        propertyValues.AddRange(split.Select(x => x.Replace(TEMP_CSV_REPLACEMENT, ",")));
+                                    }
+                                }
+                                
+                                if (propertyValues.Count == 0)
+                                {
+                                    if (txtModification.Value is string)
+                                    {
+                                        var value = txtModification.Value.ToString();
+                                        var isQuoted = value.StartsWith('"') && value.EndsWith('"');
+                                        propertyValues.Add(isQuoted ? value.Trim('"').Replace("\",\"", ",") : value);
+                                    }
+                                    else
+                                    {
+                                        propertyValues.Add(txtModification.Value);
                                     }
                                 }
 
@@ -948,7 +969,7 @@ namespace WC3MapDeprotector
                                     for (var i = 0; i < matchingModifications.Count; i++)
                                     {
                                         var modification = matchingModifications[i];
-                                        var value = propertyValues.Length > i ? propertyValues[i] : modification.Value;
+                                        var value = propertyValues.Count > i ? propertyValues[i] : modification.Value;
                                         modification.Value = value;
                                     }
                                 }

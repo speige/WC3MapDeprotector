@@ -897,6 +897,7 @@ namespace WC3MapDeprotector
 
             return result;
         }
+
         public Dictionary<string, ObjectData> ParseObjectDataFromSLKFiles(List<string> fileNames)
         {
             var result = new Dictionary<string, ObjectData>();
