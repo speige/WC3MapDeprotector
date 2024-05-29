@@ -19,6 +19,7 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler
     {
+        public static HashSet<string> validGUIVariableTypes = new HashSet<string>() { "ability", "abilcode", "animtype", "attacktype", "boolean", "buffcode", "camerasetup", "weapontype", "commandbuttoneffect", "damagetype", "defeatcondition", "destructable", "destructablecode", "dialog", "button", "effecttype", "texttag", "gamecache", "gamespeed", "handle", "hashtable", "image", "imagetype", "integer", "item", "itemtype", "itemcode", "leaderboard", "lightning", "lightningtype", "minimapicon", "mousebuttontype", "multiboard", "ordercode", "pathingtype", "player", "playercolor", "force", "location", "quest", "questitem", "race", "real", "rect", "sound", "soundtype", "effect", "string", "subanimtype", "techcode", "terraindeformation", "terrainshape", "terraintype", "timer", "timerdialog", "trigger", "ubersplat", "ubersplattype", "unit", "group", "unitcode", "fogmodifier", "weathereffect" };
         public bool TryDecompileMapTriggers(MapTriggersFormatVersion formatVersion, MapTriggersSubVersion? subVersion, [NotNullWhen(true)] out MapTriggers? mapTriggers)
         {
             var initGlobals = GetFunction("InitGlobals");
@@ -103,7 +104,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         var variableDefinition = new VariableDefinition
                         {
                             Name = globalDeclaration.Declarator.IdentifierName.Name["udg_".Length..],
-                            Type = globalDeclaration.Declarator.Type.TypeName.Name,
+                            Type = validGUIVariableTypes.Contains(globalDeclaration.Declarator.Type.TypeName.Name) ? globalDeclaration.Declarator.Type.TypeName.Name : "handle",
                             Unk = 1,
                             IsArray = declaration.Value.IsArray,
                             ArraySize = 1,
