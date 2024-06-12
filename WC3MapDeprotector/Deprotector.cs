@@ -1019,13 +1019,13 @@ namespace WC3MapDeprotector
             {
                 File.WriteAllText(skinPath, "");
             }
-            var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
-            var ini = parser.ReadFile(skinPath, Encoding.UTF8);
-            ini.Configuration.AssigmentSpacer = "";
-            ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0hJR0g=")] = decode("REVQUk9URUNURUQ=");
-            ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0xPVw==")] = decode("REVQUk9URUNURUQ=");
-            ini[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX05PTkU=")] = decode("REVQUk9URUNURUQ=");
-            parser.WriteFile(skinPath, ini);
+            var skinParser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
+            var skinIni = skinParser.ReadFile(skinPath, Encoding.UTF8);
+            skinIni.Configuration.AssigmentSpacer = "";
+            skinIni[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0hJR0g=")] = decode("REVQUk9URUNURUQ=");
+            skinIni[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX0xPVw==")] = decode("REVQUk9URUNURUQ=");
+            skinIni[decode("RnJhbWVEZWY=")][decode("VVBLRUVQX05PTkU=")] = decode("REVQUk9URUNURUQ=");
+            skinParser.WriteFile(skinPath, skinIni);
 
             if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")) && !File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
@@ -1193,6 +1193,18 @@ namespace WC3MapDeprotector
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Map will still open in WorldEditor & run, but saving in world editor will corrupt your war3map.j or war3map.lua script file.");
             }
+
+
+            var extraPath = Path.Combine(DiscoveredFilesPath, "war3mapExtra.txt");
+            if (!File.Exists(extraPath))
+            {
+                File.WriteAllText(extraPath, "");
+            }
+            var extraParser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
+            var extraIni = extraParser.ReadFile(extraPath, Encoding.UTF8);
+            extraIni.Configuration.AssigmentSpacer = "";
+            extraIni["MapExtraInfo"]["EnableJassHelper"] = "true";
+            extraParser.WriteFile(extraPath, extraIni);
 
             BuildImportList();
 
@@ -2082,7 +2094,8 @@ namespace WC3MapDeprotector
                     lines.RemoveRange(startGlobalsLineIdx, endGlobalsLineIdx - startGlobalsLineIdx + 1);
                     lines.InsertRange(startGlobalsLineIdx, userGlobalLines);
                     lines.Insert(startGlobalsLineIdx, "globals");
-                    lines.Insert(startGlobalsLineIdx + userGlobalLines.Count + 1, "endglobals");
+                    lines.Insert(startGlobalsLineIdx, "//If you get compiler errors, Ensure vJASS is enabled");
+                    lines.Insert(startGlobalsLineIdx + userGlobalLines.Count + 2, "endglobals");
                     jassScript = new StringBuilder().AppendJoin("\r\n", lines.ToArray()).ToString();
                     result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = jassScript.Replace("%", "%%") }, GlobalCustomScriptComment = "Deprotected global script. Please ensure JassHelper:EnableJassHelper and JassHelper:EnableVJass settings are turned on. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
                     result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition() { Id = triggersCategoryItemIdx, ParentId = rootCategoryItemIdx, Name = "Triggers", IsExpanded = true });
