@@ -21,21 +21,6 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
-        public static void ResetHandledSyntaxBeforeDecompile(this JassScriptDecompiler jassScriptDecompiler)
-        {
-            /*
-            //todo: causing world editor crash, determine why & uncomment
-            foreach (var function in jassScriptDecompiler.Context.FunctionDeclarations.Values)
-            {
-                function.Handled = false;
-            }
-            foreach (var variable in jassScriptDecompiler.Context.VariableDeclarations.Values)
-            {
-                variable.Handled = false;
-            }
-            */
-        }
-
         public static Map Clone_Shallow(this Map map)
         {
             return new Map()
