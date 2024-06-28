@@ -83,10 +83,7 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                 createdRegions.Add(currentRegion);
 
-                                if (!regions.TryAdd(setStatement.IdentifierName.Name, currentRegion))
-                                {
-                                    regions[setStatement.IdentifierName.Name] = currentRegion;
-                                }
+                                regions[setStatement.IdentifierName.Name] = currentRegion;
                             }
                         }
                         else if (string.Equals(setStatement.IdentifierName.Name, "we", StringComparison.Ordinal) &&

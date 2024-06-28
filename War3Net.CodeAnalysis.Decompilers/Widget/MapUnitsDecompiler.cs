@@ -660,7 +660,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         callStatement.Arguments.Arguments[1].TryGetRealExpressionValue(out var x) &&
                         callStatement.Arguments.Arguments[2].TryGetRealExpressionValue(out var y))
                     {
-                        result.Add(index, new Vector2(x, y));
+                        result[index] = new Vector2(x, y);
                     }
                 }
                 else

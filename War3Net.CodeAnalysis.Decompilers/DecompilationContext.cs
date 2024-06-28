@@ -60,7 +60,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 {
                     if (declaration is JassFunctionDeclarationSyntax functionDeclaration)
                     {
-                        functionDeclarationsBuilder.Add(functionDeclaration.FunctionDeclarator.IdentifierName.Name, new FunctionDeclarationContext(functionDeclaration, comments));
+                        functionDeclarationsBuilder[functionDeclaration.FunctionDeclarator.IdentifierName.Name] = new FunctionDeclarationContext(functionDeclaration, comments);
                     }
                     else if (declaration is JassGlobalDeclarationListSyntax globalDeclarationList)
                     {
@@ -68,7 +68,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                         {
                             if (declaration2 is JassGlobalDeclarationSyntax globalDeclaration)
                             {
-                                variableDeclarationsBuilder.Add(globalDeclaration.Declarator.IdentifierName.Name, new VariableDeclarationContext(globalDeclaration));
+                                variableDeclarationsBuilder[globalDeclaration.Declarator.IdentifierName.Name] = new VariableDeclarationContext(globalDeclaration);
                             }
                         }
                     }

@@ -94,7 +94,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     flags |= SoundFlags.UNK16;
                                 }
 
-                                sounds.Add(setStatement.IdentifierName.Name, new Sound
+                                sounds[setStatement.IdentifierName.Name] = new Sound
                                 {
                                     Name = setStatement.IdentifierName.Name,
                                     FilePath = filePath,
@@ -108,7 +108,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     FacialAnimationLabel = string.Empty,
                                     FacialAnimationGroupLabel = string.Empty,
                                     FacialAnimationSetFilepath = string.Empty,
-                                });
+                                };
                             }
                         }
                         else if (setStatement.Value.Expression is JassStringLiteralExpressionSyntax stringLiteralExpression)
@@ -123,7 +123,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 flags |= SoundFlags.UNK16;
                             }
 
-                            sounds.Add(setStatement.IdentifierName.Name, new Sound
+                            sounds[setStatement.IdentifierName.Name] = new Sound
                             {
                                 Name = setStatement.IdentifierName.Name,
                                 FilePath = filePath,
@@ -131,7 +131,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 Flags = flags,
                                 FadeInRate = 10,
                                 FadeOutRate = 10,
-                            });
+                            };
                         }
                         else
                         {

@@ -59,11 +59,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                     {
                         if (invocationExpression.Arguments.Arguments.IsEmpty)
                         {
-                            cameras.Add(setStatement.IdentifierName.Name, new Camera
+                            cameras[setStatement.IdentifierName.Name] = new Camera
                             {
                                 Name = setStatement.IdentifierName.Name["gg_cam_".Length..].Replace('_', ' '),
                                 NearClippingPlane = useNewFormat ? default : 100f,
-                            });
+                            };
                         }
                     }
                     else
