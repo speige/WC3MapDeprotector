@@ -1,4 +1,5 @@
 ﻿using CSharpLua;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
@@ -32,7 +33,15 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return _fileIndexToMd5.Values.Any(x => string.IsNullOrWhiteSpace(Path.GetExtension(_discoveredFileNameToMD5.FirstOrDefault(y => y.Value == x).Key ?? "")) && (!_md5ToPredictedExtension.TryGetValue(x, out var extension) || string.IsNullOrWhiteSpace(extension)));
+                return _fileIndexToMd5.Values.Where(x =>
+                {
+                    var fileName = _discoveredFileNameToMD5.FirstOrDefault(y => y.Value == x).Key ?? "";
+                    if (fileName.Trim().StartsWith("(") && fileName.Trim().EndsWith(")"))
+                    {
+                        return false;
+                    }
+                    return string.IsNullOrWhiteSpace(Path.GetExtension(fileName)) && (!_md5ToPredictedExtension.TryGetValue(x, out var extension) || string.IsNullOrWhiteSpace(extension));
+                }).Any();
             }
         }
 
