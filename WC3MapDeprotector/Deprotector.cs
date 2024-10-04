@@ -223,7 +223,6 @@ namespace WC3MapDeprotector
             }
         }
 
-
         protected string UnknownFilesPath
         {
             get
@@ -674,7 +673,10 @@ namespace WC3MapDeprotector
 
                     foreach (var slkFile in slkFiles)
                     {
-                        File.Delete(slkFile);
+                        if (!slkFile.ToLower().Contains("\\splats\\"))
+                        {
+                            File.Delete(slkFile);
+                        }
                     }
                 }
 
@@ -989,6 +991,8 @@ namespace WC3MapDeprotector
                 }
             }
 
+            /*
+            //todo: merge both versions of ObjectData
             map_ObjectDataOnly.AbilitySkinObjectData = map_ObjectDataOnly.AbilityObjectData;
             map_ObjectDataOnly.BuffSkinObjectData = map_ObjectDataOnly.BuffObjectData;
             map_ObjectDataOnly.DestructableSkinObjectData = map_ObjectDataOnly.DestructableObjectData;
@@ -996,6 +1000,7 @@ namespace WC3MapDeprotector
             map_ObjectDataOnly.ItemSkinObjectData = map_ObjectDataOnly.ItemObjectData;
             map_ObjectDataOnly.UnitSkinObjectData = map_ObjectDataOnly.UnitObjectData;
             map_ObjectDataOnly.UpgradeSkinObjectData = map_ObjectDataOnly.UpgradeObjectData;
+            */
 
             foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
             {
