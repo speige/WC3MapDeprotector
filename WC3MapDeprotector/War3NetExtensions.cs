@@ -210,14 +210,9 @@ namespace WC3MapDeprotector
             return syntaxNode.DFS_Flatten(GetAllChildSyntaxNodes).ToList();
         }
 
-        public static List<string> GetObjectDataStringValues(this Map map, List<string> rawCodes = null)
+        public static Dictionary<string, Dictionary<string, List<object>>> GetObjectData(this Map map, bool replaceTriggerStrings = true)
         {
-            var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            var identifierToRawCode = new HashSet<int>();
-            if (rawCodes != null)
-            {
-                identifierToRawCode.AddRange(rawCodes.Select(x => x.FromRawcode()));
-            }
+            var result = new Dictionary<string, Dictionary<string, List<object>>>();
 
             var objectDataProperties = typeof(Map).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.EndsWith("ObjectData", StringComparison.InvariantCultureIgnoreCase)).ToList();
             foreach (var objectDataProperty in objectDataProperties)
@@ -236,10 +231,17 @@ namespace WC3MapDeprotector
                     {
                         continue;
                     }
-                    
+
                     var modificationProperty = childData[0].GetType().GetProperty("Modifications", BindingFlags.Public | BindingFlags.Instance);
                     foreach (var child in childData)
                     {
+                        var objectId = child.ToString();
+                        if (!result.TryGetValue(objectId, out var objectHashTable))
+                        {
+                            objectHashTable = new Dictionary<string, List<object>>();
+                            result[objectId] = objectHashTable;
+                        }
+
                         var modifications = (System.Collections.IList)modificationProperty.GetValue(child);
                         if (modifications == null || modifications.Count == 0)
                         {
@@ -252,22 +254,50 @@ namespace WC3MapDeprotector
                         foreach (var modification in modifications)
                         {
                             var id = (int)idProperty.GetValue(modification);
-                            if (identifierToRawCode.Any() && !identifierToRawCode.Contains(id))
+                            var value = valueProperty.GetValue(modification);
+
+                            if (value is string valueString)
                             {
-                                continue;
+                                const string TRIGSTR_ = "TRIGSTR_";
+                                if (valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase) == true)
+                                {
+                                    if (int.TryParse(valueString.Substring(TRIGSTR_.Length), out var key))
+                                    {
+                                        value = map.TriggerStrings.Strings.FirstOrDefault(x => x.Key == key)?.Value ?? value;
+                                    }
+                                }
                             }
 
-                            var value = valueProperty.GetValue(modification);
-                            if (value is string)
+                            var rawCode = id.ToRawcode();
+                            if (!objectHashTable.TryGetValue(rawCode, out var list))
                             {
-                                result.Add((string)value);
+                                list = new List<object>();
+                                objectHashTable[rawCode] = list;
+                            }
+
+                            if (!list.Contains(value))
+                            {
+                                list.Add(value);
                             }
                         }
                     }
                 }
             }
 
-            return result.ToList();
+            return result;
+        }
+
+        public static List<string> GetObjectDataStringValues(this Map map, List<string> rawCodes = null)
+        {
+            var result = GetObjectData(map);
+            var identifierToRawCode = new HashSet<int>();
+            if (rawCodes != null)
+            {
+                identifierToRawCode.AddRange(rawCodes.Select(x => x.FromRawcode()));
+                result = result.Where(x => rawCodes.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value);
+            }
+
+            return result.Values.SelectMany(x => x.SelectMany(y => y.Value)).OfType<string>().Distinct().ToList();
         }
 
         public static List<MpqKnownFile> GetObjectDataFiles(this Map map, bool ignoreExceptions = false)
