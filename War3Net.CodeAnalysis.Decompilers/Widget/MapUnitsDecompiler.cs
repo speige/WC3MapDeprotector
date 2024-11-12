@@ -800,8 +800,12 @@ namespace War3Net.CodeAnalysis.Decompilers
                     {
                         if (callStatement.Arguments.Arguments[0].TryGetIntegerExpressionValue_New(out int itemId) && callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out int chance))
                         {
-                            var itemSet = result[^1];
-                            itemSet.Items.Add(new RandomItemSetItem() { ItemId = itemId.InvertEndianness(), Chance = chance });
+                            if (itemId != -1)
+                            {
+                                var itemSet = result[^1];
+                                itemSet.Items.Add(new RandomItemSetItem() { ItemId = itemId.InvertEndianness(), Chance = chance });
+                            }
+
                         }
                     }
                 }
