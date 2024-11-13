@@ -21,6 +21,16 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static List<SimpleObjectModification> FindUnitObjectData(this Map map, string unitFourCC)
+        {
+            return map.UnitObjectData.BaseUnits.Where(y => y.ToString().Contains(unitFourCC)).Concat(map.UnitObjectData.NewUnits.Where(y => y.ToString().Contains(unitFourCC))).ToList();
+        }
+
+        public static List<SimpleObjectDataModification> GetObjectDataProperty(this List<SimpleObjectModification> unitObjectData, string propertyNameFourCC)
+        {
+            return unitObjectData.SelectMany(y => y.Modifications).Where(y => y.ToString().Equals(propertyNameFourCC, StringComparison.InvariantCultureIgnoreCase)).ToList();
+        }
+
         public static Map Clone_Shallow(this Map map)
         {
             return new Map()
