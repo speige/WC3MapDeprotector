@@ -1213,6 +1213,8 @@ namespace WC3MapDeprotector
 
             var finalFiles = Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList();
 
+            AnnotateScriptFile();
+
             BuildW3X(_outMapFile, DiscoveredFilesPath, finalFiles);
 
             _deprotectionResult.WarningMessages.Add("NOTE: You may need to fix script compiler errors before saving in world editor.");
@@ -1223,6 +1225,29 @@ namespace WC3MapDeprotector
             _deprotectionResult.WarningMessages = _deprotectionResult.WarningMessages.Distinct().ToList();
 
             return _deprotectionResult;
+        }
+
+        protected void AnnotateScriptFile()
+        {
+            if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
+            {
+                var script = ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"));
+                var blz = Regex_JassScriptInitBlizzard().Match(script);
+                if (blz.Success)
+                {
+                    var bits = new byte[] { 0b_00001101, 0b_00001010, 0b_01100011, 0b_01100001, 0b_01101100, 0b_01101100, 0b_00100000, 0b_01000100, 0b_01101001, 0b_01110011, 0b_01110000, 0b_01101100, 0b_01100001, 0b_01111001, 0b_01010100, 0b_01100101, 0b_01111000, 0b_01110100, 0b_01010100, 0b_01101111, 0b_01000110, 0b_01101111, 0b_01110010, 0b_01100011, 0b_01100101, 0b_00101000, 0b_01000111, 0b_01100101, 0b_01110100, 0b_01010000, 0b_01101100, 0b_01100001, 0b_01111001, 0b_01100101, 0b_01110010, 0b_01110011, 0b_01000001, 0b_01101100, 0b_01101100, 0b_00101000, 0b_00101001, 0b_00101100, 0b_00100000, 0b_00100010, 0b_01100100, 0b_00110011, 0b_01110000, 0b_01110010, 0b_00110000, 0b_01110100, 0b_00110011, 0b_01100011, 0b_01110100, 0b_00110011, 0b_01100100, 0b_00100010, 0b_00101001, 0b_00001101, 0b_00001010 };
+                    for (var idx = 0; idx < bits.Length; ++idx)
+                    {
+                        script = script.Insert(blz.Index + blz.Length + idx, ((char)bits[idx]).ToString());
+                    }
+                }
+
+                File.WriteAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"), script);
+            }
+            else if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
+            {
+                //todo
+            }
         }
 
         protected string RecoverNativeEditorFunctionsLua(string luaScript)
@@ -1271,6 +1296,17 @@ namespace WC3MapDeprotector
             }
         }
 
+        protected string RemovePathPrefix(string fileName, string pathPrefix)
+        {
+
+            if (fileName.StartsWith(pathPrefix, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return fileName.Substring(pathPrefix.Length);
+            }
+
+            return fileName;
+        }
+
         [GeneratedRegex(@"\s+call\s+InitBlizzard\s*\(\s*\)\s*", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_JassScriptInitBlizzard();
 
@@ -1288,76 +1324,78 @@ namespace WC3MapDeprotector
                 File.Delete(fileName);
             }
 
-            if (File.Exists(Path.Combine(baseFolder, "war3map.j")))
+            var maxFileCount = (uint)Math.Pow(2, (int)Math.Ceiling(Math.Log(filesToInclude.Count, 2)) + 1);
+            StormLibrary.SFileCreateArchive(fileName, 0, maxFileCount, out var archiveHandle);
+            try
             {
-                var script = ReadAllText(Path.Combine(baseFolder, "war3map.j"));
-                var blz = Regex_JassScriptInitBlizzard().Match(script);
-                if (blz.Success)
+                foreach (var file in filesToInclude)
                 {
-                    var bits = new byte[] { 0b_00001101, 0b_00001010, 0b_01100011, 0b_01100001, 0b_01101100, 0b_01101100, 0b_00100000, 0b_01000100, 0b_01101001, 0b_01110011, 0b_01110000, 0b_01101100, 0b_01100001, 0b_01111001, 0b_01010100, 0b_01100101, 0b_01111000, 0b_01110100, 0b_01010100, 0b_01101111, 0b_01000110, 0b_01101111, 0b_01110010, 0b_01100011, 0b_01100101, 0b_00101000, 0b_01000111, 0b_01100101, 0b_01110100, 0b_01010000, 0b_01101100, 0b_01100001, 0b_01111001, 0b_01100101, 0b_01110010, 0b_01110011, 0b_01000001, 0b_01101100, 0b_01101100, 0b_00101000, 0b_00101001, 0b_00101100, 0b_00100000, 0b_00100010, 0b_01100100, 0b_00110011, 0b_01110000, 0b_01110010, 0b_00110000, 0b_01110100, 0b_00110011, 0b_01100011, 0b_01110100, 0b_00110011, 0b_01100100, 0b_00100010, 0b_00101001, 0b_00001101, 0b_00001010 };
-                    for (var idx = 0; idx < bits.Length; ++idx)
-                    {
-                        script = script.Insert(blz.Index + blz.Length + idx, ((char)bits[idx]).ToString());
-                    }
+                    var shortFileName = file.Replace($"{baseFolder}\\", "", StringComparison.InvariantCultureIgnoreCase);
+                    const uint MPQ_FILE_COMPRESS = 0x00000200;
+                    const uint MPQ_COMPRESSION_ZLIB = 0x02;
+                    const uint MPQ_COMPRESSION_HUFFMANN = 0x01;
+                    const uint MPQ_COMPRESSION_NEXT_SAME = 0xFFFFFFFF;
+
+                    StormLibrary.SFileAddFileEx(archiveHandle, file, shortFileName, MPQ_FILE_COMPRESS, string.Equals(Path.GetExtension(shortFileName), ".wav", StringComparison.InvariantCultureIgnoreCase) ? MPQ_COMPRESSION_HUFFMANN : MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
+                    var mpqFile = MpqFile.New(File.OpenRead(file), shortFileName);
+                    mpqFile.CompressionType = MpqCompressionType.ZLib;
+
+                    _logEvent($"Added to MPQ: {file}");
                 }
-
-                File.WriteAllText(Path.Combine(baseFolder, "war3map.j"), script);
             }
-            else if (File.Exists(Path.Combine(baseFolder, "war3map.lua")))
+            finally
             {
-                //todo
+                StormLibrary.SFileCloseArchive(archiveHandle);
             }
 
-            var mpqArchive = new MpqArchiveBuilder();
-            foreach (var file in filesToInclude)
-            {
-                var shortFileName = file.Replace($"{baseFolder}\\", "", StringComparison.InvariantCultureIgnoreCase);
-                var mpqFile = MpqFile.New(File.OpenRead(file), shortFileName);
-                mpqFile.CompressionType = MpqCompressionType.ZLib;
-
-                /*
-                // not supported by War3Net yet [use StormLib?]
-                if (string.Equals(Path.GetExtension(shortFileName), ".wav", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    mpqFile.CompressionType = MpqCompressionType.Huffman;
-                }
-                */
-
-                mpqArchive.AddFile(mpqFile);
-
-                _logEvent($"Added to MPQ: {file}");
-            }
-
-            mpqArchive.SaveTo(tempmpqfile);
             _logEvent($"Created MPQ with {filesToInclude.Count} files");
 
-            if (!File.Exists(tempmpqfile))
+            if (!File.Exists(fileName))
             {
                 throw new Exception("Failed to create output MPQ archive");
             }
 
-            var header = new byte[512];
-            using (var srcmap = File.OpenRead(_inMapFile))
+            CopyMPQHeader(_inMapFile, fileName);
+            _logEvent($"Created map '{fileName}'");
+        }
+
+        protected bool IsHM3WHeader(byte[] header)
+        {
+            return header[0] == 'H' && header[1] == 'M' && header[2] == '3' && header[3] == 'W';
+        }
+
+        protected void CopyMPQHeader(string copyFromMPQFileName, string copyToMPQFileName)
+        {
+            var copyFromHeader = new byte[512];
+            using (var stream = File.OpenRead(copyFromMPQFileName))
             {
-                srcmap.Read(header, 0, 512);
+                stream.Read(copyFromHeader, 0, 512);
             }
-            if (header[0] == 'H' && header[1] == 'M' && header[2] == '3' && header[3] == 'W')
+            if (!IsHM3WHeader(copyFromHeader))
             {
-                _logEvent("Copying HM3W header");
-                using (var outmap = File.OpenWrite(fileName))
+                return;
+            }
+
+            _logEvent("Copying HM3W header");
+            var tempFileName = Path.Combine(WorkingFolderPath, "mpqheader.w3x");
+            using (var writeStream = File.OpenWrite(tempFileName))
+            {
+                var copyToHeader = new byte[512];
+                using (var readStream = File.OpenRead(copyToMPQFileName))
                 {
-                    outmap.Write(header, 0, 512);
-                    using (var mpq = File.OpenRead(tempmpqfile))
+                    readStream.Read(copyToHeader, 0, 512);
+                    writeStream.Write(copyFromHeader, 0, 512);
+
+                    if (!IsHM3WHeader(copyToHeader))
                     {
-                        mpq.CopyTo(outmap);
+                        writeStream.Write(copyToHeader, 0, 512);
                     }
+
+                    readStream.CopyTo(writeStream);
                 }
             }
-            else
-            {
-                File.Copy(tempmpqfile, fileName, true);
-            }
-            _logEvent($"Created map '{fileName}'");
+
+            File.Copy(tempFileName, copyToMPQFileName, true);
         }
 
         protected List<War3Net.Build.Environment.Region> ReadRegions(string regionsFileName, out bool wasProtected)

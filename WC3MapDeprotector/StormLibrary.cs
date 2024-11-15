@@ -49,6 +49,15 @@ namespace WC3MapDeprotector
         [DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
         public static extern bool SFileCloseFile(IntPtr hFile);
 
+        [DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
+        public static extern bool SFileCreateArchive([MarshalAs(UnmanagedType.LPTStr)] string szMpqName, uint dwCreateFlags, uint dwMaxFileCount, out IntPtr phMpq);
+
+        [DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
+        public static extern bool SFileSetMaxFileCount(IntPtr phMpq, uint dwMaxFileCount);
+
+        [DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
+        public static extern bool SFileAddFileEx(IntPtr hMpq, [MarshalAs(UnmanagedType.LPTStr)] string szFileName, [MarshalAs(UnmanagedType.LPStr)] string szArchivedName, uint dwFlags, uint dwCompression, uint dwCompressionNext);
+
         //[DllImport(STORMLIB, CallingConvention = CallingConvention.Winapi, ExactSpelling = true, PreserveSig = true, SetLastError = true, ThrowOnUnmappableChar = false)]
         //public static extern bool SFileGetFileName(IntPtr hFile, [MarshalAs(UnmanagedType.LPStr)] out string szFileName);
 
