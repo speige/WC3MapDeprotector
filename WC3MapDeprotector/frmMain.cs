@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Reflection;
 using System.Security.Principal;
+using System.Windows.Forms;
 
 namespace WC3MapDeprotector
 {
@@ -74,10 +75,39 @@ namespace WC3MapDeprotector
             }
         }
 
+        protected string PromptUserForFileInstallPath(string fileName, string defaultPath)
+        {
+            var result = defaultPath;
+            while (!File.Exists(result))
+            {
+                using (OpenFileDialog fileDialog = new OpenFileDialog())
+                {
+                    fileDialog.Title = $"{fileName} not found. Please select install location.";
+                    fileDialog.Filter = "Exe Files (*.exe)|*.exe";
+                    fileDialog.FilterIndex = 1;
+                    fileDialog.Multiselect = false;
+                    fileDialog.InitialDirectory = Path.GetDirectoryName(defaultPath);
+                    fileDialog.CheckFileExists = true;
+                    fileDialog.CheckPathExists = true;
+                    fileDialog.FileName = fileName;
+
+                    if (fileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        result = fileDialog.FileName;
+                    }
+                }
+            }
+
+            return result;
+        }
+
         protected void MainForm_Load(object sender, EventArgs e)
         {
             EnableControls();
             CheckForUpdates();
+
+            UserSettings.WC3ExePath = PromptUserForFileInstallPath("Warcraft III.exe", UserSettings.WC3ExePath);
+            UserSettings.WorldEditExePath = PromptUserForFileInstallPath("World Editor.exe", UserSettings.WorldEditExePath);
         }
 
         protected void tbInputFile_TextChanged(object sender, EventArgs e)

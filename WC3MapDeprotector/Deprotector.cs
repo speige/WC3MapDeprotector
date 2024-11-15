@@ -28,6 +28,7 @@ using FastMDX;
 using System.Collections.Concurrent;
 using War3Net.IO.Slk;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace WC3MapDeprotector
 {
@@ -297,14 +298,9 @@ namespace WC3MapDeprotector
             return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
         }
 
-        protected System.Diagnostics.Process LaunchWC3(string wc3ExePath, string mapFileName)
+        protected Process LaunchWC3(string mapFileName)
         {
-            return Utils.ExecuteCommand(wc3ExePath, $"-launch -loadfile \"{mapFileName}\"");
-        }
-
-        protected string GetWc3LocalFilesPath(string wc3ExePath)
-        {
-            return Path.GetDirectoryName(Path.GetDirectoryName(wc3ExePath));
+            return Utils.ExecuteCommand(UserSettings.WC3ExePath, $"-launch -loadfile \"{mapFileName}\"");
         }
 
         protected void LiveGameScanForUnknownFiles(StormMPQArchive archive)
@@ -317,11 +313,7 @@ namespace WC3MapDeprotector
             var oldEnableLocalFiles = Registry.GetValue(REGISTRY_KEY, REGISTRY_VALUE, null);
             Registry.SetValue(REGISTRY_KEY, REGISTRY_VALUE, 1);
 
-            //todo: save to %appdata% so it remembers last set location
-            var wc3ExePath = Path.Combine(@"c:\Program Files (x86)\Warcraft III\_retail_\x86_64\Warcraft III.exe");
-            var wc3LocalFilesPath = GetWc3LocalFilesPath(wc3ExePath);
-
-            System.Diagnostics.Process process = null;
+            Process process = null;
             var tempMapLocation = Path.ChangeExtension(Path.GetTempPath(), "WC3MapDeprotector_LiveGameScan" + Path.GetExtension(_inMapFile));
             try
             {
@@ -334,7 +326,7 @@ namespace WC3MapDeprotector
                 using (var scanner = new ProcessFileAccessScanner())
                 {
                     var form = new frmLiveGameScanner();
-                    form.WC3ExePath = wc3ExePath;
+                    form.WC3ExePath = UserSettings.WC3ExePath;
 
                     scanner.FileAccessed += fileName =>
                     {
@@ -376,8 +368,8 @@ namespace WC3MapDeprotector
                             process.Kill();
                         }
 
-                        scanner.MonitorFolderPath = GetWc3LocalFilesPath(form.WC3ExePath);
-                        process = LaunchWC3(form.WC3ExePath, tempMapLocation);
+                        scanner.MonitorFolderPath = UserSettings.WC3LocalFilesPath;
+                        process = LaunchWC3(tempMapLocation);
                         scanner.ProcessId = process.Id;
                     };
 

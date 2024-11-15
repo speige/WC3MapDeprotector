@@ -1,0 +1,12 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="WC3MapDeprotector.Properties" GeneratedClassName="Settings">
+  <Profiles />
+  <Settings>
+    <Setting Name="WC3ExePath" Type="System.String" Scope="User">
+      <Value Profile="(Default)">c:\Program Files (x86)\Warcraft III\_retail_\x86_64\Warcraft III.exe</Value>
+    </Setting>
+    <Setting Name="WorldEditExePath" Type="System.String" Scope="User">
+      <Value Profile="(Default)">c:\Program Files (x86)\Warcraft III\_retail_\x86_64\World Editor.exe</Value>
+    </Setting>
+  </Settings>
+</SettingsFile>
