@@ -449,6 +449,11 @@ namespace WC3MapDeprotector
 
         public async Task<DeprotectionResult> Deprotect()
         {
+            while (WorldEditor.GetRunningInstanceOfEditor() != null)
+            {
+                MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
+            }
+
             _logEvent($"Processing map: {MapBaseName}");
 
             CleanTemp();
@@ -467,8 +472,9 @@ namespace WC3MapDeprotector
 
             _deprotectionResult = new DeprotectionResult();
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
+            _deprotectionResult.WarningMessages.Add($"NOTE: World Editor has SD & HD modes. HD is prone to crashing and should not be used, it's find to use HD in game itself. The setting can be changed in WorldEditor.exe via File/Preferences/AssetMode");
 
-            var baseMapFilesZip = Path.Combine(ExeFolderPath, "BaseMapFiles.zip");
+            var baseMapFilesZip = Path.Combine(ExeFolderPath, "BaseMapFiles.zip"); 
             if (!Directory.Exists(BaseMapFilesPath) && File.Exists(baseMapFilesZip))
             {
                 ZipFile.ExtractToDirectory(baseMapFilesZip, BaseMapFilesPath, true);

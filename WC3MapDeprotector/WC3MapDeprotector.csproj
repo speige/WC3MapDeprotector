@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FlaUI.UIA2" Version="4.0.0" />
     <PackageReference Include="ini-parser-netstandard" Version="2.5.2" />
     <PackageReference Include="Jot" Version="2.1.17" />
     <PackageReference Include="Microsoft.ClearScript.V8" Version="7.4.4" />
