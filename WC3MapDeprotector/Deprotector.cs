@@ -1218,6 +1218,7 @@ namespace WC3MapDeprotector
 
             //UpgradeToLatestFileFormats_DontUse();
             MoveObjectEditorStringsToTriggerStrings();
+            CorrectUnitPositionZOffsets();
             //RepairW3XNativeFilesInEditor();
 
             AnnotateScriptFile();
@@ -1395,7 +1396,7 @@ namespace WC3MapDeprotector
             {
                 map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
                 map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
-                map.Info.GameDataVersion = Enum.GetValues(typeof(GameDataVersion)).Cast<GameDataVersion>().OrderByDescending(x => x).First();
+                map.Info.GameDataVersion = GameDataVersion.TFT;
                 map.Info.GameVersion = new Version(2, 0, 0, 22370);
             }
 
@@ -1448,7 +1449,11 @@ namespace WC3MapDeprotector
                 SaveDecompiledArchiveFile(file);
             }
 
-            File.Delete(tempMapFileName);
+            try
+            {
+                File.Delete(tempMapFileName);
+            }
+            catch { }
         }
 
         protected void MoveObjectEditorStringsToTriggerStrings()
@@ -1492,7 +1497,11 @@ namespace WC3MapDeprotector
                 SaveDecompiledArchiveFile(file);
             }
 
-            File.Delete(tempMapFileName);
+            try
+            {
+                File.Delete(tempMapFileName);
+            }
+            catch { }
         }
 
         protected void RepairW3XNativeFilesInEditor()
@@ -1516,6 +1525,41 @@ namespace WC3MapDeprotector
                 editor.SaveMap();
             }
             */
+        }
+
+        protected void CorrectUnitPositionZOffsets()
+        {
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var tempMapFileName = Path.Combine(WorkingFolderPath, "unitPositionZ.w3x");
+            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
+            var map = Map.Open(tempMapFileName);
+
+            var tileColumns = map.Environment.Width + 1;
+            var tileRows = map.Environment.Height + 1;
+            var tileWidth = (uint)((map.Environment.Right - map.Environment.Left) / map.Environment.Width);
+            var tileHeight = (uint)((map.Environment.Top - map.Environment.Bottom) / map.Environment.Height);
+            foreach (var unit in map.Units.Units)
+            {
+                var tileX = Math.Clamp((uint)((unit.Position.X - map.Environment.Left) / tileWidth), 0, tileColumns - 1);
+                var tileY = Math.Clamp((uint)(tileRows - (map.Environment.Top - unit.Position.Y) / tileHeight), 0, tileRows - 1);
+                var tile = map.Environment.TerrainTiles[(int)(tileY * tileColumns + tileX)];
+                var heightData = (ushort)typeof(TerrainTile).GetField("_heightData", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(tile);
+                var unitPosition = unit.Position;
+                unitPosition.Z = (heightData - 8192f + (tile.CliffLevel - 2) * 512f) / 4;
+                unit.Position = unitPosition;
+            }
+
+            var mapFiles = map.GetAllFiles();
+            foreach (var file in mapFiles)
+            {
+                SaveDecompiledArchiveFile(file);
+            }
+
+            try
+            {
+                File.Delete(tempMapFileName);
+            }
+            catch { }
         }
 
         [GeneratedRegex(@"\s+call\s+InitBlizzard\s*\(\s*\)\s*", RegexOptions.IgnoreCase)]
