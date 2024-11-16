@@ -29,6 +29,7 @@ using System.Collections.Concurrent;
 using War3Net.IO.Slk;
 using Microsoft.Win32;
 using System.Diagnostics;
+using War3Net.Build.Import;
 
 namespace WC3MapDeprotector
 {
@@ -449,10 +450,12 @@ namespace WC3MapDeprotector
 
         public async Task<DeprotectionResult> Deprotect()
         {
+            /*
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
             {
                 MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
             }
+            */
 
             _logEvent($"Processing map: {MapBaseName}");
 
@@ -608,7 +611,7 @@ namespace WC3MapDeprotector
                                     var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
                                     {
-                                        objectData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList();
+                                        objectData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
                                     }
                                     else
                                     {
@@ -616,7 +619,7 @@ namespace WC3MapDeprotector
                                         {
                                             if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
                                             {
-                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList();
+                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList().AsReadOnly();
                                             }
                                         }
                                     }
@@ -626,7 +629,7 @@ namespace WC3MapDeprotector
                                     var value = objectData.NewValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
                                     {
-                                        objectData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList();
+                                        objectData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
                                     }
                                     else
                                     {
@@ -634,7 +637,7 @@ namespace WC3MapDeprotector
                                         {
                                             if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
                                             {
-                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList();
+                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList().AsReadOnly();
                                             }
                                         }
                                     }
@@ -652,13 +655,13 @@ namespace WC3MapDeprotector
                                             var newModification = newValue.Modifications.FirstOrDefault(x => x.Id == baseModification.Id && x.Level == baseModification.Level);
                                             if (newModification != null)
                                             {
-                                                newValue.Modifications = newValue.Modifications.Except(new[] { newModification }).ToList();
+                                                newValue.Modifications = newValue.Modifications.Except(new[] { newModification }).ToList().AsReadOnly();
                                             }
-                                            newValue.Modifications = newValue.Modifications.Concat(new[] { baseModification }).ToList();
+                                            newValue.Modifications = newValue.Modifications.Concat(new[] { baseModification }).ToList().AsReadOnly();
                                         }
                                     }
                                 }
-                                objectData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList();
+                                objectData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList().AsReadOnly();
 
                                 File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), objectData.Serialize());
                             }
@@ -961,7 +964,7 @@ namespace WC3MapDeprotector
                                         var newModification = record.GetEmptyObjectDataModificationWrapper();
                                         newModification.Id = property.FromRawcode();
                                         newModification.Value = propertyValue;
-                                        record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList();
+                                        record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList().AsReadOnly();
                                     }
                                 }
                                 else
@@ -1213,6 +1216,10 @@ namespace WC3MapDeprotector
 
             var finalFiles = Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList();
 
+            //UpgradeToLatestFileFormats_DontUse();
+            MoveObjectEditorStringsToTriggerStrings();
+            //RepairW3XNativeFilesInEditor();
+
             AnnotateScriptFile();
 
             BuildW3X(_outMapFile, DiscoveredFilesPath, finalFiles);
@@ -1225,6 +1232,41 @@ namespace WC3MapDeprotector
             _deprotectionResult.WarningMessages = _deprotectionResult.WarningMessages.Distinct().ToList();
 
             return _deprotectionResult;
+        }
+
+        protected void AnnotateMap(Map map)
+        {
+            if (int.TryParse((map.Info.MapName ?? "").Replace("TRIGSTR_", ""), out var trgStr1))
+            {
+                var str = map.TriggerStrings?.Strings?.FirstOrDefault(x => x.Key == trgStr1);
+                if (str != null)
+                {
+                    str.Value = "\u0044\u0045\u0050\u0052\u004F\u0054\u0045\u0043\u0054\u0045\u0044" + (str.Value ?? "");
+                    if (str.Value.Length > 36)
+                    {
+                        str.Value = str.Value.Substring(0, 36);
+                    }
+                }
+            }
+            else
+            {
+                map.Info.MapName = "\u0044\u0045\u0050\u0052\u004F\u0054\u0045\u0043\u0054\u0045\u0044" + (map.Info.MapName ?? "");
+            }
+
+            map.Info.RecommendedPlayers = "\u0057\u0043\u0033\u004D\u0061\u0070\u0044\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u006F\u0072";
+
+            if (map.TriggerStrings?.Strings != null && int.TryParse((map.Info.MapDescription ?? "").Replace("TRIGSTR_", ""), out var trgStr2))
+            {
+                var str = map.TriggerStrings.Strings.FirstOrDefault(x => x.Key == trgStr2);
+                if (str != null)
+                {
+                    str.Value = $"{str.Value ?? ""}\r\n\u004D\u0061\u0070\u0020\u0064\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u0065\u0064\u0020\u0062\u0079\u0020\u0068\u0074\u0074\u0070\u0073\u003A\u002F\u002F\u0067\u0069\u0074\u0068\u0075\u0062\u002E\u0063\u006F\u006D\u002F\u0073\u0070\u0065\u0069\u0067\u0065\u002F\u0057\u0043\u0033\u004D\u0061\u0070\u0044\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u006F\u0072\r\n\r\n";
+                }
+            }
+
+            map.Info.CampaignBackgroundNumber = -1;
+            map.Info.LoadingScreenBackgroundNumber = -1;
+            map.Info.LoadingScreenPath = "\u004C\u006F\u0061\u0064\u0069\u006E\u0067\u0053\u0063\u0072\u0065\u0065\u006E\u002E\u006D\u0064\u0078";
         }
 
         protected void AnnotateScriptFile()
@@ -1298,6 +1340,10 @@ namespace WC3MapDeprotector
 
         protected string RemovePathPrefix(string fileName, string pathPrefix)
         {
+            if (!pathPrefix.EndsWith(@"\"))
+            {
+                pathPrefix += @"\";
+            }
 
             if (fileName.StartsWith(pathPrefix, StringComparison.InvariantCultureIgnoreCase))
             {
@@ -1305,6 +1351,171 @@ namespace WC3MapDeprotector
             }
 
             return fileName;
+        }
+
+        protected void UpgradeToLatestFileFormats_DontUse()
+        {
+            //todo: Need to troubleshoot, causing world editor failures (probably War3Net has some missing field definitions in latest versions)
+            throw new Exception("UpgradeToLatestFileFormats causes corruption of binary data files");
+
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var tempMapFileName = Path.Combine(WorkingFolderPath, "fileFormats.w3x");
+            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
+            var map = Map.Open(tempMapFileName);
+
+            if (map.Cameras != null)
+            {
+                map.Cameras.FormatVersion = Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.CustomTextTriggers != null)
+            {
+                map.CustomTextTriggers.FormatVersion = Enum.GetValues(typeof(MapCustomTextTriggersFormatVersion)).Cast<MapCustomTextTriggersFormatVersion>().OrderByDescending(x => x).First();
+                map.CustomTextTriggers.SubVersion = Enum.GetValues(typeof(MapCustomTextTriggersSubVersion)).Cast<MapCustomTextTriggersSubVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Doodads != null)
+            {
+                map.Doodads.FormatVersion = Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderByDescending(x => x).First();
+                map.Doodads.SubVersion = Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderByDescending(x => x).First();
+                map.Doodads.SpecialDoodadVersion = Enum.GetValues(typeof(SpecialDoodadVersion)).Cast<SpecialDoodadVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Environment != null)
+            {
+                map.Environment.FormatVersion = Enum.GetValues(typeof(MapEnvironmentFormatVersion)).Cast<MapEnvironmentFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.ImportedFiles != null)
+            {
+                map.ImportedFiles.FormatVersion = Enum.GetValues(typeof(ImportedFilesFormatVersion)).Cast<ImportedFilesFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Info != null)
+            {
+                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
+                map.Info.GameDataVersion = Enum.GetValues(typeof(GameDataVersion)).Cast<GameDataVersion>().OrderByDescending(x => x).First();
+                map.Info.GameVersion = new Version(2, 0, 0, 22370);
+            }
+
+            if (map.PathingMap != null)
+            {
+                map.PathingMap.FormatVersion = Enum.GetValues(typeof(MapPathingMapFormatVersion)).Cast<MapPathingMapFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.PreviewIcons != null)
+            {
+                map.PreviewIcons.FormatVersion = Enum.GetValues(typeof(MapPreviewIconsFormatVersion)).Cast<MapPreviewIconsFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Regions != null)
+            {
+                map.Regions.FormatVersion = Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Sounds != null)
+            {
+                map.Sounds.FormatVersion = Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Triggers != null)
+            {
+                map.Triggers.FormatVersion = Enum.GetValues(typeof(MapTriggersFormatVersion)).Cast<MapTriggersFormatVersion>().OrderByDescending(x => x).First();
+                map.Triggers.SubVersion = Enum.GetValues(typeof(MapTriggersSubVersion)).Cast<MapTriggersSubVersion>().OrderByDescending(x => x).First();
+            }
+
+            if (map.Units != null)
+            {
+                map.Units.UseNewFormat = true;
+            }
+
+            var allObjectData = map.GetAllObjectData(createIfNotExists: false);
+            foreach ((var dataType, var objectData) in allObjectData)
+            {
+                objectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
+            }
+
+            var allSkinObjectData = map.GetAllObjectData(skin: true, createIfNotExists: false);
+            foreach ((var dataType, var skinObjectData) in allSkinObjectData)
+            {
+                skinObjectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
+            }
+
+            var mapFiles = map.GetAllFiles();
+            foreach (var file in mapFiles)
+            {
+                SaveDecompiledArchiveFile(file);
+            }
+
+            File.Delete(tempMapFileName);
+        }
+
+        protected void MoveObjectEditorStringsToTriggerStrings()
+        {
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var tempMapFileName = Path.Combine(WorkingFolderPath, "triggerStrings.w3x");
+            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
+            var map = Map.Open(tempMapFileName);
+
+            const string TRIGSTR_ = "TRIGSTR_";
+            var triggerStringSupportedObjectAttributeFourCCs = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "gef1", "gcls", "gef2", "gef3", "gef4", "ahky", "anam", "aret", "arhk", "arut", "atp1", "aub1", "auhk", "aut1", "auu1", "ftip", "fube", "fnam", "bnam", "bsuf", "ides", "unam", "utip", "utub", "uhot", "uawt", "upro", "utpr", "ucun", "ucut", "ghk1", "gnam", "gtp1", "gub1" };
+            
+            map.TriggerStrings ??= new TriggerStrings();
+            var maxTriggerKey = map.TriggerStrings.Strings.Select(x => x.Key).Concat(new uint[] { 0 }).Max();
+            var allObjectData = map.GetAllObjectData(false).Concat(map.GetAllObjectData(true)).ToList();
+            foreach ((var dataType, var objectData) in allObjectData)
+            {
+                var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
+                foreach (var data in combinedObjectData)
+                {
+                    foreach (var modification in data.Modifications)
+                    {
+                        if (triggerStringSupportedObjectAttributeFourCCs.Contains(modification.ToString()) && modification.Value is string valueString && valueString.Length > 1)
+                        {
+                            if (!valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                maxTriggerKey++;
+                                var triggerString = new TriggerString() { Key = maxTriggerKey, Value = valueString };
+                                modification.Value = TRIGSTR_ + maxTriggerKey;
+                                map.TriggerStrings.Strings.Add(triggerString);
+                            }
+                        }
+                    }
+                }
+            }
+
+            AnnotateMap(map);
+            var mapFiles = map.GetAllFiles();
+            foreach (var file in mapFiles)
+            {
+                SaveDecompiledArchiveFile(file);
+            }
+
+            File.Delete(tempMapFileName);
+        }
+
+        protected void RepairW3XNativeFilesInEditor()
+        {
+            //war3map.wts - if I move all strings from ObjectEditor data files to wts file, will it speed up loading?
+
+            /*
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var baseMapFileNames = Directory.GetFiles(BaseMapFilesPath).Select(x => RemovePathPrefix(x, BaseMapFilesPath)).ToList();
+            var commonlyCorruptFiles = new List<string>() { "war3mapunits.doo" };
+            var notRepairableFiles = new List<string>() { "war3map.j", "war3map.imp", "war3map.wct", "war3map.wtg" };
+
+            BuildW3X();
+
+            var map = Map.Open();
+            var tempMapFileName_beforeUnitsDoo = Path.Combine(WorkingFolderPath, Path.ChangeExtension(Path.GetTempFileName(), ".w3x"));
+            var tempMapFileName_afterUnitsDoo = Path.Combine(WorkingFolderPath, Path.ChangeExtension(Path.GetTempFileName(), ".w3x"));
+            File.Copy(fileName, tempMapFileName);
+            using (var editor = new WorldEditor())
+            {
+                editor.SaveMap();
+            }
+            */
         }
 
         [GeneratedRegex(@"\s+call\s+InitBlizzard\s*\(\s*\)\s*", RegexOptions.IgnoreCase)]
@@ -1330,7 +1541,7 @@ namespace WC3MapDeprotector
             {
                 foreach (var file in filesToInclude)
                 {
-                    var shortFileName = file.Replace($"{baseFolder}\\", "", StringComparison.InvariantCultureIgnoreCase);
+                    var shortFileName = RemovePathPrefix(file, baseFolder);
                     const uint MPQ_FILE_COMPRESS = 0x00000200;
                     const uint MPQ_COMPRESSION_ZLIB = 0x02;
                     const uint MPQ_COMPRESSION_HUFFMANN = 0x01;
@@ -1491,7 +1702,7 @@ namespace WC3MapDeprotector
         protected List<string> GetUnknownFileNames()
         {
             Directory.CreateDirectory(UnknownFilesPath);
-            return Directory.GetFiles(UnknownFilesPath, "*", SearchOption.TopDirectoryOnly).Select(x => x.Replace($"{UnknownFilesPath}\\", "", StringComparison.InvariantCultureIgnoreCase)).ToList();
+            return Directory.GetFiles(UnknownFilesPath, "*", SearchOption.TopDirectoryOnly).Select(x => RemovePathPrefix(x, UnknownFilesPath)).ToList();
         }
 
         protected void BruteForceUnknownFileNames(StormMPQArchive archive)
@@ -3455,7 +3666,7 @@ endfunction
             _logEvent("Building war3map.imp...");
             var files = Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList();
             var newfiles = new List<string>();
-            foreach (var file in files.Select(x => x.Replace($"{DiscoveredFilesPath}\\", "", StringComparison.InvariantCultureIgnoreCase)))
+            foreach (var file in files.Select(x => RemovePathPrefix(x, DiscoveredFilesPath)))
             {
                 if (!Regex_NonImportedNativeEditorFileName().IsMatch(file))
                 {

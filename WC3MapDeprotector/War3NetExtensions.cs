@@ -21,16 +21,6 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
-        public static List<SimpleObjectModification> FindUnitObjectData(this Map map, string unitFourCC)
-        {
-            return map.UnitObjectData.BaseUnits.Where(y => y.ToString().Contains(unitFourCC)).Concat(map.UnitObjectData.NewUnits.Where(y => y.ToString().Contains(unitFourCC))).ToList();
-        }
-
-        public static List<SimpleObjectDataModification> GetObjectDataProperty(this List<SimpleObjectModification> unitObjectData, string propertyNameFourCC)
-        {
-            return unitObjectData.SelectMany(y => y.Modifications).Where(y => y.ToString().Equals(propertyNameFourCC, StringComparison.InvariantCultureIgnoreCase)).ToList();
-        }
-
         public static Map Clone_Shallow(this Map map)
         {
             return new Map()
@@ -269,7 +259,7 @@ namespace WC3MapDeprotector
                             if (value is string valueString)
                             {
                                 const string TRIGSTR_ = "TRIGSTR_";
-                                if (valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase) == true)
+                                if (replaceTriggerStrings && valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase))
                                 {
                                     if (int.TryParse(valueString.Substring(TRIGSTR_.Length), out var key))
                                     {
@@ -343,39 +333,9 @@ namespace WC3MapDeprotector
             if (map.Info == null)
             {
                 map.Info = new MapInfo(default);
-                var mapInfoVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
-                var editorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
-                map.Info.FormatVersion = mapInfoVersion;
+                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
                 map.Info.GameVersion = new Version(1, 36, 1, 20719);
-            }
-
-
-            if (int.TryParse((map.Info.MapName ?? "").Replace("TRIGSTR_", ""), out var trgStr1))
-            {
-                var str = map.TriggerStrings?.Strings?.FirstOrDefault(x => x.Key == trgStr1);
-                if (str != null)
-                {
-                    str.Value = "\u0044\u0045\u0050\u0052\u004F\u0054\u0045\u0043\u0054\u0045\u0044" + (str.Value ?? "");
-                    if (str.Value.Length > 36)
-                    {
-                        str.Value = str.Value.Substring(0, 36);
-                    }
-                }
-            }
-            else
-            {
-                map.Info.MapName = "\u0044\u0045\u0050\u0052\u004F\u0054\u0045\u0043\u0054\u0045\u0044" + (map.Info.MapName ?? "");
-            }
-
-            map.Info.RecommendedPlayers = "\u0057\u0043\u0033\u004D\u0061\u0070\u0044\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u006F\u0072";
-
-            if (map.TriggerStrings?.Strings != null && int.TryParse((map.Info.MapDescription ?? "").Replace("TRIGSTR_", ""), out var trgStr2))
-            {
-                var str = map.TriggerStrings.Strings.FirstOrDefault(x => x.Key == trgStr2);
-                if (str != null)
-                {
-                    str.Value = $"{str.Value ?? ""}\r\n\u004D\u0061\u0070\u0020\u0064\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u0065\u0064\u0020\u0062\u0079\u0020\u0068\u0074\u0074\u0070\u0073\u003A\u002F\u002F\u0067\u0069\u0074\u0068\u0075\u0062\u002E\u0063\u006F\u006D\u002F\u0073\u0070\u0065\u0069\u0067\u0065\u002F\u0057\u0043\u0033\u004D\u0061\u0070\u0044\u0065\u0070\u0072\u006F\u0074\u0065\u0063\u0074\u006F\u0072\r\n\r\n";
-                }
             }
 
             if (map.Units != null && map.Info.FormatVersion >= MapInfoFormatVersion.v28)
@@ -390,10 +350,6 @@ namespace WC3MapDeprotector
                     unit.SkinId = unit.TypeId;
                 }
             }
-
-            map.Info.CampaignBackgroundNumber = -1;
-            map.Info.LoadingScreenBackgroundNumber = -1;
-            map.Info.LoadingScreenPath = "\u004C\u006F\u0061\u0064\u0069\u006E\u0067\u0053\u0063\u0072\u0065\u0065\u006E\u002E\u006D\u0064\u0078";
 
             return AppDomain.CurrentDomain.GetAssemblies().Where(x => x.FullName?.Contains("War3Net") ?? false).SelectMany(x => x.GetTypes()).Where(x => x.Name == "MapExtensions").SelectMany(x =>
             {
