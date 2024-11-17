@@ -1444,7 +1444,7 @@ namespace WC3MapDeprotector
                 map.Doodads.FormatVersion = Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SubVersion = Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SpecialDoodadVersion = Enum.GetValues(typeof(SpecialDoodadVersion)).Cast<SpecialDoodadVersion>().OrderByDescending(x => x).First();
-                map.Doodads.UseNewFormat = true;
+                //map.Doodads.UseNewFormat = true;
                 foreach (var doodad in map.Doodads.Doodads)
                 {
                     doodad.SkinId = doodad.TypeId;
@@ -1463,8 +1463,8 @@ namespace WC3MapDeprotector
 
             if (map.Info != null)
             {
-                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
-                map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
+                //map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
                 map.Info.GameDataVersion = GameDataVersion.TFT;
                 map.Info.GameVersion ??= new Version(2, 0, 0, 22370);
                 map.Info.SupportedModes = SupportedModes.SD | SupportedModes.HD;
@@ -1498,7 +1498,7 @@ namespace WC3MapDeprotector
 
             if (map.Units != null)
             {
-                map.Units.UseNewFormat = true;
+                //map.Units.UseNewFormat = true;
                 foreach (var unit in map.Units.Units)
                 {
                     unit.SkinId = unit.TypeId;
@@ -1508,7 +1508,14 @@ namespace WC3MapDeprotector
             var allObjectData = map.GetAllObjectData();
             foreach ((var dataType, var objectData) in allObjectData)
             {
+                /*
                 objectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
+                var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
+                foreach (var data in combinedObjectData)
+                {
+                    data.Unk = new List<int>() { 0 };
+                }
+                */
             }
 
             var mapFiles = map.GetAllFiles();
