@@ -30,6 +30,7 @@ using War3Net.IO.Slk;
 using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
+using System.Linq;
 
 namespace WC3MapDeprotector
 {
@@ -497,7 +498,7 @@ namespace WC3MapDeprotector
                 var objectDatas = _objectDataParser.ToWar3NetObjectData(slkData);
                 foreach (var objectData in objectDatas)
                 {
-                    _defaultSLKData.GetObjectDataByType(objectData.ObjectDataType).BaseValues = objectData.BaseValues;
+                    _defaultSLKData.GetObjectDataByType(objectData.ObjectDataType).CoreData.BaseValues = objectData.BaseValues;
                 }
             }
 
@@ -611,7 +612,7 @@ namespace WC3MapDeprotector
                                     var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
                                     {
-                                        objectData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
+                                        objectData.CoreData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
                                     }
                                     else
                                     {
@@ -629,7 +630,7 @@ namespace WC3MapDeprotector
                                     var value = objectData.NewValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
                                     if (value == null)
                                     {
-                                        objectData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
+                                        objectData.CoreData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
                                     }
                                     else
                                     {
@@ -661,9 +662,9 @@ namespace WC3MapDeprotector
                                         }
                                     }
                                 }
-                                objectData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList().AsReadOnly();
+                                objectData.CoreData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList().AsReadOnly();
 
-                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), objectData.Serialize());
+                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), objectData.CoreData.Serialize());
                             }
                             else
                             {
@@ -885,7 +886,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData); ;
+            Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData);
 
             var perLevelCSVProperties = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "atp1", "aub1" };
             var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
@@ -991,17 +992,6 @@ namespace WC3MapDeprotector
                     DebugSettings.Warn("Unable to decompile some object data");
                 }
             }
-
-            /*
-            //todo: merge both versions of ObjectData
-            map_ObjectDataOnly.AbilitySkinObjectData = map_ObjectDataOnly.AbilityObjectData;
-            map_ObjectDataOnly.BuffSkinObjectData = map_ObjectDataOnly.BuffObjectData;
-            map_ObjectDataOnly.DestructableSkinObjectData = map_ObjectDataOnly.DestructableObjectData;
-            map_ObjectDataOnly.DoodadSkinObjectData = map_ObjectDataOnly.DoodadObjectData;
-            map_ObjectDataOnly.ItemSkinObjectData = map_ObjectDataOnly.ItemObjectData;
-            map_ObjectDataOnly.UnitSkinObjectData = map_ObjectDataOnly.UnitObjectData;
-            map_ObjectDataOnly.UpgradeSkinObjectData = map_ObjectDataOnly.UpgradeObjectData;
-            */
 
             foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
             {
@@ -1214,16 +1204,15 @@ namespace WC3MapDeprotector
 
             BuildImportList();
 
-            var finalFiles = Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList();
-
-            //UpgradeToLatestFileFormats_DontUse();
-            MoveObjectEditorStringsToTriggerStrings();
             CorrectUnitPositionZOffsets();
+            MoveObjectEditorStringsToTriggerStrings();
+            //RefactorSkinnableProperties_DontUse();
+            //UpgradeToLatestFileFormats_DontUse();
             //RepairW3XNativeFilesInEditor();
 
             AnnotateScriptFile();
 
-            BuildW3X(_outMapFile, DiscoveredFilesPath, finalFiles);
+            BuildW3X(_outMapFile, DiscoveredFilesPath, Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList());
 
             _deprotectionResult.WarningMessages.Add("NOTE: You may need to fix script compiler errors before saving in world editor.");
             _deprotectionResult.WarningMessages.Add("NOTE: Objects added directly to editor render screen, like units/doodads/items/etc are stored in an editor-only file called war3mapunits.doo and converted to script code on save. Protection deletes the editor file and obfuscates the script code to make it harder to recover. Decompiling the war3map script file back into war3mapunits.doo is not 100% perfect for most maps. Please do extensive testing to ensure everything still behaves correctly, you may have to do many manual bug fixes in world editor after deprotection.");
@@ -1354,10 +1343,84 @@ namespace WC3MapDeprotector
             return fileName;
         }
 
+        protected void RefactorSkinnableProperties_DontUse()
+        {
+            throw new Exception("RefactorSkinnableProperties isn't working yet, it prevents world editor from loading");
+
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var tempMapFileName = Path.Combine(WorkingFolderPath, "skinObjectData.w3x");
+            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
+            var map = Map.Open(tempMapFileName);
+
+            var supportedFourCCAttributes = new HashSet<string>() { "ahky", "anam", "aret", "arhk", "arut", "asat", "atp1", "aub1", "atat", "auhk", "aut1", "auu1", "alig", "amat", "ansf", "aeat", "acat", "aart", "aaea", "auar", "abpx", "abpy", "arar", "arpx", "aani", "acap", "aubx", "amac", "arpy", "fnam", "ftat", "ftip", "fube", "fsat", "feat", "fnsf", "fart", "fta0", "fmat", "fspt", "fta1", "ftac", "fspd", "bgpm", "bmas", "bmis", "bnam", "bsuf", "bmmb", "bmmg", "bmmr", "bsel", "bdsn", "bfil", "bgsc", "bvar", "blit", "ides", "unam", "utip", "utub", "uhot", "ubpx", "ubpy", "iclb", "iclg", "iclr", "iico", "ifil", "isca", "uawt", "uico", "umdl", "upro", "usca", "uspa", "utpr", "unsf", "ulpz", "ua1m", "ussi", "uimz", "utaa", "ucun", "ucut", "ussc", "uble", "uma1", "usnd", "umxp", "ushu", "ushb", "uclg", "uclr", "uclb", "uubs", "ucua", "uslz", "uver", "uaap", "uerd", "upru", "ushh", "ushw", "ushx", "ushy", "umxr", "uani", "ushr", "ua2m", "ghk1", "gnam", "gtp1", "gub1", "gar1", "gbpx", "gbpy" };
+            var allObjectData = map.GetAllObjectData();
+            foreach ((var dataType, var objectData) in allObjectData)
+            {
+                foreach (var data in objectData.CoreData.BaseValues)
+                {
+                    var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
+                    var modifications = data.Modifications;
+                    foreach (var modification in modifications)
+                    {
+                        if (supportedFourCCAttributes.Contains(modification.ToString()) && modification.Value is string)
+                        {
+                            modificationsToMove.Add(modification);
+                        }
+                    }
+                    data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
+                    var skinData = objectData.SkinData.BaseValues.FirstOrDefault(x => x.ToString() == data.ToString());
+                    if (skinData == null)
+                    {
+                        skinData = ObjectDataParser.GetEmptyObjectModificationWrapper(dataType);
+                        skinData.OldId = data.OldId;
+                        skinData.NewId = data.NewId;
+                        skinData.Unk = data.Unk;
+                        objectData.SkinData.BaseValues = objectData.SkinData.BaseValues.Concat(new[] { skinData }).ToList().AsReadOnly();
+                    }
+                    skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
+                }
+
+                foreach (var data in objectData.CoreData.NewValues)
+                {
+                    var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
+                    var modifications = data.Modifications;
+                    foreach (var modification in modifications)
+                    {
+                        if (supportedFourCCAttributes.Contains(modification.ToString()) && modification.Value is string)
+                        {
+                            modificationsToMove.Add(modification);
+                        }
+                    }
+                    data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
+                    var skinData = objectData.SkinData.NewValues.FirstOrDefault(x => x.ToString() == data.ToString());
+                    if (skinData == null)
+                    {
+                        skinData = ObjectDataParser.GetEmptyObjectModificationWrapper(dataType);
+                        skinData.OldId = data.OldId;
+                        skinData.NewId = data.NewId;
+                        skinData.Unk = data.Unk;
+                        objectData.SkinData.NewValues = objectData.SkinData.NewValues.Concat(new[] { skinData }).ToList().AsReadOnly();
+                    }
+                    skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
+                }
+            }
+
+            var mapFiles = map.GetAllFiles();
+            foreach (var file in mapFiles)
+            {
+                SaveDecompiledArchiveFile(file);
+            }
+
+            try
+            {
+                File.Delete(tempMapFileName);
+            }
+            catch { }
+        }
+
         protected void UpgradeToLatestFileFormats_DontUse()
         {
-            //todo: Need to troubleshoot, causing world editor failures (probably War3Net has some missing field definitions in latest versions)
-            throw new Exception("UpgradeToLatestFileFormats causes corruption of binary data files");
+            throw new Exception("UpgradeToLatestFileFormats isn't working yet, it prevents world editor from loading");
 
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var tempMapFileName = Path.Combine(WorkingFolderPath, "fileFormats.w3x");
@@ -1367,6 +1430,7 @@ namespace WC3MapDeprotector
             if (map.Cameras != null)
             {
                 map.Cameras.FormatVersion = Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderByDescending(x => x).First();
+                map.Cameras.UseNewFormat = true;
             }
 
             if (map.CustomTextTriggers != null)
@@ -1380,6 +1444,11 @@ namespace WC3MapDeprotector
                 map.Doodads.FormatVersion = Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SubVersion = Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SpecialDoodadVersion = Enum.GetValues(typeof(SpecialDoodadVersion)).Cast<SpecialDoodadVersion>().OrderByDescending(x => x).First();
+                map.Doodads.UseNewFormat = true;
+                foreach (var doodad in map.Doodads.Doodads)
+                {
+                    doodad.SkinId = doodad.TypeId;
+                }
             }
 
             if (map.Environment != null)
@@ -1397,7 +1466,8 @@ namespace WC3MapDeprotector
                 map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
                 map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
                 map.Info.GameDataVersion = GameDataVersion.TFT;
-                map.Info.GameVersion = new Version(2, 0, 0, 22370);
+                map.Info.GameVersion ??= new Version(2, 0, 0, 22370);
+                map.Info.SupportedModes = SupportedModes.SD | SupportedModes.HD;
             }
 
             if (map.PathingMap != null)
@@ -1429,18 +1499,16 @@ namespace WC3MapDeprotector
             if (map.Units != null)
             {
                 map.Units.UseNewFormat = true;
+                foreach (var unit in map.Units.Units)
+                {
+                    unit.SkinId = unit.TypeId;
+                }
             }
 
-            var allObjectData = map.GetAllObjectData(createIfNotExists: false);
+            var allObjectData = map.GetAllObjectData();
             foreach ((var dataType, var objectData) in allObjectData)
             {
                 objectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
-            }
-
-            var allSkinObjectData = map.GetAllObjectData(skin: true, createIfNotExists: false);
-            foreach ((var dataType, var skinObjectData) in allSkinObjectData)
-            {
-                skinObjectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
             }
 
             var mapFiles = map.GetAllFiles();
@@ -1468,7 +1536,7 @@ namespace WC3MapDeprotector
             
             map.TriggerStrings ??= new TriggerStrings();
             var maxTriggerKey = map.TriggerStrings.Strings.Select(x => x.Key).Concat(new uint[] { 0 }).Max();
-            var allObjectData = map.GetAllObjectData(false).Concat(map.GetAllObjectData(true)).ToList();
+            var allObjectData = map.GetAllObjectData();
             foreach ((var dataType, var objectData) in allObjectData)
             {
                 var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
@@ -1579,8 +1647,9 @@ namespace WC3MapDeprotector
                 File.Delete(fileName);
             }
 
+            var MPQ_CREATE_ATTRIBUTES = (uint)0x00200000;
             var maxFileCount = (uint)Math.Pow(2, (int)Math.Ceiling(Math.Log(filesToInclude.Count, 2)) + 1);
-            StormLibrary.SFileCreateArchive(fileName, 0, maxFileCount, out var archiveHandle);
+            StormLibrary.SFileCreateArchive(fileName, MPQ_CREATE_ATTRIBUTES, maxFileCount, out var archiveHandle);
             try
             {
                 foreach (var file in filesToInclude)
@@ -1592,8 +1661,6 @@ namespace WC3MapDeprotector
                     const uint MPQ_COMPRESSION_NEXT_SAME = 0xFFFFFFFF;
 
                     StormLibrary.SFileAddFileEx(archiveHandle, file, shortFileName, MPQ_FILE_COMPRESS, string.Equals(Path.GetExtension(shortFileName), ".wav", StringComparison.InvariantCultureIgnoreCase) ? MPQ_COMPRESSION_HUFFMANN : MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
-                    var mpqFile = MpqFile.New(File.OpenRead(file), shortFileName);
-                    mpqFile.CompressionType = MpqCompressionType.ZLib;
 
                     _logEvent($"Added to MPQ: {file}");
                 }
@@ -1683,7 +1750,7 @@ namespace WC3MapDeprotector
         {
             var fileName = Path.Combine(DiscoveredFilesPath, mpqFile.FileName);
             Directory.CreateDirectory(Path.GetDirectoryName(fileName));
-            using (var stream = new FileStream(fileName, FileMode.OpenOrCreate))
+            using (var stream = new FileStream(fileName, FileMode.Create))
             {
                 mpqFile.MpqStream.CopyTo(stream);
             }
@@ -3586,7 +3653,7 @@ endfunction
 
             var wctsections = new List<string>();
 
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wtg"), FileMode.OpenOrCreate))
+            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wtg"), FileMode.Create))
             using (var wtgFile = new BinaryWriter(stream))
             {
                 _logEvent("Creating war3map.wtg...");
@@ -3637,7 +3704,7 @@ endfunction
             }
 
             _logEvent("Creating war3map.wct...");
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wct"), FileMode.OpenOrCreate))
+            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wct"), FileMode.Create))
             using (var wctFile = new BinaryWriter(stream))
             {
                 var toolAdvertisement = $"// {ATTRIB}";
@@ -3719,7 +3786,7 @@ endfunction
             }
             newfiles.Add("\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76\x00");
             newfiles = newfiles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.imp"), FileMode.OpenOrCreate))
+            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.imp"), FileMode.Create))
             using (var writer = new BinaryWriter(stream))
             {
                 writer.Write(1);

@@ -2,13 +2,12 @@
 using IniParser;
 using System.Text;
 using War3Net.Build;
-using War3Net.Build.Extensions;
 using War3Net.Build.Object;
 using War3Net.Common.Extensions;
-using War3Net.Common.Providers;
 using War3Net.IO.Slk;
 using System.Collections.ObjectModel;
-using System.Linq;
+using War3Net.Common.Providers;
+using War3Net.Build.Extensions;
 
 namespace WC3MapDeprotector
 {
@@ -173,10 +172,10 @@ namespace WC3MapDeprotector
 
         public War3NetObjectDataModificationWrapper GetEmptyObjectDataModificationWrapper()
         {
-                switch (ObjectModification)
-                {
-                    case LevelObjectModification level:
-                        return new War3NetObjectDataModificationWrapper(new LevelObjectDataModification());
+            switch (ObjectModification)
+            {
+                case LevelObjectModification level:
+                    return new War3NetObjectDataModificationWrapper(new LevelObjectDataModification());
                 case SimpleObjectModification simple:
                     return new War3NetObjectDataModificationWrapper(new SimpleObjectDataModification());
                 case VariationObjectModification variation:
@@ -287,6 +286,26 @@ namespace WC3MapDeprotector
                         throw new NotImplementedException();
                 }
             }
+            set
+            {
+                switch (ObjectModification)
+                {
+                    case LevelObjectModification level:
+                        level.Unk.Clear();
+                        level.Unk.AddRange(value);
+                        return;
+                    case SimpleObjectModification simple:
+                        simple.Unk.Clear();
+                        simple.Unk.AddRange(value);
+                        return;
+                    case VariationObjectModification variation:
+                        variation.Unk.Clear();
+                        variation.Unk.AddRange(value);
+                        return;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
         }
 
         public ReadOnlyCollection<War3NetObjectDataModificationWrapper> Modifications
@@ -385,6 +404,11 @@ namespace WC3MapDeprotector
             }
         }
 
+        public override string ToString()
+        {
+            return ObjectData.ToString();
+        }
+
         public ObjectDataType ObjectDataType
         {
             get
@@ -463,126 +487,6 @@ namespace WC3MapDeprotector
                     default:
                         throw new NotImplementedException();
                 }
-            }
-        }
-
-        public override string ToString()
-        {
-            return ObjectData.ToString();
-        }
-
-        public string FileExtension()
-        {
-            switch (ObjectData)
-            {
-                case AbilityObjectData:
-                    return AbilityObjectData.FileExtension;
-                case BuffObjectData:
-                    return BuffObjectData.FileExtension;
-                case DestructableObjectData:
-                    return DestructableObjectData.FileExtension;
-                case DoodadObjectData:
-                    return DoodadObjectData.FileExtension;
-                case ItemObjectData:
-                    return ItemObjectData.FileExtension;
-                case UnitObjectData:
-                    return UnitObjectData.FileExtension;
-                case UpgradeObjectData:
-                    return UpgradeObjectData.FileExtension;
-                default:
-                    throw new NotImplementedException();
-            }
-        }
-
-        public string CampaignFileName()
-        {
-            switch (ObjectData)
-            {
-                case AbilityObjectData:
-                    return AbilityObjectData.CampaignFileName;
-                case BuffObjectData:
-                    return BuffObjectData.CampaignFileName;
-                case DestructableObjectData:
-                    return DestructableObjectData.CampaignFileName;
-                case DoodadObjectData:
-                    return DoodadObjectData.CampaignFileName;
-                case ItemObjectData:
-                    return ItemObjectData.CampaignFileName;
-                case UnitObjectData:
-                    return UnitObjectData.CampaignFileName;
-                case UpgradeObjectData:
-                    return UpgradeObjectData.CampaignFileName;
-                default:
-                    throw new NotImplementedException();
-            }
-        }
-
-        public string CampaignSkinFileName()
-        {
-            switch (ObjectData)
-            {
-                case AbilityObjectData:
-                    return AbilityObjectData.CampaignSkinFileName;
-                case BuffObjectData:
-                    return BuffObjectData.CampaignSkinFileName;
-                case DestructableObjectData:
-                    return DestructableObjectData.CampaignSkinFileName;
-                case DoodadObjectData:
-                    return DoodadObjectData.CampaignSkinFileName;
-                case ItemObjectData:
-                    return ItemObjectData.CampaignSkinFileName;
-                case UnitObjectData:
-                    return UnitObjectData.CampaignSkinFileName;
-                case UpgradeObjectData:
-                    return UpgradeObjectData.CampaignSkinFileName;
-                default:
-                    throw new NotImplementedException();
-            }
-        }
-
-        public string MapFileName()
-        {
-            switch (ObjectData)
-            {
-                case AbilityObjectData:
-                    return AbilityObjectData.MapFileName;
-                case BuffObjectData:
-                    return BuffObjectData.MapFileName;
-                case DestructableObjectData:
-                    return DestructableObjectData.MapFileName;
-                case DoodadObjectData:
-                    return DoodadObjectData.MapFileName;
-                case ItemObjectData:
-                    return ItemObjectData.MapFileName;
-                case UnitObjectData:
-                    return UnitObjectData.MapFileName;
-                case UpgradeObjectData:
-                    return UpgradeObjectData.MapFileName;
-                default:
-                    throw new NotImplementedException();
-            }
-        }
-
-        public string MapSkinFileName()
-        {
-            switch (ObjectData)
-            {
-                case AbilityObjectData:
-                    return AbilityObjectData.MapSkinFileName;
-                case BuffObjectData:
-                    return BuffObjectData.MapSkinFileName;
-                case DestructableObjectData:
-                    return DestructableObjectData.MapSkinFileName;
-                case DoodadObjectData:
-                    return DoodadObjectData.MapSkinFileName;
-                case ItemObjectData:
-                    return ItemObjectData.MapSkinFileName;
-                case UnitObjectData:
-                    return UnitObjectData.MapSkinFileName;
-                case UpgradeObjectData:
-                    return UpgradeObjectData.MapSkinFileName;
-                default:
-                    throw new NotImplementedException();
             }
         }
 
@@ -712,6 +616,79 @@ namespace WC3MapDeprotector
         }
     }
 
+    public class War3NetSkinnableObjectDataWrapper
+    {
+        public War3NetObjectDataWrapper CoreData { get; }
+        public War3NetObjectDataWrapper SkinData { get; }
+
+        public War3NetSkinnableObjectDataWrapper(War3NetObjectDataWrapper baseData, War3NetObjectDataWrapper skinData)
+        {
+            CoreData = baseData;
+            SkinData = skinData;
+        }
+
+        public override int GetHashCode()
+        {
+            return (CoreData?.GetHashCode() ?? 0) ^ (SkinData?.GetHashCode() ?? 0);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return (CoreData?.Equals((obj as War3NetSkinnableObjectDataWrapper)?.CoreData) ?? false) && (SkinData?.Equals((obj as War3NetSkinnableObjectDataWrapper)?.SkinData) ?? false);
+        }
+
+        public override string ToString()
+        {
+            return CoreData.ToString() + "_" + SkinData.ToString();
+        }
+
+        public ObjectDataType ObjectDataType
+        {
+            get
+            {
+                var result = CoreData.ObjectDataType;
+                if (result != SkinData.ObjectDataType)
+                {
+                    throw new Exception("War3NetSkinnableObjectDataWrapper ObjectDataType mismatch");
+                }
+
+                return result;
+            }
+        }
+
+        public ObjectDataFormatVersion FormatVersion
+        {
+            get
+            {
+                var result = CoreData.FormatVersion;
+                SkinData.FormatVersion = result;
+                return result;
+            }
+            set
+            {
+                CoreData.FormatVersion = value;
+                SkinData.FormatVersion = value;
+            }
+        }
+
+        public ReadOnlyCollection<War3NetObjectModificationWrapper> BaseValues
+        {
+            get
+            {
+                return CoreData.BaseValues.Concat(SkinData.BaseValues).ToList().AsReadOnly();
+            }
+        }
+
+        public ReadOnlyCollection<War3NetObjectModificationWrapper> NewValues
+        {
+            get
+            {
+                return CoreData.NewValues.Concat(SkinData.NewValues).ToList().AsReadOnly();
+            }
+        }
+
+    }
+
     public enum ObjectDataType
     {
         Ability,
@@ -788,123 +765,44 @@ namespace WC3MapDeprotector
             return null;
         }
 
-        public static Dictionary<ObjectDataType, War3NetObjectDataWrapper> GetAllObjectData(this Map map, bool skin = false, bool createIfNotExists = true)
+        public static Dictionary<ObjectDataType, War3NetSkinnableObjectDataWrapper> GetAllObjectData(this Map map)
         {
-            return Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().Select(x => new KeyValuePair<ObjectDataType, War3NetObjectDataWrapper>(x, map.GetObjectDataByType(x, skin, createIfNotExists))).Where(x => x.Value != null).ToDictionary(x => x.Key, x => x.Value);
+            return Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().Select(x => new KeyValuePair<ObjectDataType, War3NetSkinnableObjectDataWrapper>(x, map.GetObjectDataByType(x))).Where(x => x.Value != null).ToDictionary(x => x.Key, x => x.Value);
         }
 
-        public static War3NetObjectDataWrapper GetObjectDataByType(this Map map, ObjectDataType objectDataType, bool skin = false, bool createIfNotExists = true)
+        public static War3NetSkinnableObjectDataWrapper GetObjectDataByType(this Map map, ObjectDataType objectDataType)
         {
             //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
-            if (skin)
-            {
-                switch (objectDataType)
-                {
-                    case ObjectDataType.Ability:
-                        if (!createIfNotExists && map.AbilitySkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.AbilitySkinObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.AbilitySkinObjectData);
-                    case ObjectDataType.Buff:
-                        if (!createIfNotExists && map.BuffSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.BuffSkinObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.BuffSkinObjectData);
-                    case ObjectDataType.Destructable:
-                        if (!createIfNotExists && map.DestructableSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.DestructableSkinObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.DestructableSkinObjectData);
-                    case ObjectDataType.Doodad:
-                        if (!createIfNotExists && map.DoodadSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.DoodadSkinObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.DoodadSkinObjectData);
-                    case ObjectDataType.Item:
-                        if (!createIfNotExists && map.ItemSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.ItemSkinObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.ItemSkinObjectData);
-                    case ObjectDataType.Unit:
-                        if (!createIfNotExists && map.UnitSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.UnitSkinObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.UnitSkinObjectData);
-                    case ObjectDataType.Upgrade:
-                        if (!createIfNotExists && map.UpgradeSkinObjectData == null)
-                        {
-                            return null;
-                        }
-                        map.UpgradeSkinObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
-                        return new War3NetObjectDataWrapper(map.UpgradeSkinObjectData);
-                    default:
-                        throw new NotImplementedException();
-                }
-            }
-
             switch (objectDataType)
             {
                 case ObjectDataType.Ability:
-                    if (!createIfNotExists && map.AbilityObjectData == null)
-                    {
-                        return null;
-                    }
                     map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.AbilityObjectData);
+                    map.AbilitySkinObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.AbilityObjectData), new War3NetObjectDataWrapper(map.AbilitySkinObjectData));
                 case ObjectDataType.Buff:
-                    if (!createIfNotExists && map.BuffObjectData == null)
-                    {
-                        return null;
-                    }
                     map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.BuffObjectData);
+                    map.BuffSkinObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.BuffObjectData), new War3NetObjectDataWrapper(map.BuffSkinObjectData));
                 case ObjectDataType.Destructable:
-                    if (!createIfNotExists && map.DestructableObjectData == null)
-                    {
-                        return null;
-                    }
                     map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.DestructableObjectData);
+                    map.DestructableSkinObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.DestructableObjectData), new War3NetObjectDataWrapper(map.DestructableSkinObjectData));
                 case ObjectDataType.Doodad:
-                    if (!createIfNotExists && map.DoodadObjectData == null)
-                    {
-                        return null;
-                    }
                     map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.DoodadObjectData);
+                    map.DoodadSkinObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.DoodadObjectData), new War3NetObjectDataWrapper(map.DoodadSkinObjectData));
                 case ObjectDataType.Item:
-                    if (!createIfNotExists && map.ItemObjectData == null)
-                    {
-                        return null;
-                    }
                     map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.ItemObjectData);
+                    map.ItemSkinObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.ItemObjectData), new War3NetObjectDataWrapper(map.ItemSkinObjectData));
                 case ObjectDataType.Unit:
-                    if (!createIfNotExists && map.UnitObjectData == null)
-                    {
-                        return null;
-                    }
                     map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.UnitObjectData);
+                    map.UnitSkinObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.UnitObjectData), new War3NetObjectDataWrapper(map.UnitSkinObjectData));
                 case ObjectDataType.Upgrade:
-                    if (!createIfNotExists && map.UpgradeObjectData == null)
-                    {
-                        return null;
-                    }
                     map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
-                    return new War3NetObjectDataWrapper(map.UpgradeObjectData);
+                    map.UpgradeSkinObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataWrapper(map.UpgradeObjectData), new War3NetObjectDataWrapper(map.UpgradeSkinObjectData));
                 default:
                     throw new NotImplementedException();
             }
