@@ -451,12 +451,10 @@ namespace WC3MapDeprotector
 
         public async Task<DeprotectionResult> Deprotect()
         {
-            /*
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
             {
                 MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
             }
-            */
 
             _logEvent($"Processing map: {MapBaseName}");
 
@@ -1206,13 +1204,15 @@ namespace WC3MapDeprotector
 
             CorrectUnitPositionZOffsets();
             MoveObjectEditorStringsToTriggerStrings();
-            //RefactorSkinnableProperties_DontUse();
-            //UpgradeToLatestFileFormats_DontUse();
-            //RepairW3XNativeFilesInEditor();
+            RefactorSkinnableProperties();
+            UpgradeToLatestFileFormats();
+            RepairW3XNativeFilesInEditor();
 
             AnnotateScriptFile();
 
             BuildW3X(_outMapFile, DiscoveredFilesPath, Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList());
+
+            //todo: open final file in WorldEditor with "Local Files" to find remaining textures/3dModels?
 
             _deprotectionResult.WarningMessages.Add("NOTE: You may need to fix script compiler errors before saving in world editor.");
             _deprotectionResult.WarningMessages.Add("NOTE: Objects added directly to editor render screen, like units/doodads/items/etc are stored in an editor-only file called war3mapunits.doo and converted to script code on save. Protection deletes the editor file and obfuscates the script code to make it harder to recover. Decompiling the war3map script file back into war3mapunits.doo is not 100% perfect for most maps. Please do extensive testing to ensure everything still behaves correctly, you may have to do many manual bug fixes in world editor after deprotection.");
@@ -1343,10 +1343,8 @@ namespace WC3MapDeprotector
             return fileName;
         }
 
-        protected void RefactorSkinnableProperties_DontUse()
+        protected void RefactorSkinnableProperties()
         {
-            throw new Exception("RefactorSkinnableProperties isn't working yet, it prevents world editor from loading");
-
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var tempMapFileName = Path.Combine(WorkingFolderPath, "skinObjectData.w3x");
             BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
@@ -1418,10 +1416,8 @@ namespace WC3MapDeprotector
             catch { }
         }
 
-        protected void UpgradeToLatestFileFormats_DontUse()
+        protected void UpgradeToLatestFileFormats()
         {
-            throw new Exception("UpgradeToLatestFileFormats isn't working yet, it prevents world editor from loading");
-
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var tempMapFileName = Path.Combine(WorkingFolderPath, "fileFormats.w3x");
             BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
@@ -1444,7 +1440,7 @@ namespace WC3MapDeprotector
                 map.Doodads.FormatVersion = Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SubVersion = Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderByDescending(x => x).First();
                 map.Doodads.SpecialDoodadVersion = Enum.GetValues(typeof(SpecialDoodadVersion)).Cast<SpecialDoodadVersion>().OrderByDescending(x => x).First();
-                //map.Doodads.UseNewFormat = true;
+                map.Doodads.UseNewFormat = true;
                 foreach (var doodad in map.Doodads.Doodads)
                 {
                     doodad.SkinId = doodad.TypeId;
@@ -1463,8 +1459,8 @@ namespace WC3MapDeprotector
 
             if (map.Info != null)
             {
-                //map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
-                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
+                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
                 map.Info.GameDataVersion = GameDataVersion.TFT;
                 map.Info.GameVersion ??= new Version(2, 0, 0, 22370);
                 map.Info.SupportedModes = SupportedModes.SD | SupportedModes.HD;
@@ -1498,7 +1494,7 @@ namespace WC3MapDeprotector
 
             if (map.Units != null)
             {
-                //map.Units.UseNewFormat = true;
+                map.Units.UseNewFormat = true;
                 foreach (var unit in map.Units.Units)
                 {
                     unit.SkinId = unit.TypeId;
@@ -1508,14 +1504,12 @@ namespace WC3MapDeprotector
             var allObjectData = map.GetAllObjectData();
             foreach ((var dataType, var objectData) in allObjectData)
             {
-                /*
                 objectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
                 var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
                 foreach (var data in combinedObjectData)
                 {
                     data.Unk = new List<int>() { 0 };
                 }
-                */
             }
 
             var mapFiles = map.GetAllFiles();
@@ -1581,25 +1575,65 @@ namespace WC3MapDeprotector
 
         protected void RepairW3XNativeFilesInEditor()
         {
-            //war3map.wts - if I move all strings from ObjectEditor data files to wts file, will it speed up loading?
+            //NOTE: minor corruption can be repaired by opening map & saving, but need to remove all models/etc from w3x 1st or it will crash editor.
+            //todo: double-check that war3map.wts doesn't have any lost trigger data after saving with baseMap triggers
 
-            /*
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
-            var baseMapFileNames = Directory.GetFiles(BaseMapFilesPath).Select(x => RemovePathPrefix(x, BaseMapFilesPath)).ToList();
-            var commonlyCorruptFiles = new List<string>() { "war3mapunits.doo" };
-            var notRepairableFiles = new List<string>() { "war3map.j", "war3map.imp", "war3map.wct", "war3map.wtg" };
+            var baseFileNames = Directory.GetFiles(BaseMapFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, BaseMapFilesPath)).ToList();
+            var notRepairableFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "war3map.j", "war3map.imp", "war3map.wct", "war3map.wtg" };
 
-            BuildW3X();
-
-            var map = Map.Open();
-            var tempMapFileName_beforeUnitsDoo = Path.Combine(WorkingFolderPath, Path.ChangeExtension(Path.GetTempFileName(), ".w3x"));
-            var tempMapFileName_afterUnitsDoo = Path.Combine(WorkingFolderPath, Path.ChangeExtension(Path.GetTempFileName(), ".w3x"));
-            File.Copy(fileName, tempMapFileName);
-            using (var editor = new WorldEditor())
+            var allFiles = nativeFileNames.Concat(baseFileNames).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+            var repairNativesFolder = Path.Combine(TempFolderPath, "repairNatives");
+            foreach (var file in allFiles)
             {
-                editor.SaveMap();
+                var baseFileName = Path.Combine(BaseMapFilesPath, file);
+                var realFileName = Path.Combine(DiscoveredFilesPath, file);
+                var repairFileName = Path.Combine(repairNativesFolder, file);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(repairFileName));
+
+                if (File.Exists(realFileName) && !notRepairableFiles.Contains(file))
+                {
+                    File.Copy(realFileName, repairFileName);
+                }
+                else if (File.Exists(baseFileName))
+                {
+                    File.Copy(baseFileName, repairFileName);
+                }
             }
-            */
+
+            var tempMapFileName = Path.Combine(repairNativesFolder, "map.w3x");
+            BuildW3X(tempMapFileName, repairNativesFolder, allFiles.Select(x => @$"{repairNativesFolder}\{x}").Where(x => File.Exists(x)).ToList());
+
+            try
+            {
+                using (var editor = new WorldEditor(tempMapFileName))
+                {
+                    editor.SaveMap();
+                }
+            }
+            catch
+            {
+                //todo: show explanation on screen with retry button on failure
+                _logEvent("Unable to load/save in world editor...");
+                return;
+            }
+
+            var map = Map.Open(tempMapFileName);
+            var mapFiles = map.GetAllFiles();
+            foreach (var file in mapFiles)
+            {                
+                if (!notRepairableFiles.Contains(file.FileName))
+                {
+                    SaveDecompiledArchiveFile(file);
+                }
+            }
+
+            try
+            {
+                File.Delete(tempMapFileName);
+            }
+            catch { }
         }
 
         protected void CorrectUnitPositionZOffsets()

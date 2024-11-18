@@ -12,6 +12,13 @@ namespace WC3MapDeprotector
 
         public WorldEditor(string mapFileName)
         {
+            Process editorInstance = null;
+            do
+            {
+                editorInstance?.Kill();
+                editorInstance = WorldEditor.GetRunningInstanceOfEditor();
+            } while (editorInstance != null);
+
             MapFileName = mapFileName;
             Process = Utils.ExecuteCommand(UserSettings.WorldEditExePath, $"-launch -loadfile \"{mapFileName}\" -hd 0");
         }
@@ -37,12 +44,24 @@ namespace WC3MapDeprotector
         public void SaveMap()
         {
             var originalWriteTime = GetLastWriteTime();
-            const int sleepTime = 1000;
-            var maxWait = 1000 * 30;
+            var sleepTime = (int)TimeSpan.FromSeconds(15).TotalMilliseconds;
+            var maxWait = (int)TimeSpan.FromMinutes(15).TotalMilliseconds;
+            var oneSecond = (int)TimeSpan.FromSeconds(1).TotalMilliseconds;
 
             do
             {
-                Win32Api.SetForegroundWindow(Process.MainWindowHandle);
+                do
+                {
+                    Win32Api.SetForegroundWindow(Process.MainWindowHandle);
+                    Thread.Sleep(oneSecond);
+                    maxWait -= sleepTime;
+
+                    if (maxWait < 0 || Process.HasExited)
+                    {
+                        throw new Exception("Unable to save file in WorldEditor");
+                    }
+                } while (Win32Api.GetForegroundWindow() != Process.MainWindowHandle);
+
                 SendKeys.SendWait("^s");
                 Thread.Sleep(sleepTime);
                 maxWait -= sleepTime;
