@@ -1,17 +1,37 @@
 ﻿using FlaUI.Core.AutomationElements;
 using FlaUI.UIA2;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace WC3MapDeprotector
 {
-    public class WorldEditor : IDisposable
+    public partial class WorldEditor : IDisposable
     {
         //NOTE: Can use FlaUI.Core for UI Automation if need to execute things that can't be done with hotkeys
         protected Process Process;
         public string MapFileName { get; protected set; }
 
-        public WorldEditor(string mapFileName)
+        public WorldEditor()
         {
+        }
+
+        protected void SleepUntilTrue(Func<bool> predicate, int maxSleepMS, string errorMessageOnFailure, int sleepBetweenChecksMS = 1000)
+        {
+            while (!predicate())
+            {
+                if (Process.HasExited || maxSleepMS < 0)
+                {
+                    throw new Exception(errorMessageOnFailure);
+                }
+
+                Thread.Sleep(sleepBetweenChecksMS);
+                maxSleepMS -= sleepBetweenChecksMS;
+            }
+        }
+
+        public void LoadMapFile(string mapFileName)
+        {
+            MapFileName = mapFileName;
             Process editorInstance = null;
             do
             {
@@ -19,8 +39,22 @@ namespace WC3MapDeprotector
                 editorInstance = WorldEditor.GetRunningInstanceOfEditor();
             } while (editorInstance != null);
 
-            MapFileName = mapFileName;
-            Process = Utils.ExecuteCommand(UserSettings.WorldEditExePath, $"-launch -loadfile \"{mapFileName}\" -hd 0");
+            Process = Utils.ExecuteCommand(UserSettings.WorldEditExePath, $"-launch -loadfile \"{mapFileName}\" -hd 0", ProcessWindowStyle.Maximized);
+
+            SleepUntilTrue(() =>
+            {
+                RefreshProcess();
+                if (!string.IsNullOrWhiteSpace(Process.MainWindowTitle))
+                {
+                    const int SW_MINIMIZE = 6;
+                    Win32Api.ShowWindow(Process.MainWindowHandle, SW_MINIMIZE);
+                    return true;
+                }
+
+                return false;
+            }, (int)TimeSpan.FromMinutes(1).TotalMilliseconds, "Unable to load map file in World Editor");
+
+            SleepUntilTrue(() => IsMapLoaded(mapFileName), (int)TimeSpan.FromMinutes(15).TotalMilliseconds, "Unable to load map file in World Editor");
         }
 
         public static Process GetRunningInstanceOfEditor()
@@ -33,6 +67,27 @@ namespace WC3MapDeprotector
                 }
                 catch { return false; }
             }).FirstOrDefault();
+        }
+
+        protected void RefreshProcess()
+        {
+            Process = Process.GetProcessById(Process.Id);
+        }
+
+        [GeneratedRegex(@"^[^[]+\[(.*)\]\s*$", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_GetMapFileName();
+        public string GetLoadedMapFileName()
+        {
+            RefreshProcess();
+            var mainWindowTitle = Process.MainWindowTitle;
+            var match = Regex_GetMapFileName().Match(mainWindowTitle);
+            return match.Success ? match.Groups[1].Value : "";
+        }
+
+        public bool IsMapLoaded(string mapFileName)
+        {
+            var loadedMapFileName = GetLoadedMapFileName();
+            return !string.IsNullOrWhiteSpace(loadedMapFileName) && Path.GetFileName(mapFileName).StartsWith(Path.GetFileName(loadedMapFileName));
         }
 
         public DateTime GetLastWriteTime()
@@ -48,33 +103,25 @@ namespace WC3MapDeprotector
             var maxWait = (int)TimeSpan.FromMinutes(15).TotalMilliseconds;
             var oneSecond = (int)TimeSpan.FromSeconds(1).TotalMilliseconds;
 
-            do
+            SleepUntilTrue(() =>
             {
-                do
-                {
-                    Win32Api.SetForegroundWindow(Process.MainWindowHandle);
-                    Thread.Sleep(oneSecond);
-                    maxWait -= sleepTime;
+                //todo: if window shows it's already saving, don't focus/ctrl+s again
+                //todo: if it asks about generating start locations, click yes
+                //todo: minimize again
 
-                    if (maxWait < 0 || Process.HasExited)
-                    {
-                        throw new Exception("Unable to save file in WorldEditor");
-                    }
-                } while (Win32Api.GetForegroundWindow() != Process.MainWindowHandle);
-
-                SendKeys.SendWait("^s");
-                Thread.Sleep(sleepTime);
-                maxWait -= sleepTime;
-                if (maxWait < 0)
+                Win32Api.SetForegroundWindow(Process.MainWindowHandle);
+                if (Win32Api.GetForegroundWindow() == Process.MainWindowHandle)
                 {
-                    throw new Exception("Unable to save file in WorldEditor");
+                    SendKeys.SendWait("^s");
                 }
-            } while (GetLastWriteTime() == originalWriteTime);
+
+                return GetLastWriteTime() != originalWriteTime;
+            }, (int)TimeSpan.FromMinutes(5).TotalMilliseconds, "Unable to save map file in World Editor");
         }
 
         public void Dispose()
         {
-            Process.Kill();
+            Process?.Kill();
         }
     }
 }

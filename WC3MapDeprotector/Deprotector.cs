@@ -571,7 +571,7 @@ namespace WC3MapDeprotector
                     var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
                     new DirectoryInfo(slkRecoverOutPath).Delete(true);
                     Directory.CreateDirectory(slkRecoverOutPath);
-                    Utils.WaitForProcessToExit(Utils.ExecuteCommand(SLKRecoverEXE, ""));
+                    Utils.WaitForProcessToExit(Utils.ExecuteCommand(SLKRecoverEXE, "", ProcessWindowStyle.Hidden));
 
                     _logEvent("SilkObjectOptimizer completed");
 
@@ -1202,11 +1202,52 @@ namespace WC3MapDeprotector
 
             BuildImportList();
 
-            CorrectUnitPositionZOffsets();
-            MoveObjectEditorStringsToTriggerStrings();
-            RefactorSkinnableProperties();
-            UpgradeToLatestFileFormats();
-            RepairW3XNativeFilesInEditor();
+            var autoUpgradeError = false;
+            try
+            {
+                CorrectUnitPositionZOffsets();
+            }
+            catch
+            {
+                autoUpgradeError = false;
+            }
+            try
+            {
+                MoveObjectEditorStringsToTriggerStrings();
+            }
+            catch
+            {
+                autoUpgradeError = false;
+            }
+            try
+            {
+                RefactorSkinnableProperties();
+            }
+            catch
+            {
+                autoUpgradeError = false;
+            }
+            try
+            {
+                UpgradeToLatestFileFormats();
+            }
+            catch
+            {
+                autoUpgradeError = false;
+            }
+            try
+            {
+                //todo: show explanation on screen with retry button on failure
+                RepairW3XNativeFilesInEditor();
+            }
+            catch
+            {
+                autoUpgradeError = false;
+            }
+            if (autoUpgradeError)
+            {
+                _deprotectionResult.WarningMessages.Add("Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor");
+            }
 
             AnnotateScriptFile();
 
@@ -1605,18 +1646,10 @@ namespace WC3MapDeprotector
             var tempMapFileName = Path.Combine(repairNativesFolder, "map.w3x");
             BuildW3X(tempMapFileName, repairNativesFolder, allFiles.Select(x => @$"{repairNativesFolder}\{x}").Where(x => File.Exists(x)).ToList());
 
-            try
+            using (var editor = new WorldEditor())
             {
-                using (var editor = new WorldEditor(tempMapFileName))
-                {
-                    editor.SaveMap();
-                }
-            }
-            catch
-            {
-                //todo: show explanation on screen with retry button on failure
-                _logEvent("Unable to load/save in world editor...");
-                return;
+                editor.LoadMapFile(tempMapFileName);
+                editor.SaveMap();
             }
 
             var map = Map.Open(tempMapFileName);

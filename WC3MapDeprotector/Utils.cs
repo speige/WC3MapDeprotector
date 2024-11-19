@@ -4,7 +4,7 @@ namespace WC3MapDeprotector
 {
     public static class Utils
     {
-        public static Process ExecuteCommand(string exePath, string arguments)
+        public static Process ExecuteCommand(string exePath, string arguments, ProcessWindowStyle windowStyle = ProcessWindowStyle.Normal)
         {
             var process = new Process();
             process.StartInfo.FileName = exePath;
@@ -13,7 +13,7 @@ namespace WC3MapDeprotector
             process.StartInfo.RedirectStandardOutput = false;
             process.StartInfo.RedirectStandardError = false;
             process.StartInfo.RedirectStandardInput = false;
-            process.StartInfo.WindowStyle = ProcessWindowStyle.Normal;
+            process.StartInfo.WindowStyle = windowStyle;
             process.StartInfo.CreateNoWindow = false;
             process.StartInfo.WorkingDirectory = Path.GetDirectoryName(exePath);
             process.Start();
