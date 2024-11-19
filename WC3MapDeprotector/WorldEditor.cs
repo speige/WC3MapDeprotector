@@ -47,8 +47,6 @@ namespace WC3MapDeprotector
                 RefreshProcess();
                 if (!string.IsNullOrWhiteSpace(Process.MainWindowTitle))
                 {
-                    const int SW_MINIMIZE = 6;
-                    Win32Api.ShowWindow(Process.MainWindowHandle, SW_MINIMIZE);
                     return true;
                 }
 
@@ -87,7 +85,7 @@ namespace WC3MapDeprotector
 
         public bool IsMapLoaded(string mapFileName)
         {
-            var loadedMapFileName = GetLoadedMapFileName();
+            var loadedMapFileName = GetLoadedMapFileName().TrimEnd("*").TrimEnd(" ");
             return !string.IsNullOrWhiteSpace(loadedMapFileName) && Path.GetFileName(mapFileName).StartsWith(Path.GetFileName(loadedMapFileName));
         }
 

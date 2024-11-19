@@ -1237,7 +1237,6 @@ namespace WC3MapDeprotector
             }
             try
             {
-                //todo: show explanation on screen with retry button on failure
                 RepairW3XNativeFilesInEditor();
             }
             catch
