@@ -42,7 +42,7 @@
             rtbDisclaimer.Margin = new Padding(5);
             rtbDisclaimer.Name = "rtbDisclaimer";
             rtbDisclaimer.ReadOnly = true;
-            rtbDisclaimer.Size = new Size(1217, 562);
+            rtbDisclaimer.Size = new Size(1217, 558);
             rtbDisclaimer.TabIndex = 0;
             rtbDisclaimer.Text = "";
             // 
@@ -50,7 +50,7 @@
             // 
             btnOkay.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             btnOkay.DialogResult = DialogResult.OK;
-            btnOkay.Location = new Point(19, 600);
+            btnOkay.Location = new Point(19, 596);
             btnOkay.Margin = new Padding(5);
             btnOkay.Name = "btnOkay";
             btnOkay.Size = new Size(227, 38);
@@ -62,7 +62,7 @@
             // 
             btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(942, 600);
+            btnCancel.Location = new Point(942, 596);
             btnCancel.Margin = new Padding(5);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(301, 38);
@@ -73,7 +73,7 @@
             // btnEasterEgg
             // 
             btnEasterEgg.Anchor = AnchorStyles.Bottom;
-            btnEasterEgg.Location = new Point(580, 607);
+            btnEasterEgg.Location = new Point(580, 603);
             btnEasterEgg.Margin = new Padding(0);
             btnEasterEgg.Name = "btnEasterEgg";
             btnEasterEgg.Size = new Size(26, 31);
@@ -88,7 +88,7 @@
             AcceptButton = btnCancel;
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1257, 652);
+            ClientSize = new Size(1257, 648);
             Controls.Add(btnEasterEgg);
             Controls.Add(btnCancel);
             Controls.Add(btnOkay);

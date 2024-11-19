@@ -65,7 +65,6 @@ namespace WC3MapDeprotector
             tbInputFile.Enabled = !_running;
             tbOutputFile.Enabled = !_running;
             cbTranspileToLua.Enabled = !_running;
-            cbBruteForceUnknowns.Enabled = !_running;
             cbVisualTriggers.Enabled = !_running;
             btnRebuildMap.TabStop = !_running;
 
@@ -108,6 +107,7 @@ namespace WC3MapDeprotector
 
             UserSettings.WC3ExePath = PromptUserForFileInstallPath("Warcraft III.exe", UserSettings.WC3ExePath);
             UserSettings.WorldEditExePath = PromptUserForFileInstallPath("World Editor.exe", UserSettings.WorldEditExePath);
+            cbOutputFormat.SelectedItem = "Reforged";
         }
 
         protected void tbInputFile_TextChanged(object sender, EventArgs e)
@@ -175,7 +175,7 @@ namespace WC3MapDeprotector
                 _cancel = false;
                 _running = true;
                 EnableControls();
-                using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked, BruteForceUnknowns = cbBruteForceUnknowns.Checked }, log =>
+                using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked }, log =>
                 {
                     BeginInvoke(() =>
                     {
@@ -264,6 +264,15 @@ namespace WC3MapDeprotector
             }
 
             Activate();
+        }
+
+        private void cbOutputFormat_SelectedValueChanged(object sender, EventArgs e)
+        {
+            if (cbOutputFormat.SelectedItem != "Reforged")
+            {
+                new frmGameVersionCompatability().ShowDialog();
+                cbOutputFormat.SelectedItem = "Reforged";
+            }
         }
     }
 }

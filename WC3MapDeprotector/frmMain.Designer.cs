@@ -38,15 +38,18 @@
             label2 = new Label();
             btnInputFileBrowse = new Button();
             btnOutputFileBrowse = new Button();
-            cbTranspileToLua = new CheckBox();
-            cbBruteForceUnknowns = new CheckBox();
             btnDonate = new Button();
             btnBugReport = new Button();
-            cbVisualTriggers = new CheckBox();
             label4 = new Label();
             tbWarningMessages = new TextBox();
             label3 = new Label();
             tbDebugLog = new TextBox();
+            groupBox1 = new GroupBox();
+            cbVisualTriggers = new CheckBox();
+            cbTranspileToLua = new CheckBox();
+            cbOutputFormat = new ComboBox();
+            label5 = new Label();
+            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // tbInputFile
@@ -133,26 +136,6 @@
             btnOutputFileBrowse.UseVisualStyleBackColor = true;
             btnOutputFileBrowse.Click += btnOutputFileBrowse_Click;
             // 
-            // cbTranspileToLua
-            // 
-            cbTranspileToLua.AutoSize = true;
-            cbTranspileToLua.Location = new Point(132, 190);
-            cbTranspileToLua.Name = "cbTranspileToLua";
-            cbTranspileToLua.Size = new Size(329, 29);
-            cbTranspileToLua.TabIndex = 9;
-            cbTranspileToLua.Text = "Convert JASS to LUA (experimental)";
-            cbTranspileToLua.UseVisualStyleBackColor = true;
-            // 
-            // cbBruteForceUnknowns
-            // 
-            cbBruteForceUnknowns.AutoSize = true;
-            cbBruteForceUnknowns.Location = new Point(132, 225);
-            cbBruteForceUnknowns.Name = "cbBruteForceUnknowns";
-            cbBruteForceUnknowns.Size = new Size(407, 29);
-            cbBruteForceUnknowns.TabIndex = 10;
-            cbBruteForceUnknowns.Text = "Brute force unknown files (SLOW as in DAYS)";
-            cbBruteForceUnknowns.UseVisualStyleBackColor = true;
-            // 
             // btnDonate
             // 
             btnDonate.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -174,16 +157,6 @@
             btnBugReport.TabIndex = 12;
             btnBugReport.UseVisualStyleBackColor = true;
             btnBugReport.Click += btnBugReport_Click;
-            // 
-            // cbVisualTriggers
-            // 
-            cbVisualTriggers.AutoSize = true;
-            cbVisualTriggers.Location = new Point(132, 155);
-            cbVisualTriggers.Name = "cbVisualTriggers";
-            cbVisualTriggers.Size = new Size(341, 29);
-            cbVisualTriggers.TabIndex = 15;
-            cbVisualTriggers.Text = "Create Visual/GUI Triggers (experimental)";
-            cbVisualTriggers.UseVisualStyleBackColor = true;
             // 
             // label4
             // 
@@ -232,20 +205,71 @@
             tbDebugLog.Size = new Size(1217, 235);
             tbDebugLog.TabIndex = 23;
             // 
-            // MainForm
+            // groupBox1
+            // 
+            groupBox1.Controls.Add(cbVisualTriggers);
+            groupBox1.Controls.Add(cbTranspileToLua);
+            groupBox1.Location = new Point(29, 145);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Size = new Size(482, 118);
+            groupBox1.TabIndex = 27;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "Experimental options (these don't work very well yet)";
+            // 
+            // cbVisualTriggers
+            // 
+            cbVisualTriggers.AutoSize = true;
+            cbVisualTriggers.Location = new Point(40, 31);
+            cbVisualTriggers.Name = "cbVisualTriggers";
+            cbVisualTriggers.Size = new Size(369, 29);
+            cbVisualTriggers.TabIndex = 17;
+            cbVisualTriggers.Text = "Convert Jass code to Visual/GUI Triggers";
+            cbVisualTriggers.UseVisualStyleBackColor = true;
+            // 
+            // cbTranspileToLua
+            // 
+            cbTranspileToLua.AutoSize = true;
+            cbTranspileToLua.Location = new Point(40, 66);
+            cbTranspileToLua.Name = "cbTranspileToLua";
+            cbTranspileToLua.Size = new Size(238, 29);
+            cbTranspileToLua.TabIndex = 16;
+            cbTranspileToLua.Text = "Convert Jass code to Lua";
+            cbTranspileToLua.UseVisualStyleBackColor = true;
+            // 
+            // cbOutputFormat
+            // 
+            cbOutputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbOutputFormat.FormattingEnabled = true;
+            cbOutputFormat.Items.AddRange(new object[] { "Reforged", "Classic / 1.26a" });
+            cbOutputFormat.Location = new Point(1068, 146);
+            cbOutputFormat.Name = "cbOutputFormat";
+            cbOutputFormat.Size = new Size(167, 33);
+            cbOutputFormat.TabIndex = 28;
+            cbOutputFormat.SelectedValueChanged += cbOutputFormat_SelectedValueChanged;
+            // 
+            // label5
+            // 
+            label5.AutoSize = true;
+            label5.Location = new Point(927, 149);
+            label5.Name = "label5";
+            label5.Size = new Size(135, 25);
+            label5.TabIndex = 29;
+            label5.Text = "Output Format";
+            // 
+            // frmMain
             // 
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1257, 821);
+            Controls.Add(label5);
+            Controls.Add(cbOutputFormat);
+            Controls.Add(groupBox1);
             Controls.Add(label4);
             Controls.Add(tbWarningMessages);
             Controls.Add(label3);
             Controls.Add(tbDebugLog);
-            Controls.Add(cbVisualTriggers);
             Controls.Add(btnBugReport);
             Controls.Add(btnDonate);
-            Controls.Add(cbBruteForceUnknowns);
-            Controls.Add(cbTranspileToLua);
             Controls.Add(btnOutputFileBrowse);
             Controls.Add(btnInputFileBrowse);
             Controls.Add(label2);
@@ -257,8 +281,10 @@
             Icon = (Icon)resources.GetObject("$this.Icon");
             Margin = new Padding(5);
             MinimumSize = new Size(800, 775);
-            Name = "MainForm";
+            Name = "frmMain";
             Load += MainForm_Load;
+            groupBox1.ResumeLayout(false);
+            groupBox1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -274,14 +300,16 @@
         private Label label2;
         private Button btnInputFileBrowse;
         private Button btnOutputFileBrowse;
-        private CheckBox cbTranspileToLua;
-        private CheckBox cbBruteForceUnknowns;
         private Button btnDonate;
         private Button btnBugReport;
-        private CheckBox cbVisualTriggers;
         private Label label4;
         private TextBox tbWarningMessages;
         private Label label3;
         private TextBox tbDebugLog;
+        private GroupBox groupBox1;
+        private CheckBox cbVisualTriggers;
+        private CheckBox cbTranspileToLua;
+        private ComboBox cbOutputFormat;
+        private Label label5;
     }
 }
