@@ -45,6 +45,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Update="frmHelp.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="frmGameVersionCompatability.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -84,6 +87,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="GameVersionCompatability.rtf">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Help.rtf">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="listfile.zip">

@@ -1,4 +1,5 @@
 ﻿using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
 using FlaUI.UIA2;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
@@ -99,24 +100,59 @@ namespace WC3MapDeprotector
         public void SaveMap()
         {
             var originalWriteTime = GetLastWriteTime();
-            var sleepTime = (int)TimeSpan.FromSeconds(15).TotalMilliseconds;
-            var maxWait = (int)TimeSpan.FromMinutes(15).TotalMilliseconds;
-            var oneSecond = (int)TimeSpan.FromSeconds(1).TotalMilliseconds;
 
-            SleepUntilTrue(() =>
+            using (var app = FlaUI.Core.Application.Attach(Process.Id))
+            using (var automation = new UIA2Automation())
             {
-                //todo: if window shows it's already saving, don't focus/ctrl+s again
-                //todo: if it asks about generating start locations, click yes
-                //todo: minimize again
+                var mainWindow = app.GetMainWindow(automation);
 
-                Win32Api.SetForegroundWindow(Process.MainWindowHandle);
-                if (Win32Api.GetForegroundWindow() == Process.MainWindowHandle)
+                SleepUntilTrue(() =>
                 {
-                    SendKeys.SendWait("^s");
-                }
+                    try
+                    {
+                        SleepUntilTrue(() =>
+                        {
+                            Win32Api.SetForegroundWindow(Process.MainWindowHandle);
+                            Thread.Sleep(1000);
+                            if (Win32Api.GetForegroundWindow() == Process.MainWindowHandle)
+                            {
+                                SendKeys.SendWait("^s");
+                                Thread.Sleep(1000);
+                                return true;
+                            }
 
-                return GetLastWriteTime() != originalWriteTime;
-            }, (int)TimeSpan.FromMinutes(5).TotalMilliseconds, "Unable to save map file in World Editor");
+                            return false;
+                        }, (int)TimeSpan.FromMinutes(1).TotalMilliseconds, "");
+                    }
+                    catch { }
+
+                    try
+                    {
+                        SleepUntilTrue(() =>
+                        {
+                            var warningWindow = mainWindow.ModalWindows.Where(x => x.Name.Equals("warning", StringComparison.InvariantCultureIgnoreCase)).FirstOrDefault();
+                            if (warningWindow != null)
+                            {
+                                var children = warningWindow.FindAllChildren();
+                                if (children.Any(x => x.ControlType == ControlType.Text && x.Name.Contains("starting location", StringComparison.InvariantCultureIgnoreCase)))
+                                {
+                                    var yesButton = children.FirstOrDefault(x => x.ControlType == ControlType.Button && x.Name.Equals("yes", StringComparison.InvariantCultureIgnoreCase));
+                                    if (yesButton != null)
+                                    {
+                                        yesButton.Click();
+                                        Thread.Sleep(1000);
+                                    }
+                                }
+                            }
+
+                            return GetLastWriteTime() != originalWriteTime;
+                        }, (int)TimeSpan.FromMinutes(1).TotalMilliseconds, "");
+                    }
+                    catch { }
+
+                    return GetLastWriteTime() != originalWriteTime;
+                }, (int)TimeSpan.FromMinutes(5).TotalMilliseconds, "Unable to save map file in World Editor");
+            }
         }
 
         public void Dispose()

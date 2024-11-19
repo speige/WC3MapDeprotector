@@ -49,6 +49,7 @@
             cbTranspileToLua = new CheckBox();
             cbOutputFormat = new ComboBox();
             label5 = new Label();
+            btnHelp = new Button();
             groupBox1.SuspendLayout();
             SuspendLayout();
             // 
@@ -95,7 +96,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(19, 30);
+            label1.Location = new Point(19, 27);
             label1.Margin = new Padding(5, 0, 5, 0);
             label1.Name = "label1";
             label1.Size = new Size(90, 25);
@@ -105,7 +106,7 @@
             // label2
             // 
             label2.AutoSize = true;
-            label2.Location = new Point(19, 98);
+            label2.Location = new Point(19, 93);
             label2.Margin = new Padding(5, 0, 5, 0);
             label2.Name = "label2";
             label2.Size = new Size(105, 25);
@@ -140,10 +141,13 @@
             // 
             btnDonate.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnDonate.Image = (Image)resources.GetObject("btnDonate.Image");
-            btnDonate.Location = new Point(1079, 754);
+            btnDonate.Location = new Point(18, 729);
             btnDonate.Name = "btnDonate";
-            btnDonate.Size = new Size(67, 55);
+            btnDonate.Size = new Size(100, 80);
             btnDonate.TabIndex = 11;
+            btnDonate.Text = "Donate";
+            btnDonate.TextAlign = ContentAlignment.BottomCenter;
+            btnDonate.TextImageRelation = TextImageRelation.ImageAboveText;
             btnDonate.UseVisualStyleBackColor = true;
             btnDonate.Click += btnDonate_Click;
             // 
@@ -151,10 +155,13 @@
             // 
             btnBugReport.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             btnBugReport.Image = (Image)resources.GetObject("btnBugReport.Image");
-            btnBugReport.Location = new Point(1170, 754);
+            btnBugReport.Location = new Point(987, 729);
             btnBugReport.Name = "btnBugReport";
-            btnBugReport.Size = new Size(67, 55);
+            btnBugReport.Size = new Size(125, 80);
             btnBugReport.TabIndex = 12;
+            btnBugReport.Text = "Bug Report";
+            btnBugReport.TextAlign = ContentAlignment.BottomCenter;
+            btnBugReport.TextImageRelation = TextImageRelation.ImageAboveText;
             btnBugReport.UseVisualStyleBackColor = true;
             btnBugReport.Click += btnBugReport_Click;
             // 
@@ -202,16 +209,16 @@
             tbDebugLog.Name = "tbDebugLog";
             tbDebugLog.ReadOnly = true;
             tbDebugLog.ScrollBars = ScrollBars.Both;
-            tbDebugLog.Size = new Size(1217, 235);
+            tbDebugLog.Size = new Size(1217, 201);
             tbDebugLog.TabIndex = 23;
             // 
             // groupBox1
             // 
             groupBox1.Controls.Add(cbVisualTriggers);
             groupBox1.Controls.Add(cbTranspileToLua);
-            groupBox1.Location = new Point(29, 145);
+            groupBox1.Location = new Point(19, 145);
             groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(482, 118);
+            groupBox1.Size = new Size(482, 114);
             groupBox1.TabIndex = 27;
             groupBox1.TabStop = false;
             groupBox1.Text = "Experimental options (these don't work very well yet)";
@@ -241,7 +248,7 @@
             cbOutputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
             cbOutputFormat.FormattingEnabled = true;
             cbOutputFormat.Items.AddRange(new object[] { "Reforged", "Classic / 1.26a" });
-            cbOutputFormat.Location = new Point(1068, 146);
+            cbOutputFormat.Location = new Point(1068, 155);
             cbOutputFormat.Name = "cbOutputFormat";
             cbOutputFormat.Size = new Size(167, 33);
             cbOutputFormat.TabIndex = 28;
@@ -250,17 +257,32 @@
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(927, 149);
+            label5.Location = new Point(927, 158);
             label5.Name = "label5";
             label5.Size = new Size(135, 25);
             label5.TabIndex = 29;
             label5.Text = "Output Format";
+            // 
+            // btnHelp
+            // 
+            btnHelp.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnHelp.Image = (Image)resources.GetObject("btnHelp.Image");
+            btnHelp.Location = new Point(1136, 729);
+            btnHelp.Name = "btnHelp";
+            btnHelp.Size = new Size(100, 80);
+            btnHelp.TabIndex = 30;
+            btnHelp.Text = "Help";
+            btnHelp.TextAlign = ContentAlignment.BottomCenter;
+            btnHelp.TextImageRelation = TextImageRelation.ImageAboveText;
+            btnHelp.UseVisualStyleBackColor = true;
+            btnHelp.Click += btnHelp_Click;
             // 
             // frmMain
             // 
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1257, 821);
+            Controls.Add(btnHelp);
             Controls.Add(label5);
             Controls.Add(cbOutputFormat);
             Controls.Add(groupBox1);
@@ -311,5 +333,6 @@
         private CheckBox cbTranspileToLua;
         private ComboBox cbOutputFormat;
         private Label label5;
+        private Button btnHelp;
     }
 }

@@ -326,8 +326,8 @@ namespace WC3MapDeprotector
 
                 File.Copy(_inMapFile, tempMapLocation);
                 using (var scanner = new ProcessFileAccessScanner())
+                using (var form = new frmLiveGameScanner())
                 {
-                    var form = new frmLiveGameScanner();
                     form.WC3ExePath = UserSettings.WC3ExePath;
 
                     scanner.FileAccessed += fileName =>
@@ -1209,7 +1209,7 @@ namespace WC3MapDeprotector
             }
             catch
             {
-                autoUpgradeError = false;
+                autoUpgradeError = true;
             }
             try
             {
@@ -1217,7 +1217,7 @@ namespace WC3MapDeprotector
             }
             catch
             {
-                autoUpgradeError = false;
+                autoUpgradeError = true;
             }
             try
             {
@@ -1225,7 +1225,7 @@ namespace WC3MapDeprotector
             }
             catch
             {
-                autoUpgradeError = false;
+                autoUpgradeError = true;
             }
             try
             {
@@ -1233,7 +1233,7 @@ namespace WC3MapDeprotector
             }
             catch
             {
-                autoUpgradeError = false;
+                autoUpgradeError = true;
             }
             try
             {
@@ -1242,7 +1242,7 @@ namespace WC3MapDeprotector
             }
             catch
             {
-                autoUpgradeError = false;
+                autoUpgradeError = true;
             }
             if (autoUpgradeError)
             {
@@ -1646,8 +1646,11 @@ namespace WC3MapDeprotector
             var tempMapFileName = Path.Combine(repairNativesFolder, "map.w3x");
             BuildW3X(tempMapFileName, repairNativesFolder, allFiles.Select(x => @$"{repairNativesFolder}\{x}").Where(x => File.Exists(x)).ToList());
 
+            using (var form = new frmWorldEditorInstructions())
             using (var editor = new WorldEditor())
             {
+                form.Show();
+                Application.DoEvents();
                 editor.LoadMapFile(tempMapFileName);
                 editor.SaveMap();
             }

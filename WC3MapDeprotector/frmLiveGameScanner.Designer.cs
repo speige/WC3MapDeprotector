@@ -50,7 +50,7 @@
             label1.Location = new Point(14, 9);
             label1.Margin = new Padding(5, 0, 5, 0);
             label1.Name = "label1";
-            label1.Size = new Size(664, 269);
+            label1.Size = new Size(664, 389);
             label1.TabIndex = 0;
             label1.Text = resources.GetString("label1.Text");
             // 
@@ -58,7 +58,7 @@
             // 
             label2.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label2.AutoSize = true;
-            label2.Location = new Point(386, 425);
+            label2.Location = new Point(386, 482);
             label2.Name = "label2";
             label2.Size = new Size(186, 25);
             label2.TabIndex = 1;
@@ -68,7 +68,7 @@
             // 
             label3.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label3.AutoSize = true;
-            label3.Location = new Point(429, 487);
+            label3.Location = new Point(429, 520);
             label3.Name = "label3";
             label3.Size = new Size(143, 25);
             label3.TabIndex = 2;
@@ -78,7 +78,7 @@
             // 
             label4.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label4.AutoSize = true;
-            label4.Location = new Point(421, 549);
+            label4.Location = new Point(421, 558);
             label4.Name = "label4";
             label4.Size = new Size(151, 25);
             label4.TabIndex = 3;
@@ -98,7 +98,7 @@
             // tbFakeFileCount
             // 
             tbFakeFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbFakeFileCount.Location = new Point(578, 487);
+            tbFakeFileCount.Location = new Point(578, 520);
             tbFakeFileCount.Name = "tbFakeFileCount";
             tbFakeFileCount.Size = new Size(100, 32);
             tbFakeFileCount.TabIndex = 5;
@@ -106,7 +106,7 @@
             // tbUnknownFileCount
             // 
             tbUnknownFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbUnknownFileCount.Location = new Point(578, 425);
+            tbUnknownFileCount.Location = new Point(578, 482);
             tbUnknownFileCount.Name = "tbUnknownFileCount";
             tbUnknownFileCount.Size = new Size(100, 32);
             tbUnknownFileCount.TabIndex = 6;
@@ -114,7 +114,7 @@
             // tbDiscoveredFileCount
             // 
             tbDiscoveredFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbDiscoveredFileCount.Location = new Point(578, 549);
+            tbDiscoveredFileCount.Location = new Point(578, 558);
             tbDiscoveredFileCount.Name = "tbDiscoveredFileCount";
             tbDiscoveredFileCount.Size = new Size(100, 32);
             tbDiscoveredFileCount.TabIndex = 7;
@@ -133,7 +133,7 @@
             // tbWC3ExePath
             // 
             tbWC3ExePath.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            tbWC3ExePath.Location = new Point(178, 301);
+            tbWC3ExePath.Location = new Point(178, 415);
             tbWC3ExePath.Name = "tbWC3ExePath";
             tbWC3ExePath.Size = new Size(425, 32);
             tbWC3ExePath.TabIndex = 9;
@@ -141,7 +141,7 @@
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(14, 305);
+            label5.Location = new Point(14, 419);
             label5.Name = "label5";
             label5.Size = new Size(160, 25);
             label5.TabIndex = 10;
@@ -151,7 +151,7 @@
             // 
             btnWC3ExePathBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             btnWC3ExePathBrowse.Image = (Image)resources.GetObject("btnWC3ExePathBrowse.Image");
-            btnWC3ExePathBrowse.Location = new Point(611, 289);
+            btnWC3ExePathBrowse.Location = new Point(611, 403);
             btnWC3ExePathBrowse.Margin = new Padding(5);
             btnWC3ExePathBrowse.Name = "btnWC3ExePathBrowse";
             btnWC3ExePathBrowse.Size = new Size(67, 55);

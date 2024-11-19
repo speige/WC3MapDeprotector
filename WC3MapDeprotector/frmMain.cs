@@ -162,10 +162,13 @@ namespace WC3MapDeprotector
             tbDebugLog.Clear();
             tbWarningMessages.Clear();
 
-            if (!_disclaimerApproved && new frmDisclaimer().ShowDialog() != DialogResult.OK)
+            using (var form = new frmDisclaimer())
             {
-                MessageBox.Show("Sorry, you can only deprotect a map if you promise not to be toxic to the community");
-                return;
+                if (!_disclaimerApproved && form.ShowDialog() != DialogResult.OK)
+                {
+                    MessageBox.Show("Sorry, you can only deprotect a map if you promise not to be toxic to the community");
+                    return;
+                }
             }
 
             _disclaimerApproved = true;
@@ -270,8 +273,19 @@ namespace WC3MapDeprotector
         {
             if (cbOutputFormat.SelectedItem != "Reforged")
             {
-                new frmGameVersionCompatability().ShowDialog();
+                using (var form = new frmGameVersionCompatability())
+                {
+                    form.ShowDialog();
+                }
                 cbOutputFormat.SelectedItem = "Reforged";
+            }
+        }
+
+        private void btnHelp_Click(object sender, EventArgs e)
+        {
+            using (var form = new frmHelp())
+            {
+                form.ShowDialog();
             }
         }
     }
