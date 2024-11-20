@@ -234,6 +234,14 @@ namespace WC3MapDeprotector
             }
         }
 
+        protected string DeletedFilesPath
+        {
+            get
+            {
+                return Path.Combine(ExtractedFilesPath, "Deleted");
+            }
+        }
+
         protected string MapBaseName
         {
             get
@@ -446,6 +454,9 @@ namespace WC3MapDeprotector
             return result.ToString();
         }
 
+        [GeneratedRegex(@"^(?!ID;|b;|c;|e)", RegexOptions.IgnoreCase)]
+        protected static partial Regex Regex_SLKInvalidRow();
+
         [GeneratedRegex(@"(<[^>]*>)|(.)", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ObjectDataPropertyReferenceCSV();
 
@@ -555,6 +566,16 @@ namespace WC3MapDeprotector
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
 
                 var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
+                foreach (var slkFile in slkFiles)
+                {
+                    var text = File.ReadAllLines(slkFile).ToList();
+                    if (text.RemoveAll(x => Regex_SLKInvalidRow().IsMatch(x)) > 0)
+                    {
+                        MoveExtractedFileToDeletedFolder(slkFile);
+                        File.WriteAllLines(slkFile, text);
+                    }
+                }
+
                 if (slkFiles.Count > 0)
                 {
                     var slkRecoverableFiles = new List<string>() { "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q", "war3map.w3t", "war3map.w3u" };
@@ -574,7 +595,6 @@ namespace WC3MapDeprotector
                     Utils.WaitForProcessToExit(Utils.ExecuteCommand(SLKRecoverEXE, "", ProcessWindowStyle.Hidden));
 
                     _logEvent("SilkObjectOptimizer completed");
-
 
                     var parsedSlkObjectData = _objectDataParser.ParseObjectDataFromSLKFiles(slkFiles);
                     //NOTE: SLKRecover generates corrupted files for any SLK files that are missing, this excludes them
@@ -675,7 +695,7 @@ namespace WC3MapDeprotector
                     {
                         if (!slkFile.ToLower().Contains("\\splats\\"))
                         {
-                            File.Delete(slkFile);
+                            MoveExtractedFileToDeletedFolder(slkFile);
                         }
                     }
                 }
@@ -982,7 +1002,7 @@ namespace WC3MapDeprotector
 
                 if (containsObjectData)
                 {
-                    File.Delete(txtFile);
+                    MoveExtractedFileToDeletedFolder(txtFile);
                 }
 
                 if (containsObjectData && unknownObjects > 0)
@@ -1002,11 +1022,11 @@ namespace WC3MapDeprotector
             PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
-            File.Delete(Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"));
-            File.Delete(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
-            File.Delete(Path.Combine(DiscoveredFilesPath, "war3map.wtg"));
-            File.Delete(Path.Combine(DiscoveredFilesPath, "war3map.w3r"));
-            //todo: keep a copy of these & diff with decompiled versions from war3map.j so we can update _deprotectionResult.CountOfProtectionsFound
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wtg"));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.w3r"));
+            //todo: diff with decompiled versions from war3map.j so we can update _deprotectionResult.CountOfProtectionsFound
 
             var skinPath = Path.Combine(DiscoveredFilesPath, "war3mapSkin.txt");
             if (!File.Exists(skinPath))
@@ -1134,7 +1154,7 @@ namespace WC3MapDeprotector
                 if (!string.IsNullOrWhiteSpace(luaScript))
                 {
                     File.WriteAllText(Path.Combine(DiscoveredFilesPath, "war3map.lua"), luaScript);
-                    File.Delete(Path.Combine(DiscoveredFilesPath, "war3map.j"));
+                    MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.j"));
                     _logEvent("Created war3map.lua");
 
                     try
@@ -1183,7 +1203,7 @@ namespace WC3MapDeprotector
             {
                 _deprotectionResult.CountOfProtectionsFound++;
                 File.Copy(Path.Combine(BaseMapFilesPath, "war3map.wtg"), Path.Combine(DiscoveredFilesPath, "war3map.wtg"), true);
-                File.Delete(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
+                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Map will still open in WorldEditor & run, but saving in world editor will corrupt your war3map.j or war3map.lua script file.");
             }
@@ -1834,6 +1854,22 @@ namespace WC3MapDeprotector
             _logEvent($"Reconstructed by parsing other map files: {fileName}");
 
             return true;
+        }
+
+        protected void MoveExtractedFileToDeletedFolder(string extractedFileName)
+        {
+            if (!File.Exists(extractedFileName))
+            {
+                return;
+            }
+
+            var newFileName = Path.Combine(DeletedFilesPath, Path.GetRelativePath(ExtractedFilesPath, extractedFileName));
+            Directory.CreateDirectory(Path.GetDirectoryName(newFileName));
+            while (File.Exists(newFileName))
+            {
+                newFileName = newFileName + "_old";
+            }
+            File.Move(extractedFileName, newFileName);
         }
 
         protected bool ExtractFileFromArchive(StormMPQArchive archive, string archiveFileName)
@@ -3808,17 +3844,17 @@ endfunction
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "(attributes)")))
             {
                 _logEvent("Deleting (attributes)...");
-                File.Delete(Path.Combine(DiscoveredFilesPath, "(attributes)"));
+                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "(attributes)"));
             }
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "(listfile)")))
             {
                 _logEvent("Deleting (listfile)...");
-                File.Delete(Path.Combine(DiscoveredFilesPath, "(listfile)"));
+                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "(listfile)"));
             }
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "(signature)")))
             {
                 _logEvent("Deleting (signature)...");
-                File.Delete(Path.Combine(DiscoveredFilesPath, "(signature)"));
+                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "(signature)"));
             }
         }
 
