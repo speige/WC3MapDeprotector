@@ -585,6 +585,7 @@ namespace WC3MapDeprotector
                 }
                 _logEvent($"Cleaning up imported ObjectEditor data");
                 _objectEditor.RepairInvalidData();
+                _logEvent($"Exporting ObjectEditor data to WorldEditor binary format");
                 _objectEditor.SetWar3NetObjectFiles(map_ObjectDataCollectionOnly);
 
                 foreach (var file in map_ObjectDataCollectionOnly.GetObjectDataFiles())
@@ -1033,7 +1034,7 @@ namespace WC3MapDeprotector
             if (autoUpgradeError)
             {
                 _deprotectionResult.CriticalWarningCount++;
-                _deprotectionResult.WarningMessages.Add("Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor, but not very likely.");
+                _deprotectionResult.WarningMessages.Add("WARNING: Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor, but not very likely.");
             }
 
             AnnotateScriptFile();

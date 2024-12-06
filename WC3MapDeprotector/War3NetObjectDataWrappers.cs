@@ -746,6 +746,46 @@ namespace WC3MapDeprotector
             return Data.GetValueOrDefault(property);
         }
 
+        public List<Type_PropertyName> GetPropertiesWithMatchingValues(GenericObjectData<Type_PropertyName> otherObjectData)
+        {
+            var result = new List<Type_PropertyName>();
+            if (otherObjectData == null)
+            {
+                return result;
+            }
+
+            foreach (var record in Data)
+            {
+                if (record.Value == null || !otherObjectData.Data.TryGetValue(record.Key, out var otherData) || otherData == null || record.Value.Count != otherData.Count)
+                {
+                    continue;
+                }
+
+                var matches = true;
+                for (var idx = 0; idx < record.Value.Count; idx++)
+                {
+                    var value = record.Value[idx];
+                    var otherValue = otherData[idx];
+
+                    if (value != otherValue)
+                    {
+                        if (value?.ToString() != otherValue?.ToString())
+                        {
+                            matches = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (matches)
+                {
+                    result.Add(record.Key);
+                }
+            }
+
+            return result;
+        }
+
         public void ClearValues(Type_PropertyName property)
         {
             Data.Remove(property);

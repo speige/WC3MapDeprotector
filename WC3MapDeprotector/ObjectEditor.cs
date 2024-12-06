@@ -77,7 +77,7 @@ namespace WC3MapDeprotector
                     var field = x.Value.GetValue("field")?.ToString() ?? "";
                     if (int.TryParse(x.Value.GetValue("data")?.ToString() ?? "", out var data) && data > 0)
                     {
-                        field += (char)(((byte)'A') + (data-1));
+                        field += (char)(((byte)'A') + (data - 1));
                     }
 
                     result.Add(new KeyValuePair<string, (FourCC propertyId, int level)>(field, (x.Key, 0)));
@@ -241,7 +241,7 @@ namespace WC3MapDeprotector
                     var propertyIDs = TranslatePropertyNameToIDs(objectData.Value.ObjectDataType, propertyName);
                     if (objectData.Value.ObjectDataType == ObjectDataType.Unknown || objectData.Value.ObjectDataType == ObjectDataType.Mix_Of_Multiple)
                     {
-                        propertyIDs = Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().SelectMany(x =>  TranslatePropertyNameToIDs(x, propertyName)).Distinct().ToList();
+                        propertyIDs = Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().SelectMany(x => TranslatePropertyNameToIDs(x, propertyName)).Distinct().ToList();
                     }
                     var metaDataPerProperty = propertyIDs.ToDictionary(x => x, x => _objectMetaDataCollection_baseGame.TryGetValue(x.propertyId, out var metaData) ? metaData : null);
                     var splitCSV = metaDataPerProperty.DistinctBy(x => x.Value.GetValue("index")?.ToString() ?? "").Count() > 1 || metaDataPerProperty.Any(x => (x.Value.GetValue("repeat")?.ToString() ?? "0").Trim() != "0" && (x.Value.GetValue("appendIndex")?.ToString() ?? "1").Trim() != "1");
@@ -255,7 +255,7 @@ namespace WC3MapDeprotector
                             {
                                 for (var index = 0; index < splitIndexes.Count; index++)
                                 {
-                                    convertedObjectData.SetValue(fourCC.propertyId, unquoteString(splitIndexes[index]), index+1);
+                                    convertedObjectData.SetValue(fourCC.propertyId, unquoteString(splitIndexes[index]), index + 1);
                                 }
                             }
                             else if (int.TryParse(metaData.GetValue("index")?.ToString() ?? "", out var index) && index != -1)
@@ -390,28 +390,6 @@ namespace WC3MapDeprotector
             }
 
             return result;
-        }
-
-        public List<FourCC> GetPropertiesWithMatchingValues(FourCC objectAID, FourCC objectBID)
-        {
-            var objectDataA = GetObjectDataForID_ReadOnly(objectAID);
-            var objectDataB = GetObjectDataForID_ReadOnly(objectBID);
-
-            if (objectDataA == null || objectDataB == null)
-            {
-                return new List<FourCC>();
-            }
-
-            return objectDataA.GetPropertyNames().Intersect(objectDataB.GetPropertyNames()).Where(x =>
-            {
-                int levels = objectDataA.GetLevelCount(x);
-                if (levels != objectDataB.GetLevelCount(x))
-                {
-                    return false;
-                }
-
-                return Enumerable.Range(1, levels).All(y => objectDataA.GetValue(x, y)?.ToString() == objectDataB.GetValue(x, y)?.ToString());
-            }).ToList();
         }
 
         public void RepairInvalidData()
@@ -614,22 +592,19 @@ namespace WC3MapDeprotector
         protected void FixMissingParents()
         {
             var missingParentObjects = _objectDataCollection_overrides.Where(x => x.Value.Parent == null && IsCustomObject(x.Key)).ToList();
+            var validParentObjects = _validParents.ToDictionary(x => x, x => GetObjectDataForID_ReadOnly(x));
             foreach (var objectData in missingParentObjects)
             {
-                var possibleParentIds = _validParents.ToList();
-                if (objectData.Value.ObjectDataType != ObjectDataType.Unknown && objectData.Value.ObjectDataType != ObjectDataType.Mix_Of_Multiple)
-                {
-                    possibleParentIds = possibleParentIds.Where(x => _objectDataCollection_baseGame.TryGetValue(x, out var parentObject) && parentObject.ObjectDataType == objectData.Value.ObjectDataType).ToList();
-                }
-                objectData.Value.Parent = possibleParentIds.OrderByDescending(x => GetPropertiesWithMatchingValues(objectData.Key, x).Count).FirstOrDefault();
-                
-                if (objectData.Value.Parent == null)
+                var checkAllObjectDataTypes = objectData.Value.ObjectDataType == ObjectDataType.Unknown || objectData.Value.ObjectDataType == ObjectDataType.Mix_Of_Multiple;
+                var newParent = validParentObjects.Where(x => checkAllObjectDataTypes || x.Value.ObjectDataType == objectData.Value.ObjectDataType).OrderByDescending(x => objectData.Value.GetPropertiesWithMatchingValues(x.Value).Count).FirstOrDefault();
+                if (newParent.Key == null)
                 {
                     continue;
                 }
 
-                var matchingProperties = GetPropertiesWithMatchingValues(objectData.Key, objectData.Value.Parent);
-                foreach (var  property in matchingProperties)
+                objectData.Value.Parent = newParent.Key;
+                var matchingProperties = objectData.Value.GetPropertiesWithMatchingValues(newParent.Value);
+                foreach (var property in matchingProperties)
                 {
                     objectData.Value.ClearValues(property);
                 }
@@ -713,7 +688,7 @@ namespace WC3MapDeprotector
                 var maxX = slkData.Select(x => x.Key.x).Max();
                 var maxY = slkData.Select(x => x.Key.y).Max();
 
-                var columnNames = new string[maxX+1];
+                var columnNames = new string[maxX + 1];
                 for (var x = 0; x <= maxX; x++)
                 {
                     columnNames[x] = slkData.GetValueOrDefault((x, 0))?.ToString() ?? $"{Path.GetFileName(fileName)}_{x}";
@@ -911,7 +886,7 @@ namespace WC3MapDeprotector
 
                                     break;
                                 }
-                                
+
                                 if (!baseGameValue.Equals(objectData.GetValue(propertyName, level)))
                                 {
                                     skip = false;
