@@ -1,8 +1,6 @@
 using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Reflection;
-using System.Security.Principal;
-using System.Windows.Forms;
 
 namespace WC3MapDeprotector
 {
@@ -132,6 +130,14 @@ namespace WC3MapDeprotector
         {
             if (fdInputFile.ShowDialog() == DialogResult.OK)
             {
+                if (fdInputFile.FileName.EndsWith(".w3n", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    tbInputFile.Text = "";
+                    MessageBox.Show("w3n file format is a custom campaign file with multiple missions. You must split the files into separate w3x files first before running this tool. There are instructions in the help document.");
+                    btnHelp_Click(sender, e);
+                    return;
+                }
+
                 tbInputFile.Text = fdInputFile.FileName;
                 EnableControls();
             }
@@ -286,6 +292,19 @@ namespace WC3MapDeprotector
             using (var form = new frmHelp())
             {
                 form.ShowDialog();
+            }
+        }
+
+        private void btnYoutube_Click(object sender, EventArgs e)
+        {
+            Process.Start("explorer", "http://www.youtube.com/@ai-gamer");
+        }
+
+        private void btnDiscord_Click(object sender, EventArgs e)
+        {
+            using (var discord = new frmDiscord())
+            {
+                discord.ShowDialog();
             }
         }
     }

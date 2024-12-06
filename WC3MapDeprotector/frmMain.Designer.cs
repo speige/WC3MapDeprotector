@@ -50,6 +50,8 @@
             cbOutputFormat = new ComboBox();
             label5 = new Label();
             btnHelp = new Button();
+            btnYoutube = new Button();
+            btnDiscord = new Button();
             groupBox1.SuspendLayout();
             SuspendLayout();
             // 
@@ -277,11 +279,41 @@
             btnHelp.UseVisualStyleBackColor = true;
             btnHelp.Click += btnHelp_Click;
             // 
+            // btnYoutube
+            // 
+            btnYoutube.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnYoutube.Image = (Image)resources.GetObject("btnYoutube.Image");
+            btnYoutube.Location = new Point(136, 729);
+            btnYoutube.Name = "btnYoutube";
+            btnYoutube.Size = new Size(125, 80);
+            btnYoutube.TabIndex = 31;
+            btnYoutube.Text = "My Channel";
+            btnYoutube.TextAlign = ContentAlignment.BottomCenter;
+            btnYoutube.TextImageRelation = TextImageRelation.ImageAboveText;
+            btnYoutube.UseVisualStyleBackColor = true;
+            btnYoutube.Click += btnYoutube_Click;
+            // 
+            // btnDiscord
+            // 
+            btnDiscord.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            btnDiscord.Image = (Image)resources.GetObject("btnDiscord.Image");
+            btnDiscord.Location = new Point(279, 729);
+            btnDiscord.Name = "btnDiscord";
+            btnDiscord.Size = new Size(125, 80);
+            btnDiscord.TabIndex = 32;
+            btnDiscord.Text = "My Discord";
+            btnDiscord.TextAlign = ContentAlignment.BottomCenter;
+            btnDiscord.TextImageRelation = TextImageRelation.ImageAboveText;
+            btnDiscord.UseVisualStyleBackColor = true;
+            btnDiscord.Click += btnDiscord_Click;
+            // 
             // frmMain
             // 
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1257, 821);
+            Controls.Add(btnDiscord);
+            Controls.Add(btnYoutube);
             Controls.Add(btnHelp);
             Controls.Add(label5);
             Controls.Add(cbOutputFormat);
@@ -334,5 +366,7 @@
         private ComboBox cbOutputFormat;
         private Label label5;
         private Button btnHelp;
+        private Button btnYoutube;
+        private Button btnDiscord;
     }
 }

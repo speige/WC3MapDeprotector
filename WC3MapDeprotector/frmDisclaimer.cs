@@ -17,7 +17,7 @@ namespace WC3MapDeprotector
 
         protected void btnEasterEgg_Click(object sender, EventArgs e)
         {
-            Process.Start("explorer", "https://www.youtube.com/@ai-gamer");
+            Process.Start("explorer", "https://www.imdb.com/title/tt0113957");
         }
     }
 }

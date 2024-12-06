@@ -1,0 +1,8 @@
+You accidentally clicked "Source Code" under GitHub Releases.
+You probably meant to click "WC3MapDeprotector.zip" to download the actual program
+
+You can download it here:
+https://github.com/speige/WC3MapDeprotector/releases/latest/download/WC3MapDeprotector.zip
+
+
+If you actually want to read the source code, Google how to "clone" the repository instead.

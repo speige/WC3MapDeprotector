@@ -111,9 +111,6 @@
     <None Update="StormLib_x86.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="windowsdesktop-runtime-8.0.0-win-x64.exe">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
   <ItemGroup>
