@@ -62,8 +62,6 @@ namespace WC3MapDeprotector
             btnOutputFileBrowse.Enabled = !_running;
             tbInputFile.Enabled = !_running;
             tbOutputFile.Enabled = !_running;
-            cbTranspileToLua.Enabled = !_running;
-            cbVisualTriggers.Enabled = !_running;
             btnRebuildMap.TabStop = !_running;
 
             if (_running)
@@ -184,7 +182,7 @@ namespace WC3MapDeprotector
                 _cancel = false;
                 _running = true;
                 EnableControls();
-                using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { TranspileJassToLUA = cbTranspileToLua.Checked, CreateVisualTriggers = cbVisualTriggers.Checked }, log =>
+                using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { }, log =>
                 {
                     BeginInvoke(() =>
                     {

@@ -44,15 +44,11 @@
             tbWarningMessages = new TextBox();
             label3 = new Label();
             tbDebugLog = new TextBox();
-            groupBox1 = new GroupBox();
-            cbVisualTriggers = new CheckBox();
-            cbTranspileToLua = new CheckBox();
             cbOutputFormat = new ComboBox();
             label5 = new Label();
             btnHelp = new Button();
             btnYoutube = new Button();
             btnDiscord = new Button();
-            groupBox1.SuspendLayout();
             SuspendLayout();
             // 
             // tbInputFile
@@ -214,37 +210,6 @@
             tbDebugLog.Size = new Size(1217, 201);
             tbDebugLog.TabIndex = 23;
             // 
-            // groupBox1
-            // 
-            groupBox1.Controls.Add(cbVisualTriggers);
-            groupBox1.Controls.Add(cbTranspileToLua);
-            groupBox1.Location = new Point(19, 145);
-            groupBox1.Name = "groupBox1";
-            groupBox1.Size = new Size(482, 114);
-            groupBox1.TabIndex = 27;
-            groupBox1.TabStop = false;
-            groupBox1.Text = "Experimental options (these don't work very well yet)";
-            // 
-            // cbVisualTriggers
-            // 
-            cbVisualTriggers.AutoSize = true;
-            cbVisualTriggers.Location = new Point(40, 31);
-            cbVisualTriggers.Name = "cbVisualTriggers";
-            cbVisualTriggers.Size = new Size(369, 29);
-            cbVisualTriggers.TabIndex = 17;
-            cbVisualTriggers.Text = "Convert Jass code to Visual/GUI Triggers";
-            cbVisualTriggers.UseVisualStyleBackColor = true;
-            // 
-            // cbTranspileToLua
-            // 
-            cbTranspileToLua.AutoSize = true;
-            cbTranspileToLua.Location = new Point(40, 66);
-            cbTranspileToLua.Name = "cbTranspileToLua";
-            cbTranspileToLua.Size = new Size(238, 29);
-            cbTranspileToLua.TabIndex = 16;
-            cbTranspileToLua.Text = "Convert Jass code to Lua";
-            cbTranspileToLua.UseVisualStyleBackColor = true;
-            // 
             // cbOutputFormat
             // 
             cbOutputFormat.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -317,7 +282,6 @@
             Controls.Add(btnHelp);
             Controls.Add(label5);
             Controls.Add(cbOutputFormat);
-            Controls.Add(groupBox1);
             Controls.Add(label4);
             Controls.Add(tbWarningMessages);
             Controls.Add(label3);
@@ -337,8 +301,6 @@
             MinimumSize = new Size(800, 775);
             Name = "frmMain";
             Load += MainForm_Load;
-            groupBox1.ResumeLayout(false);
-            groupBox1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -360,9 +322,6 @@
         private TextBox tbWarningMessages;
         private Label label3;
         private TextBox tbDebugLog;
-        private GroupBox groupBox1;
-        private CheckBox cbVisualTriggers;
-        private CheckBox cbTranspileToLua;
         private ComboBox cbOutputFormat;
         private Label label5;
         private Button btnHelp;
