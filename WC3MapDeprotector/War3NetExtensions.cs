@@ -1,5 +1,4 @@
 ﻿using CSharpLua;
-using ICSharpCode.Decompiler.Util;
 using System.Reflection;
 using War3Net.Build;
 using War3Net.Build.Info;
@@ -7,8 +6,6 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
-using War3Net.Common.Extensions;
-using NuGet.Packaging;
 using War3Net.Build.Audio;
 using War3Net.Build.Widget;
 using War3Net.Build.Extensions;
@@ -21,6 +18,57 @@ namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static Dictionary<ObjectDataType, War3NetSkinnableObjectDataWrapper> GetObjectDataCollection_War3Net(this Map map)
+        {
+            return Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().Select(x => new KeyValuePair<ObjectDataType, War3NetSkinnableObjectDataWrapper>(x, GetObjectDataCollectionByType(map, x))).Where(x => x.Value != null).ToDictionary(x => x.Key, x => x.Value);
+        }
+
+        private static War3NetSkinnableObjectDataWrapper GetObjectDataCollectionByType(Map map, ObjectDataType objectDataType)
+        {
+            //NOTE: War3Net uses a separate class for each type of ObjectData even though they're very similar, so we need to return object
+            switch (objectDataType)
+            {
+                case ObjectDataType.Ability:
+                    map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+                    map.AbilitySkinObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.AbilityObjectData), new War3NetObjectDataCollectionWrapper(map.AbilitySkinObjectData));
+                case ObjectDataType.Buff:
+                    map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+                    map.BuffSkinObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.BuffObjectData), new War3NetObjectDataCollectionWrapper(map.BuffSkinObjectData));
+                case ObjectDataType.Destructable:
+                    map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+                    map.DestructableSkinObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.DestructableObjectData), new War3NetObjectDataCollectionWrapper(map.DestructableSkinObjectData));
+                case ObjectDataType.Doodad:
+                    map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+                    map.DoodadSkinObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.DoodadObjectData), new War3NetObjectDataCollectionWrapper(map.DoodadSkinObjectData));
+                case ObjectDataType.Item:
+                    map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+                    map.ItemSkinObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.ItemObjectData), new War3NetObjectDataCollectionWrapper(map.ItemSkinObjectData));
+                case ObjectDataType.Unit:
+                    map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+                    map.UnitSkinObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.UnitObjectData), new War3NetObjectDataCollectionWrapper(map.UnitSkinObjectData));
+                case ObjectDataType.Upgrade:
+                    map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+                    map.UpgradeSkinObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
+                    return new War3NetSkinnableObjectDataWrapper(new War3NetObjectDataCollectionWrapper(map.UpgradeObjectData), new War3NetObjectDataCollectionWrapper(map.UpgradeSkinObjectData));
+                case ObjectDataType.GameplayConstants:
+                    return null; // todo: not supported by War3Net yet
+                case ObjectDataType.Unknown:
+                    DebugSettings.Warn("Trying to convert unknown ObjectData format to War3Net");
+                    return null;
+                case ObjectDataType.Mix_Of_Multiple:
+                    DebugSettings.Warn("Need to split ObjectData of mixed types before converting to War3Net");
+                    return null;
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
         public static Map Clone_Shallow(this Map map)
         {
             return new Map()
@@ -55,107 +103,6 @@ namespace WC3MapDeprotector
                 Doodads = map.Doodads,
                 Units = map.Units
             };
-        }
-
-        public static void ConcatObjectData(this Map map, Map otherMap)
-        {
-            map.AbilityObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.AbilityObjectData != null)
-            {
-                map.AbilityObjectData.BaseAbilities.AddRange(otherMap.AbilityObjectData.BaseAbilities);
-                map.AbilityObjectData.NewAbilities.AddRange(otherMap.AbilityObjectData.NewAbilities);
-            }
-
-            map.BuffObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.BuffObjectData != null)
-            {
-                map.BuffObjectData.BaseBuffs.AddRange(otherMap.BuffObjectData.BaseBuffs);
-                map.BuffObjectData.NewBuffs.AddRange(otherMap.BuffObjectData.NewBuffs);
-            }
-
-            map.DestructableObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.DestructableObjectData != null)
-            {
-                map.DestructableObjectData.BaseDestructables.AddRange(otherMap.DestructableObjectData.BaseDestructables);
-                map.DestructableObjectData.NewDestructables.AddRange(otherMap.DestructableObjectData.NewDestructables);
-            }
-
-            map.DoodadObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.DoodadObjectData != null)
-            {
-                map.DoodadObjectData.BaseDoodads.AddRange(otherMap.DoodadObjectData.BaseDoodads);
-                map.DoodadObjectData.NewDoodads.AddRange(otherMap.DoodadObjectData.NewDoodads);
-            }
-
-            map.ItemObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.ItemObjectData != null)
-            {
-                map.ItemObjectData.BaseItems.AddRange(otherMap.ItemObjectData.BaseItems);
-                map.ItemObjectData.NewItems.AddRange(otherMap.ItemObjectData.NewItems);
-            }
-
-            map.UnitObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.UnitObjectData != null)
-            {
-                map.UnitObjectData.BaseUnits.AddRange(otherMap.UnitObjectData.BaseUnits);
-                map.UnitObjectData.NewUnits.AddRange(otherMap.UnitObjectData.NewUnits);
-            }
-
-            map.UpgradeObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.UpgradeObjectData != null)
-            {
-                map.UpgradeObjectData.BaseUpgrades.AddRange(otherMap.UpgradeObjectData.BaseUpgrades);
-                map.UpgradeObjectData.NewUpgrades.AddRange(otherMap.UpgradeObjectData.NewUpgrades);
-            }
-
-            map.AbilitySkinObjectData ??= new AbilityObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.AbilitySkinObjectData != null)
-            {
-                map.AbilitySkinObjectData.BaseAbilities.AddRange(otherMap.AbilitySkinObjectData.BaseAbilities);
-                map.AbilitySkinObjectData.NewAbilities.AddRange(otherMap.AbilitySkinObjectData.NewAbilities);
-            }
-
-            map.BuffSkinObjectData ??= new BuffObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.BuffSkinObjectData != null)
-            {
-                map.BuffSkinObjectData.BaseBuffs.AddRange(otherMap.BuffSkinObjectData.BaseBuffs);
-                map.BuffSkinObjectData.NewBuffs.AddRange(otherMap.BuffSkinObjectData.NewBuffs);
-            }
-
-            map.DestructableSkinObjectData ??= new DestructableObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.DestructableSkinObjectData != null)
-            {
-                map.DestructableSkinObjectData.BaseDestructables.AddRange(otherMap.DestructableSkinObjectData.BaseDestructables);
-                map.DestructableSkinObjectData.NewDestructables.AddRange(otherMap.DestructableSkinObjectData.NewDestructables);
-            }
-
-            map.DoodadSkinObjectData ??= new DoodadObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.DoodadSkinObjectData != null)
-            {
-                map.DoodadSkinObjectData.BaseDoodads.AddRange(otherMap.DoodadSkinObjectData.BaseDoodads);
-                map.DoodadSkinObjectData.NewDoodads.AddRange(otherMap.DoodadSkinObjectData.NewDoodads);
-            }
-
-            map.ItemSkinObjectData ??= new ItemObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.ItemSkinObjectData != null)
-            {
-                map.ItemSkinObjectData.BaseItems.AddRange(otherMap.ItemSkinObjectData.BaseItems);
-                map.ItemSkinObjectData.NewItems.AddRange(otherMap.ItemSkinObjectData.NewItems);
-            }
-
-            map.UnitSkinObjectData ??= new UnitObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.UnitSkinObjectData != null)
-            {
-                map.UnitSkinObjectData.BaseUnits.AddRange(otherMap.UnitSkinObjectData.BaseUnits);
-                map.UnitSkinObjectData.NewUnits.AddRange(otherMap.UnitSkinObjectData.NewUnits);
-            }
-
-            map.UpgradeSkinObjectData ??= new UpgradeObjectData(ObjectDataFormatVersion.v3);
-            if (otherMap?.UpgradeSkinObjectData != null)
-            {
-                map.UpgradeSkinObjectData.BaseUpgrades.AddRange(otherMap.UpgradeSkinObjectData.BaseUpgrades);
-                map.UpgradeSkinObjectData.NewUpgrades.AddRange(otherMap.UpgradeSkinObjectData.NewUpgrades);
-            }
         }
 
         public static string GetVariableName_BugFixPendingPR(this UnitData unitData)
@@ -208,96 +155,6 @@ namespace WC3MapDeprotector
         public static List<object> GetAllChildSyntaxNodes_Recursive(object syntaxNode)
         {
             return syntaxNode.DFS_Flatten(GetAllChildSyntaxNodes).ToList();
-        }
-
-        public static Dictionary<string, Dictionary<string, List<object>>> GetObjectData(this Map map, bool replaceTriggerStrings = true)
-        {
-            var result = new Dictionary<string, Dictionary<string, List<object>>>();
-
-            var objectDataProperties = typeof(Map).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.EndsWith("ObjectData", StringComparison.InvariantCultureIgnoreCase)).ToList();
-            foreach (var objectDataProperty in objectDataProperties)
-            {
-                var objectData = objectDataProperty.GetValue(map);
-                if (objectData == null)
-                {
-                    continue;
-                }
-
-                var childProperties = objectData.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(x => x.Name.StartsWith("Base", StringComparison.InvariantCultureIgnoreCase) || x.Name.StartsWith("New", StringComparison.InvariantCultureIgnoreCase)).ToList();
-                foreach (var childProperty in childProperties)
-                {
-                    var childData = (System.Collections.IList)childProperty.GetValue(objectData);
-                    if (childData == null || childData.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    var modificationProperty = childData[0].GetType().GetProperty("Modifications", BindingFlags.Public | BindingFlags.Instance);
-                    foreach (var child in childData)
-                    {
-                        var objectId = child.ToString();
-                        if (!result.TryGetValue(objectId, out var objectHashTable))
-                        {
-                            objectHashTable = new Dictionary<string, List<object>>();
-                            result[objectId] = objectHashTable;
-                        }
-
-                        var modifications = (System.Collections.IList)modificationProperty.GetValue(child);
-                        if (modifications == null || modifications.Count == 0)
-                        {
-                            continue;
-                        }
-
-                        var modificationType = modifications[0].GetType();
-                        var idProperty = modificationType.GetProperty("Id", BindingFlags.Public | BindingFlags.Instance);
-                        var valueProperty = modificationType.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance);
-                        foreach (var modification in modifications)
-                        {
-                            var id = (int)idProperty.GetValue(modification);
-                            var value = valueProperty.GetValue(modification);
-
-                            if (value is string valueString)
-                            {
-                                const string TRIGSTR_ = "TRIGSTR_";
-                                if (replaceTriggerStrings && valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase))
-                                {
-                                    if (int.TryParse(valueString.Substring(TRIGSTR_.Length), out var key))
-                                    {
-                                        value = map.TriggerStrings.Strings.FirstOrDefault(x => x.Key == key)?.Value ?? value;
-                                    }
-                                }
-                            }
-
-                            var rawCode = id.ToRawcode();
-                            if (!objectHashTable.TryGetValue(rawCode, out var list))
-                            {
-                                list = new List<object>();
-                                objectHashTable[rawCode] = list;
-                            }
-
-                            if (!list.Contains(value))
-                            {
-                                list.Add(value);
-                            }
-                        }
-                    }
-                }
-            }
-
-            return result;
-        }
-
-        public static List<string> GetObjectDataStringValues(this Map map, List<string> rawCodes = null)
-        {
-            var result = GetObjectData(map);
-            var identifierToRawCode = new HashSet<int>();
-            if (rawCodes != null)
-            {
-                identifierToRawCode.AddRange(rawCodes.Select(x => x.FromRawcode()));
-                result = result.Where(x => rawCodes.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value);
-            }
-
-            return result.Values.SelectMany(x => x.SelectMany(y => y.Value)).OfType<string>().Distinct().ToList();
         }
 
         public static List<MpqKnownFile> GetObjectDataFiles(this Map map, bool ignoreExceptions = false)

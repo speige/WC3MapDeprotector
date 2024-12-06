@@ -30,12 +30,13 @@ namespace WC3MapDeprotector
 
         public static void Warn(string reason)
         {
+            Console.WriteLine(reason);
+
             if (!BreakOnWarnings)
             {
                 return;
             }
 
-            Console.WriteLine(reason);
             Debugger.Break();
         }
     }

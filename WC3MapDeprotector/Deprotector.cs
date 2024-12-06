@@ -26,11 +26,9 @@ using War3Net.IO.Mpq;
 using System.Numerics;
 using FastMDX;
 using System.Collections.Concurrent;
-using War3Net.IO.Slk;
 using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
-using System.Linq;
 
 namespace WC3MapDeprotector
 {
@@ -77,8 +75,7 @@ namespace WC3MapDeprotector
         public DeprotectionSettings Settings { get; private set; }
         protected readonly Action<string> _logEvent;
         protected DeprotectionResult _deprotectionResult;
-        protected ObjectDataParser _objectDataParser = new ObjectDataParser();
-        protected Map _defaultSLKData;
+        protected ObjectEditor _objectEditor;
 
         protected void AddToGlobalListFile(string fileName)
         {
@@ -150,22 +147,21 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected static string BaseMapFilesPath
+        protected static string BlankMapFilesPath
         {
             get
             {
-                return Path.Combine(ExeFolderPath, "BaseMapFiles");
+                return Path.Combine(ExeFolderPath, "BlankMapFiles");
             }
         }
 
-        protected string SLKRecoverPath
+        protected static string GameDataFilesPath
         {
             get
             {
-                return Path.Combine(WorkingFolderPath, "SilkObjectOptimizer");
+                return Path.Combine(ExeFolderPath, "GameDataFiles");
             }
         }
-
 
         protected static string InstallerListFileName
         {
@@ -184,20 +180,23 @@ namespace WC3MapDeprotector
             }
         }
 
-        protected string SLKRecoverEXE
-        {
-            get
-            {
-                return Path.Combine(SLKRecoverPath, "Silk Object Optimizer.exe");
-            }
-        }
-
         protected string WorkingFolderUniquePath = Path.GetFileNameWithoutExtension(Path.GetTempFileName());
         protected string WorkingFolderPath
         {
             get
             {
                 return Path.Combine(TempFolderPath, WorkingFolderUniquePath);
+            }
+        }
+
+        protected readonly string[] ObjectEditor_BaseGameDataFiles_SLKTXTFolders = new[] { "units", "doodads" };
+        protected const string ObjectEditor_BaseGameDataFiles_SelectedLocaleFolder = @"_locales\enus.w3mod"; // todo: allow user to select other locales? [will need to set locale in final MPQ]
+
+        protected string ObjectEditorDataFilesFolder
+        {
+            get
+            {
+                return Path.Combine(WorkingFolderPath, "ObjectEditorDataFiles");
             }
         }
 
@@ -454,12 +453,6 @@ namespace WC3MapDeprotector
             return result.ToString();
         }
 
-        [GeneratedRegex(@"^(?!ID;|b;|c;|e)", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_SLKInvalidRow();
-
-        [GeneratedRegex(@"(<[^>]*>)|(.)", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_ObjectDataPropertyReferenceCSV();
-
         public async Task<DeprotectionResult> Deprotect()
         {
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
@@ -487,29 +480,24 @@ namespace WC3MapDeprotector
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
             _deprotectionResult.WarningMessages.Add($"NOTE: World Editor has SD & HD modes. HD is prone to crashing and should not be used, it's find to use HD in game itself. The setting can be changed in WorldEditor.exe via File/Preferences/AssetMode");
 
-            var baseMapFilesZip = Path.Combine(ExeFolderPath, "BaseMapFiles.zip"); 
-            if (!Directory.Exists(BaseMapFilesPath) && File.Exists(baseMapFilesZip))
+            var blankMapFilesZip = Path.Combine(ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip"); 
+            if (!Directory.Exists(BlankMapFilesPath) && File.Exists(blankMapFilesZip))
             {
-                ZipFile.ExtractToDirectory(baseMapFilesZip, BaseMapFilesPath, true);
+                ZipFile.ExtractToDirectory(blankMapFilesZip, BlankMapFilesPath, true);
             }
 
-            var silkObjectOptimizerZip = Path.Combine(ExeFolderPath, "SilkObjectOptimizer.zip");
-            if (!File.Exists(SLKRecoverEXE) && File.Exists(silkObjectOptimizerZip))
+            var gameDataFilesZip = Path.Combine(ExeFolderPath, "GameDataFiles_2.0.0.22389.zip"); 
+            if (!Directory.Exists(GameDataFilesPath) && File.Exists(gameDataFilesZip))
             {
-                ZipFile.ExtractToDirectory(silkObjectOptimizerZip, SLKRecoverPath, true);
+                ZipFile.ExtractToDirectory(gameDataFilesZip, GameDataFilesPath, true);
             }
 
-            _defaultSLKData = new Map();
-            var defaultSLKFiles = Directory.GetFiles(Path.Combine(SLKRecoverPath, "STD")).ToList();
-            if (defaultSLKFiles.Count > 0)
+            foreach (var folder in ObjectEditor_BaseGameDataFiles_SLKTXTFolders)
             {
-                var slkData = _objectDataParser.ParseObjectDataFromSLKFiles(defaultSLKFiles);
-                var objectDatas = _objectDataParser.ToWar3NetObjectData(slkData);
-                foreach (var objectData in objectDatas)
-                {
-                    _defaultSLKData.GetObjectDataByType(objectData.ObjectDataType).CoreData.BaseValues = objectData.BaseValues;
-                }
+                CopyDirectory(Path.Combine(GameDataFilesPath, folder), Path.Combine(ObjectEditorDataFilesFolder, folder));
+                CopyDirectory(Path.Combine(GameDataFilesPath, ObjectEditor_BaseGameDataFiles_SelectedLocaleFolder, folder), Path.Combine(ObjectEditorDataFilesFolder, folder));
             }
+            _objectEditor = new ObjectEditor(ObjectEditorDataFilesFolder);
 
             if (!File.Exists(_inMapFile))
             {
@@ -533,6 +521,7 @@ namespace WC3MapDeprotector
                 Directory.CreateDirectory(DiscoveredFilesPath);
             }
 
+            Map map_ObjectDataCollectionOnly;
             using (var inMPQArchive = new StormMPQArchive(_inMapFile, ExtractedFilesPath, _logEvent, _deprotectionResult))
             {
                 if (ExtractFileFromArchive(inMPQArchive, "(listfile)"))
@@ -565,138 +554,47 @@ namespace WC3MapDeprotector
 
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
 
-                var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
-                foreach (var slkFile in slkFiles)
+                if (!Map.TryOpen(DiscoveredFilesPath, out map_ObjectDataCollectionOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData))
                 {
-                    var text = File.ReadAllLines(slkFile).ToList();
-                    if (text.RemoveAll(x => Regex_SLKInvalidRow().IsMatch(x)) > 0)
-                    {
-                        MoveExtractedFileToDeletedFolder(slkFile);
-                        File.WriteAllLines(slkFile, text);
-                    }
+                    DebugSettings.Warn("Can't open map object editor files");
                 }
 
-                if (slkFiles.Count > 0)
+                _objectEditor.ImportObjectDataCollectionFromMap(map_ObjectDataCollectionOnly);
+
+                var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
+                var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
+
+                foreach (var fileName in slkFiles.Concat(txtFiles))
                 {
-                    var slkRecoverableFiles = new List<string>() { "war3map.w3a", "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.w3q", "war3map.w3t", "war3map.w3u" };
-                    
-                    //todo: remove SLK Recover EXE & use parsing code instead
-                    _logEvent("Generating temporary map for SLK Recover: slk.w3x");
-                    var slkMpqArchive = Path.Combine(SLKRecoverPath, "slk.w3x");
-                    var minimumExtraRequiredFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3map*", SearchOption.AllDirectories)).Union(Directory.GetFiles(DiscoveredFilesPath, "war3campaign*", SearchOption.AllDirectories)).Where(x => !slkRecoverableFiles.Contains(Path.GetFileName(x))).ToList();
-
-                    BuildW3X(slkMpqArchive, DiscoveredFilesPath, slkFiles.Union(minimumExtraRequiredFiles).ToList());
-                    _logEvent("slk.w3x generated");
-
-                    _logEvent("Running SilkObjectOptimizer");
-                    var slkRecoverOutPath = Path.Combine(SLKRecoverPath, "OUT");
-                    new DirectoryInfo(slkRecoverOutPath).Delete(true);
-                    Directory.CreateDirectory(slkRecoverOutPath);
-                    Utils.WaitForProcessToExit(Utils.ExecuteCommand(SLKRecoverEXE, "", ProcessWindowStyle.Hidden));
-
-                    _logEvent("SilkObjectOptimizer completed");
-
-                    var parsedSlkObjectData = _objectDataParser.ParseObjectDataFromSLKFiles(slkFiles);
-                    //NOTE: SLKRecover generates corrupted files for any SLK files that are missing, this excludes them
-                    var validFiles = parsedSlkObjectData.Values.Select(x => x.ObjectDataType).Distinct().Select(x => $"war3map{x.GetMPQFileExtension()}").Distinct().ToHashSet(StringComparer.InvariantCultureIgnoreCase);
-
-                    var map = DecompileMap();
-                    foreach (var fileName in slkRecoverableFiles)
+                    /*
+                        NOTE: TXT files must come last for proper merging of ObjectData
+                            Merging only overwrites PropertyValues, not Parent or ObjectDataType
+                            1) TXT PropertyValues (like Name) have precedence. Example, SLK may have hpea:name=custom_hpea and TXT may have [hpea]:Name=Peasant.
+                            2) SLK Parent takes precedence. (only AbilityData.SLK has it, no other SLK/TXT does. Otherwise, we predict best Parent)
+                            3) SLK ObjectDataType takes precence. TXT can combine multiple object types (Example: CommonAbilityStrings.txt & ItemAbilityStrings.txt have FourCC for Abilities & Buffs).
+                    */
+                    if (!File.Exists(Path.Combine(ObjectEditorDataFilesFolder, RemovePathPrefix(fileName, DiscoveredFilesPath))))
                     {
-                        if (!validFiles.Contains(fileName))
-                        {
-                            continue;
-                        }
-
-                        _logEvent($"Replacing {fileName} with SLKRecover version");
-                        var recoveredFile = Path.Combine(slkRecoverOutPath, fileName);
-                        if (File.Exists(recoveredFile))
-                        {
-                            if (!File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
-                            {
-                                _deprotectionResult.CountOfProtectionsFound++;
-                            }
-
-                            if (File.Exists(Path.Combine(DiscoveredFilesPath, fileName)))
-                            {
-                                //NOTE: ObjectEditorID in BaseValues are formatted as FourCC (OldId property). NewValues are formatted as FourCC:FourCC (NewId:OldId properties). This merges & moves data after decompiling SLK because there can be data in .w3a/etc ObjectEditor files also.
-                                ObjectDataType slkType = ObjectDataParser.GetTypeByWar3MapFileExtension(Path.GetExtension(fileName));
-                                var objectData = map.GetObjectDataByType(slkType);
-                                SetMapFile(map, recoveredFile, true);
-                                var recoveredSlkObjectData = map.GetObjectDataByType(slkType);
-
-                                foreach (var slkValue in recoveredSlkObjectData.BaseValues)
-                                {
-                                    var value = objectData.BaseValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
-                                    if (value == null)
-                                    {
-                                        objectData.CoreData.BaseValues = objectData.BaseValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
-                                    }
-                                    else
-                                    {
-                                        foreach (var slkModification in slkValue.Modifications)
-                                        {
-                                            if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
-                                            {
-                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList().AsReadOnly();
-                                            }
-                                        }
-                                    }
-                                }
-                                foreach (var slkValue in recoveredSlkObjectData.NewValues)
-                                {
-                                    var value = objectData.NewValues.FirstOrDefault(x => x.ToString() == slkValue.ToString());
-                                    if (value == null)
-                                    {
-                                        objectData.CoreData.NewValues = objectData.NewValues.Concat(new[] { slkValue }).ToList().AsReadOnly();
-                                    }
-                                    else
-                                    {
-                                        foreach (var slkModification in slkValue.Modifications)
-                                        {
-                                            if (!value.Modifications.Any(x => x.Id == slkModification.Id && x.Level == slkModification.Level))
-                                            {
-                                                value.Modifications = value.Modifications.Concat(new[] { slkModification }).ToList().AsReadOnly();
-                                            }
-                                        }
-                                    }
-                                }
-
-                                var toRemoveBaseValues = new List<War3NetObjectModificationWrapper>();
-                                foreach (var baseValue in objectData.BaseValues)
-                                {
-                                    var newValue = objectData.NewValues.FirstOrDefault(x => x.NewId == baseValue.OldId);
-                                    if (newValue != null)
-                                    {
-                                        toRemoveBaseValues.Add(baseValue);
-                                        foreach (var baseModification in baseValue.Modifications)
-                                        {
-                                            var newModification = newValue.Modifications.FirstOrDefault(x => x.Id == baseModification.Id && x.Level == baseModification.Level);
-                                            if (newModification != null)
-                                            {
-                                                newValue.Modifications = newValue.Modifications.Except(new[] { newModification }).ToList().AsReadOnly();
-                                            }
-                                            newValue.Modifications = newValue.Modifications.Concat(new[] { baseModification }).ToList().AsReadOnly();
-                                        }
-                                    }
-                                }
-                                objectData.CoreData.BaseValues = objectData.BaseValues.Except(toRemoveBaseValues).ToList().AsReadOnly();
-
-                                File.WriteAllBytes(Path.Combine(DiscoveredFilesPath, fileName), objectData.CoreData.Serialize());
-                            }
-                            else
-                            {
-                                File.Move(recoveredFile, Path.Combine(DiscoveredFilesPath, fileName), false);
-                            }
-                        }
+                        continue;
                     }
 
-                    foreach (var slkFile in slkFiles)
+                    _logEvent($"Parsing ObjectEditor data file: {fileName}");
+
+                    _objectEditor.ImportObjectDataCollectionFromFile(fileName);
+                    MoveExtractedFileToDeletedFolder(fileName);
+                }
+                _logEvent($"Cleaning up imported ObjectEditor data");
+                _objectEditor.RepairInvalidData();
+                _objectEditor.SetWar3NetObjectFiles(map_ObjectDataCollectionOnly);
+
+                foreach (var file in map_ObjectDataCollectionOnly.GetObjectDataFiles())
+                {
+                    var fileName = Path.Combine(DiscoveredFilesPath, file.FileName);
+                    MoveExtractedFileToDeletedFolder(fileName);
+
+                    using (var stream = File.OpenWrite(fileName))
                     {
-                        if (!slkFile.ToLower().Contains("\\splats\\"))
-                        {
-                            MoveExtractedFileToDeletedFolder(slkFile);
-                        }
+                        file.MpqStream.CopyTo(stream);
                     }
                 }
 
@@ -904,121 +802,6 @@ namespace WC3MapDeprotector
                 }
             }
 
-            Map.TryOpen(DiscoveredFilesPath, out var map_ObjectDataOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData);
-
-            var perLevelCSVProperties = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "atp1", "aub1" };
-            var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
-            foreach (var txtFile in txtFiles)
-            {
-                var txtObjectData = _objectDataParser.ParseObjectDataFromTxtFiles(new List<string>() { txtFile });
-                var unknownObjects = 0;
-                var containsObjectData = false;
-                foreach (var parsedObjectData in txtObjectData)
-                {
-                    List<War3NetObjectModificationWrapper> matchingObjects = new List<War3NetObjectModificationWrapper>();
-                    foreach (var type in Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>())
-                    {
-                        //note: sometimes ObjectDataType for txt files is misclassified so we try all values. It's safe since IDs are unique.
-                        var objectData = map_ObjectDataOnly.GetObjectDataByType(type);
-                        matchingObjects.AddRange(objectData.BaseValues.Where(x => x.OldId.ToRawcode() == parsedObjectData.Key).Concat(objectData.NewValues.Where(x => x.NewId.ToRawcode() == parsedObjectData.Key)));
-                    }
-
-                    if (!matchingObjects.Any())
-                    {
-                        unknownObjects++;
-                    }
-
-                    containsObjectData = true;
-
-                    foreach (var record in matchingObjects)
-                    {
-                        foreach (var txtModification in parsedObjectData.Value.Data.OrderBy(x => string.Equals(x.Key, "levels", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1))
-                        {
-                            var properties = _objectDataParser.ConvertToPropertyIdPossibleRawCodes(parsedObjectData.Value.ObjectDataType, txtModification.Key);
-                            if (!properties.Any())
-                            {
-                                DebugSettings.Warn("Missing ObjectEditor Key=>ID mapping");
-                            }
-
-                            foreach (var property in properties)
-                            {
-                                var propertyValues = new List<object>();
-
-                                if (perLevelCSVProperties.Contains(property))
-                                {
-                                    const string TEMP_CSV_REPLACEMENT = "###TEMP_CSV_REPLACEMENT###";
-                                    var value = txtModification.Value.ToString();
-                                    var matches = Regex_ObjectDataPropertyReferenceCSV().Matches(value);
-                                    if (matches.Any())
-                                    {
-                                        value = matches.Select(x => x.Value.Length == 1 ? x.Value : x.Value.Replace(",", TEMP_CSV_REPLACEMENT)).Aggregate((x, y) => x + y);
-                                    }
-                                    var isQuoted = value.StartsWith('"') && value.EndsWith('"');
-                                    var split = isQuoted ? value.Trim('"').Split("\",\"") : value.Split(',');
-                                    if (split.Length > 1)
-                                    {
-                                        propertyValues.AddRange(split.Select(x => x.Replace(TEMP_CSV_REPLACEMENT, ",")));
-                                    }
-                                }
-                                
-                                if (propertyValues.Count == 0)
-                                {
-                                    if (txtModification.Value is string)
-                                    {
-                                        var value = txtModification.Value.ToString();
-                                        var isQuoted = value.StartsWith('"') && value.EndsWith('"');
-                                        propertyValues.Add(isQuoted ? value.Trim('"').Replace("\",\"", ",") : value);
-                                    }
-                                    else
-                                    {
-                                        propertyValues.Add(txtModification.Value);
-                                    }
-                                }
-
-                                var matchingModifications = record.Modifications.Where(x => x.Id.ToRawcode() == property).ToList();
-                                if (!matchingModifications.Any())
-                                {
-                                    foreach (var propertyValue in propertyValues)
-                                    {
-                                        var newModification = record.GetEmptyObjectDataModificationWrapper();
-                                        newModification.Id = property.FromRawcode();
-                                        newModification.Value = propertyValue;
-                                        record.Modifications = record.Modifications.Concat(new[] { newModification }).ToList().AsReadOnly();
-                                    }
-                                }
-                                else
-                                {
-                                    for (var i = 0; i < matchingModifications.Count; i++)
-                                    {
-                                        var modification = matchingModifications[i];
-                                        var value = propertyValues.Count > i ? propertyValues[i] : modification.Value;
-                                        modification.Value = value;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (containsObjectData)
-                {
-                    MoveExtractedFileToDeletedFolder(txtFile);
-                }
-
-                if (containsObjectData && unknownObjects > 0)
-                {
-                    DebugSettings.Warn("Unable to decompile some object data");
-                }
-            }
-
-            foreach (var file in map_ObjectDataOnly.GetObjectDataFiles())
-            {
-                using (var stream = File.OpenWrite(Path.Combine(DiscoveredFilesPath, file.FileName)))
-                {
-                    file.MpqStream.CopyTo(stream);
-                }
-            }
-
             PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
@@ -1055,7 +838,7 @@ namespace WC3MapDeprotector
             {
                 File.Move(Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x74\x67\x61"), Path.Combine(DiscoveredFilesPath, replace), true);
             }
-            File.Copy(Path.Combine(BaseMapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x33\x77\x69"), Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x74\x67\x61"), true);
+            File.Copy(Path.Combine(BlankMapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x33\x77\x69"), Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x74\x67\x61"), true);
             var replace2 = "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78";
             while (File.Exists(Path.Combine(DiscoveredFilesPath, replace2)))
             {
@@ -1065,7 +848,7 @@ namespace WC3MapDeprotector
             {
                 File.Move(Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78"), Path.Combine(DiscoveredFilesPath, replace2), true);
             }
-            File.Copy(Path.Combine(BaseMapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x33\x77\x6D"), Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78"), true);
+            File.Copy(Path.Combine(BlankMapFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x33\x77\x6D"), Path.Combine(DiscoveredFilesPath, "\x4C\x6F\x61\x64\x69\x6E\x67\x53\x63\x72\x65\x65\x6E\x2E\x6D\x64\x78"), true);
 
             var scriptFiles = Directory.GetFiles(DiscoveredFilesPath, "war3map.j", SearchOption.AllDirectories).Union(Directory.GetFiles(DiscoveredFilesPath, "war3map.lua", SearchOption.AllDirectories)).ToList();
             foreach (var scriptFile in scriptFiles)
@@ -1084,7 +867,7 @@ namespace WC3MapDeprotector
                 _logEvent($"Moving '{scriptFile}' to '{basePathScriptFileName}'");
             }
 
-            File.Copy(Path.Combine(BaseMapFilesPath, "war3map.3ws"), Path.Combine(DiscoveredFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"), true);
+            File.Copy(Path.Combine(BlankMapFilesPath, "war3map.3ws"), Path.Combine(DiscoveredFilesPath, "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"), true);
 
             string jassScript = null;
             string luaScript = null;
@@ -1094,7 +877,7 @@ namespace WC3MapDeprotector
                 jassScript = $"// {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
-                    jassScript = DeObfuscateJassScript(map_ObjectDataOnly, jassScript);
+                    jassScript = DeObfuscateJassScript(map_ObjectDataCollectionOnly, jassScript);
                     scriptMetaData = DecompileJassScriptMetaData(jassScript);
                 }
                 catch { }
@@ -1194,7 +977,7 @@ namespace WC3MapDeprotector
             if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3mapunits.doo")))
             {
                 _deprotectionResult.CountOfProtectionsFound++;
-                File.Copy(Path.Combine(BaseMapFilesPath, "war3mapunits.doo"), Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"), true);
+                File.Copy(Path.Combine(BlankMapFilesPath, "war3mapunits.doo"), Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"), true);
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: war3mapunits.doo could not be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
             }
@@ -1202,7 +985,7 @@ namespace WC3MapDeprotector
             if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.wtg")))
             {
                 _deprotectionResult.CountOfProtectionsFound++;
-                File.Copy(Path.Combine(BaseMapFilesPath, "war3map.wtg"), Path.Combine(DiscoveredFilesPath, "war3map.wtg"), true);
+                File.Copy(Path.Combine(BlankMapFilesPath, "war3map.wtg"), Path.Combine(DiscoveredFilesPath, "war3map.wtg"), true);
                 MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Map will still open in WorldEditor & run, but saving in world editor will corrupt your war3map.j or war3map.lua script file.");
@@ -1231,9 +1014,10 @@ namespace WC3MapDeprotector
             {
                 autoUpgradeError = true;
             }
+            //todo: test which of these significantly speed up world editor when loading an empty file
             try
             {
-                MoveObjectEditorStringsToTriggerStrings();
+                MoveObjectEditorStringsToTriggerStrings(); // remove if possible
             }
             catch
             {
@@ -1241,7 +1025,7 @@ namespace WC3MapDeprotector
             }
             try
             {
-                RefactorSkinnableProperties();
+                RefactorSkinnableProperties(); // remove if possible
             }
             catch
             {
@@ -1265,7 +1049,8 @@ namespace WC3MapDeprotector
             }
             if (autoUpgradeError)
             {
-                _deprotectionResult.WarningMessages.Add("Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor");
+                _deprotectionResult.CriticalWarningCount++;
+                _deprotectionResult.WarningMessages.Add("Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor, but not very likely.");
             }
 
             AnnotateScriptFile();
@@ -1388,6 +1173,16 @@ namespace WC3MapDeprotector
             }
         }
 
+        protected void CopyDirectory(string sourcePath, string destinationPath)
+        {
+            foreach (var localFile in Directory.GetFiles(sourcePath))
+            {
+                var newPath = Path.Combine(destinationPath, RemovePathPrefix(localFile, sourcePath));
+                Directory.CreateDirectory(Path.GetDirectoryName(newPath));
+                File.Copy(localFile, newPath);
+            }
+        }
+
         protected string RemovePathPrefix(string fileName, string pathPrefix)
         {
             if (!pathPrefix.EndsWith(@"\"))
@@ -1411,10 +1206,10 @@ namespace WC3MapDeprotector
             var map = Map.Open(tempMapFileName);
 
             var supportedFourCCAttributes = new HashSet<string>() { "ahky", "anam", "aret", "arhk", "arut", "asat", "atp1", "aub1", "atat", "auhk", "aut1", "auu1", "alig", "amat", "ansf", "aeat", "acat", "aart", "aaea", "auar", "abpx", "abpy", "arar", "arpx", "aani", "acap", "aubx", "amac", "arpy", "fnam", "ftat", "ftip", "fube", "fsat", "feat", "fnsf", "fart", "fta0", "fmat", "fspt", "fta1", "ftac", "fspd", "bgpm", "bmas", "bmis", "bnam", "bsuf", "bmmb", "bmmg", "bmmr", "bsel", "bdsn", "bfil", "bgsc", "bvar", "blit", "ides", "unam", "utip", "utub", "uhot", "ubpx", "ubpy", "iclb", "iclg", "iclr", "iico", "ifil", "isca", "uawt", "uico", "umdl", "upro", "usca", "uspa", "utpr", "unsf", "ulpz", "ua1m", "ussi", "uimz", "utaa", "ucun", "ucut", "ussc", "uble", "uma1", "usnd", "umxp", "ushu", "ushb", "uclg", "uclr", "uclb", "uubs", "ucua", "uslz", "uver", "uaap", "uerd", "upru", "ushh", "ushw", "ushx", "ushy", "umxr", "uani", "ushr", "ua2m", "ghk1", "gnam", "gtp1", "gub1", "gar1", "gbpx", "gbpy" };
-            var allObjectData = map.GetAllObjectData();
-            foreach ((var dataType, var objectData) in allObjectData)
+            var objectDataCollection = map.GetObjectDataCollection_War3Net();
+            foreach ((var dataType, var objectData) in objectDataCollection)
             {
-                foreach (var data in objectData.CoreData.BaseValues)
+                foreach (var data in objectData.CoreData.OriginalOverrides)
                 {
                     var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
                     var modifications = data.Modifications;
@@ -1426,19 +1221,19 @@ namespace WC3MapDeprotector
                         }
                     }
                     data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
-                    var skinData = objectData.SkinData.BaseValues.FirstOrDefault(x => x.ToString() == data.ToString());
+                    var skinData = objectData.SkinData.OriginalOverrides.FirstOrDefault(x => x.ToString() == data.ToString());
                     if (skinData == null)
                     {
-                        skinData = ObjectDataParser.GetEmptyObjectModificationWrapper(dataType);
+                        skinData = ObjectEditor.GetEmptyObjectModificationWrapper(dataType);
                         skinData.OldId = data.OldId;
                         skinData.NewId = data.NewId;
                         skinData.Unk = data.Unk;
-                        objectData.SkinData.BaseValues = objectData.SkinData.BaseValues.Concat(new[] { skinData }).ToList().AsReadOnly();
+                        objectData.SkinData.OriginalOverrides = objectData.SkinData.OriginalOverrides.Concat(new[] { skinData }).ToList().AsReadOnly();
                     }
                     skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
                 }
 
-                foreach (var data in objectData.CoreData.NewValues)
+                foreach (var data in objectData.CoreData.CustomOverrides)
                 {
                     var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
                     var modifications = data.Modifications;
@@ -1450,14 +1245,14 @@ namespace WC3MapDeprotector
                         }
                     }
                     data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
-                    var skinData = objectData.SkinData.NewValues.FirstOrDefault(x => x.ToString() == data.ToString());
+                    var skinData = objectData.SkinData.CustomOverrides.FirstOrDefault(x => x.ToString() == data.ToString());
                     if (skinData == null)
                     {
-                        skinData = ObjectDataParser.GetEmptyObjectModificationWrapper(dataType);
+                        skinData = ObjectEditor.GetEmptyObjectModificationWrapper(dataType);
                         skinData.OldId = data.OldId;
                         skinData.NewId = data.NewId;
                         skinData.Unk = data.Unk;
-                        objectData.SkinData.NewValues = objectData.SkinData.NewValues.Concat(new[] { skinData }).ToList().AsReadOnly();
+                        objectData.SkinData.CustomOverrides = objectData.SkinData.CustomOverrides.Concat(new[] { skinData }).ToList().AsReadOnly();
                     }
                     skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
                 }
@@ -1561,11 +1356,11 @@ namespace WC3MapDeprotector
                 }
             }
 
-            var allObjectData = map.GetAllObjectData();
-            foreach ((var dataType, var objectData) in allObjectData)
+            var objectDataCollection = map.GetObjectDataCollection_War3Net();
+            foreach ((var dataType, var objectData) in objectDataCollection)
             {
                 objectData.FormatVersion = War3Net.Build.Object.ObjectDataFormatVersion.v3;
-                var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
+                var combinedObjectData = objectData.OriginalOverrides.Concat(objectData.CustomOverrides).ToList();
                 foreach (var data in combinedObjectData)
                 {
                     data.Unk = new List<int>() { 0 };
@@ -1597,10 +1392,10 @@ namespace WC3MapDeprotector
             
             map.TriggerStrings ??= new TriggerStrings();
             var maxTriggerKey = map.TriggerStrings.Strings.Select(x => x.Key).Concat(new uint[] { 0 }).Max();
-            var allObjectData = map.GetAllObjectData();
-            foreach ((var dataType, var objectData) in allObjectData)
+            var objectDataCollection = map.GetObjectDataCollection_War3Net();
+            foreach ((var dataType, var objectData) in objectDataCollection)
             {
-                var combinedObjectData = objectData.BaseValues.Concat(objectData.NewValues).ToList();
+                var combinedObjectData = objectData.OriginalOverrides.Concat(objectData.CustomOverrides).ToList();
                 foreach (var data in combinedObjectData)
                 {
                     foreach (var modification in data.Modifications)
@@ -1611,7 +1406,7 @@ namespace WC3MapDeprotector
                             {
                                 maxTriggerKey++;
                                 var triggerString = new TriggerString() { Key = maxTriggerKey, Value = valueString };
-                                modification.Value = TRIGSTR_ + maxTriggerKey;
+                                modification.SetValue(TRIGSTR_ + maxTriggerKey, War3Net.Build.Object.ObjectDataType.String);
                                 map.TriggerStrings.Strings.Add(triggerString);
                             }
                         }
@@ -1639,14 +1434,14 @@ namespace WC3MapDeprotector
             //todo: double-check that war3map.wts doesn't have any lost trigger data after saving with baseMap triggers
 
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
-            var baseFileNames = Directory.GetFiles(BaseMapFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, BaseMapFilesPath)).ToList();
+            var baseFileNames = Directory.GetFiles(BlankMapFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, BlankMapFilesPath)).ToList();
             var notRepairableFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "war3map.j", "war3map.imp", "war3map.wct", "war3map.wtg" };
 
             var allFiles = nativeFileNames.Concat(baseFileNames).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
             var repairNativesFolder = Path.Combine(TempFolderPath, "repairNatives");
             foreach (var file in allFiles)
             {
-                var baseFileName = Path.Combine(BaseMapFilesPath, file);
+                var baseFileName = Path.Combine(BlankMapFilesPath, file);
                 var realFileName = Path.Combine(DiscoveredFilesPath, file);
                 var repairFileName = Path.Combine(repairNativesFolder, file);
 
@@ -2177,13 +1972,14 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"'([^']{4})'\s*\+\s*'([^']{4})'", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptMathObfuscatedFourCC();
 
-        protected string DeObfuscateFourCC(Map map_ObjectDataOnly, string script, string prefix, string suffix)
+        protected string DeObfuscateFourCC(string script, string prefix, string suffix)
         {
             var result = Regex_ScriptHexObfuscatedFourCC().Replace(script, x =>
             {
                 var intValue = Convert.ToInt32(x.Value.Substring(1), 16);
                 var rawCode = intValue.ToFourCC();
-                if (map_ObjectDataOnly?.GetObjectDataTypeForID(rawCode) == null || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+
+                if (!_objectEditor.ObjectIDExists(rawCode) || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
                 {
                     return intValue.ToString();
                 }
@@ -2196,7 +1992,7 @@ namespace WC3MapDeprotector
                 var right = x.Groups[2].Value;
                 var intValue = left.FromFourCCToInt() + right.FromFourCCToInt();
                 var rawCode = intValue.ToFourCC();
-                if (map_ObjectDataOnly?.GetObjectDataTypeForID(rawCode) == null || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
+                if (!_objectEditor.ObjectIDExists(rawCode) || rawCode.Length != 4 || rawCode.Any(x => x < ' ' || x > '~'))
                 {
                     return intValue.ToString();
                 }
@@ -2212,14 +2008,14 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        protected string DeObfuscateFourCCJass(Map map_ObjectDataOnly, string jassScript)
+        protected string DeObfuscateFourCCJass(string jassScript)
         {
-            return DeObfuscateFourCC(map_ObjectDataOnly, jassScript, "'", "'");
+            return DeObfuscateFourCC(jassScript, "'", "'");
         }
 
-        protected string DeObfuscateFourCCLua(Map map_ObjectDataOnly, string jassScript)
+        protected string DeObfuscateFourCCLua(string jassScript)
         {
-            return DeObfuscateFourCC(map_ObjectDataOnly, jassScript, "FourCC(\"", "\")");
+            return DeObfuscateFourCC(jassScript, "FourCC(\"", "\")");
         }
 
         protected List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out List<string> inlinedFunctions)
@@ -2382,7 +2178,6 @@ namespace WC3MapDeprotector
                 var tempMap = map.Clone_Shallow();
                 tempMap.Script = editorSpecificJassScript;
                 tempMap.Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass };
-                tempMap.ConcatObjectData(_defaultSLKData);
                 jassScriptDecompiler = new JassScriptDecompiler(tempMap);
             }
             catch
@@ -2577,7 +2372,7 @@ namespace WC3MapDeprotector
                                     if (function.Name == "SetVariable" && function.Parameters[1].Type == TriggerFunctionParameterType.String)
                                     {
                                         var stringValue = function.Parameters[1].Value;
-                                        if (Regex_ScriptFourCC().IsMatch(stringValue) && map.GetObjectDataTypeForID(stringValue) != null)
+                                        if (Regex_ScriptFourCC().IsMatch(stringValue) && _objectEditor.ObjectIDExists(stringValue))
                                         {
                                             var correctedText = $"set udg_{function.Parameters[0].Value}{(function.Parameters[0].ArrayIndexer != null ? $"[{function.Parameters[0].ArrayIndexer.Value}]" : "")} = '{stringValue}'";
                                             function.Type = TriggerFunctionType.Action;
@@ -2731,7 +2526,7 @@ namespace WC3MapDeprotector
                                 continue;
                             }
 
-                            var slkType = map.GetObjectDataTypeForID(variable.InitialValue);
+                            var slkType = _objectEditor.GetObjectDataTypeForID(variable.InitialValue);
                             switch (slkType)
                             {
                                 case null:
@@ -3438,7 +3233,7 @@ namespace WC3MapDeprotector
 
         protected string DeObfuscateJassScript(Map map_ObjectDataOnly, string jassScript)
         {
-            var result = DeObfuscateFourCCJass(map_ObjectDataOnly, jassScript);
+            var result = DeObfuscateFourCCJass(jassScript);
 
             try
             {
@@ -3916,7 +3711,7 @@ endfunction
 
         [GeneratedRegex(@"\\{2,}", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_MultipleSequentialPathSeparators();
-        protected List<string> CleanScannedUnknownFileNames(List<string> scannedFileNames)
+        protected List<string> CleanScannedUnknownFileNames(HashSet<string> scannedFileNames)
         {
             var invalidPathChars = new HashSet<char>(Path.GetInvalidPathChars());
             var invalidFileNameChars = new HashSet<char>(Path.GetInvalidFileNameChars());
@@ -3958,7 +3753,7 @@ endfunction
             return result.ToList();
         }
 
-        protected List<string> _objectDataKeysWithFileReferences = new List<string>() { "aaea", "aart", "acat", "aeat", "aefs", "amat", "aord", "arar", "asat", "atat", "auar", "bfil", "bnam", "bptx", "btxf", "dfil", "dptx", "fart", "feat", "fsat", "ftat", "gar1", "ifil", "iico", "ucua", "uico", "umdl", "upat", "uspa", "ussi" };
+        protected HashSet<FourCC> _objectDataPropertiesWithFileReferences = new HashSet<FourCC>() { "aaea", "aart", "acat", "aeat", "aefs", "amat", "aord", "arar", "asat", "atat", "auar", "bfil", "bnam", "bptx", "btxf", "dfil", "dptx", "fart", "feat", "fsat", "ftat", "gar1", "ifil", "iico", "ucua", "uico", "umdl", "upat", "uspa", "ussi" };
         protected List<string> ParseMapForUnknowns(Map map, List<string> unknownFileExtensions)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
@@ -3979,16 +3774,16 @@ endfunction
                 result.Add(map.Info.LoadingScreenPath);
             }
 
-            var allObjectValues = map.GetObjectDataStringValues();
-            var stringsWithFileExtensions = allObjectValues.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)).ToList();
+            var stringValues = _objectEditor.ExportAllStringValues();
+            var stringsWithFileExtensions = stringValues.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)).ToList();
             result.AddRange(stringsWithFileExtensions);
             result.AddRange(stringsWithFileExtensions.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, unknownFileExtensions)));
 
-            var commonFileReferenceObjectValues = map.GetObjectDataStringValues(_objectDataKeysWithFileReferences);
-            result.AddRange(commonFileReferenceObjectValues);
-            result.AddRange(AddCommonModelAndTextureFileExtensions(commonFileReferenceObjectValues));
+            var fileReferences = _objectEditor.ExportAllStringValues(_objectDataPropertiesWithFileReferences);
+            result.AddRange(fileReferences);
+            result.AddRange(AddCommonModelAndTextureFileExtensions(fileReferences));
 
-            return CleanScannedUnknownFileNames(result.ToList());
+            return CleanScannedUnknownFileNames(result);
         }
 
         protected List<string> ParseFileToDetectPossibleUnknowns(string fileName, List<string> unknownFileExtensions)
@@ -4041,7 +3836,7 @@ endfunction
 
             if (extension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".fdf", StringComparison.InvariantCultureIgnoreCase))
             {
-                var quotedStrings = allLines.SelectMany(x => ParseQuotedStringsFromCode(x)).ToList();
+                var quotedStrings = new HashSet<string>(allLines.SelectMany(x => ParseQuotedStringsFromCode(x)), StringComparer.InvariantCultureIgnoreCase);
                 result.AddRange(AddCommonModelAndTextureFileExtensions(quotedStrings));
             }
 
@@ -4049,25 +3844,27 @@ endfunction
             {
                 try
                 {
-                    var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
+                    var slkData = SLKParser.Parse(fileName);
+                    var maxX = slkData.Select(x => x.Key.x).Max();
+                    var maxY = slkData.Select(x => x.Key.y).Max();
                     var columns = new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
-                    for (var idx = 0; idx < slkTable.Width; idx++)
+                    for (var x = 0; x <= maxX; x++)
                     {
-                        var columnName = slkTable[idx, 0]?.ToString();
+                        var columnName = slkData.GetValueOrDefault((x, 0))?.ToString();
                         if (!string.IsNullOrWhiteSpace(columnName))
                         {
-                            columns[columnName] = idx;
+                            columns[columnName] = x;
                         }
                     }
-                    var files = new List<string>();
+                    var files = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                     if (columns.TryGetValue("dir", out var directoryColumn) && columns.TryGetValue("file", out var fileColumn))
                     {
-                        for (var row = 1; row < slkTable.Rows; row++)
+                        for (var y = 1; y <= maxY; y++)
                         {
                             try
                             {
-                                var directory = slkTable[directoryColumn, row]?.ToString();
-                                var file = slkTable[fileColumn, row]?.ToString();
+                                var directory = slkData.GetValueOrDefault((directoryColumn, y))?.ToString();
+                                var file = slkData.GetValueOrDefault((fileColumn, y))?.ToString();
                                 if (!string.IsNullOrWhiteSpace(directory) && !string.IsNullOrWhiteSpace(file))
                                 {
                                     files.Add(Path.Combine(directory, file));
@@ -4098,7 +3895,7 @@ endfunction
 
             result.AddRange(result.SelectMany(y => ScanTextForPotentialUnknownFileNames_SLOW(y, unknownFileExtensions)).ToList());
 
-            return CleanScannedUnknownFileNames(result.ToList());
+            return CleanScannedUnknownFileNames(result);
         }
 
         protected List<string> ScanBytesForReadableAsciiStrings(byte[] bytes)
@@ -4261,14 +4058,14 @@ endfunction
 
         protected HashSet<string> _modelAndTextureFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ".mdx", ".mdl", ".tga", ".blp", ".jpg", ".bmp", ".dds" };
 
-        protected List<string> AddCommonModelAndTextureFileExtensions(List<string> strings)
+        protected HashSet<string> AddCommonModelAndTextureFileExtensions(HashSet<string> strings)
         {
             HashSet<string> result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             result.AddRange(strings);
             var shortStrings = strings.Where(x => x.Length <= 150).ToList();
             result.AddRange(_modelAndTextureFileExtensions.SelectMany(ext => shortStrings.Select(fileName => $"{fileName}{ext}")));
             result.AddRange(_modelAndTextureFileExtensions.SelectMany(ext => shortStrings.Select(fileName => Path.ChangeExtension(fileName, ext))));
-            return result.ToList();
+            return result;
         }
 
         protected List<string> ScanMDLForPossibleFileNames(string mdlFileName)
@@ -4289,12 +4086,12 @@ endfunction
                     loader.Load(mdlFileName, stream.BaseStream, model);
                     if (model.Textures != null)
                     {
-                        var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
                         result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
                     }
                     if (model.Nodes != null)
                     {
-                        var nodes = model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
                         result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
                     }
                     result.Add($"{model.Name}.mdl");
@@ -4319,12 +4116,12 @@ endfunction
                     var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                     if (model.Textures != null)
                     {
-                        var textures = model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
                         result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
                     }
                     if (model.Nodes != null)
                     {
-                        var nodes = model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                        var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
                         result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
                     }
                     result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
@@ -4346,7 +4143,7 @@ endfunction
                 var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                 if (mdx.Textures != null)
                 {
-                    var textures = mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                    var textures = new HashSet<string>(mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
                     result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
                 }
                 result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{mdx.Info.Name}{ext}"));
@@ -4403,7 +4200,7 @@ endfunction
                     {
                         if (key.KeyName.EndsWith("art", StringComparison.InvariantCultureIgnoreCase) || key.KeyName.EndsWith("name", StringComparison.InvariantCultureIgnoreCase))
                         {
-                            result.AddRange(AddCommonModelAndTextureFileExtensions(new List<string>() { key.Value }));
+                            result.AddRange(AddCommonModelAndTextureFileExtensions(new HashSet<string>() { key.Value }));
                         }
 
                         result.AddRange(ScanTextForPotentialUnknownFileNames_SLOW(key.Value, unknownFileExtensions));
