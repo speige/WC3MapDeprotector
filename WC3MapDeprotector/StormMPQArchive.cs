@@ -592,9 +592,27 @@ namespace WC3MapDeprotector
             try
             {
                 _logEvent("Enumerating contents");
+                string lastFileName = null;
+                var duplicateFileNameCount = 0;
                 do
                 {
                     var fileName = MarshalByteArrayAsString(findData.cFileName);
+                    if (fileName == lastFileName)
+                    {
+                        duplicateFileNameCount++;
+                        if (duplicateFileNameCount > 10)
+                        {
+                            //StormLibrary stuck in an infinite loop
+                            break;
+                        }
+
+                        continue;
+                    }
+                    else
+                    {
+                        duplicateFileNameCount = 0;
+                    }
+                    lastFileName = fileName;
 
                     if (TryGetHashByFilename(fileName, out var fileIndex, out var hashIndex, out var mpqLeftPartialHash, out var mpqRightPartialHash, out var mpqFullHash, out var _))
                     {
