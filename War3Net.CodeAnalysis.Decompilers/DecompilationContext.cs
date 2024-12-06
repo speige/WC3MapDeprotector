@@ -43,9 +43,15 @@ namespace War3Net.CodeAnalysis.Decompilers
 
             ObjectData = new ObjectDataContext(map, campaign);
             TriggerData = new TriggerDataContext(triggerData);
+            ImportedFileNames = new(StringComparer.OrdinalIgnoreCase);
+            MaxPlayerSlots = map.Info.EditorVersion >= EditorVersion.v6060 ? 24 : 12;
 
-            CompilationUnit = JassSyntaxFactory.ParseCompilationUnit(map.Script);
+            SetCompilationUnit(JassSyntaxFactory.ParseCompilationUnit(map.Script));
+        }
 
+        public void SetCompilationUnit(JassCompilationUnitSyntax compilationUnit)
+        {
+            CompilationUnit = compilationUnit;
             var comments = new List<JassCommentSyntax>();
             var functionDeclarationsBuilder = ImmutableDictionary.CreateBuilder<string, FunctionDeclarationContext>(StringComparer.Ordinal);
             var variableDeclarationsBuilder = ImmutableDictionary.CreateBuilder<string, VariableDeclarationContext>(StringComparer.Ordinal);
@@ -80,20 +86,17 @@ namespace War3Net.CodeAnalysis.Decompilers
             FunctionDeclarations = functionDeclarationsBuilder.ToImmutable();
             VariableDeclarations = variableDeclarationsBuilder.ToImmutable();
 
-            ImportedFileNames = new(StringComparer.OrdinalIgnoreCase);
-
-            MaxPlayerSlots = map.Info.EditorVersion >= EditorVersion.v6060 ? 24 : 12;
         }
 
-        public JassCompilationUnitSyntax CompilationUnit { get; }
+        public JassCompilationUnitSyntax CompilationUnit { get; private set; }
 
         public ObjectDataContext ObjectData { get; }
 
         public TriggerDataContext TriggerData { get; }
 
-        public ImmutableDictionary<string, FunctionDeclarationContext> FunctionDeclarations { get; }
+        public ImmutableDictionary<string, FunctionDeclarationContext> FunctionDeclarations { get; private set; }
 
-        public ImmutableDictionary<string, VariableDeclarationContext> VariableDeclarations { get; }
+        public ImmutableDictionary<string, VariableDeclarationContext> VariableDeclarations { get; private set; }
 
         public HashSet<string> ImportedFileNames { get; }
 

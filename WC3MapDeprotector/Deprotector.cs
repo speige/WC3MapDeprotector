@@ -29,8 +29,6 @@ using System.Collections.Concurrent;
 using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
-using Camera = War3Net.Build.Environment.Camera;
-using Region = War3Net.Build.Environment.Region;
 
 namespace WC3MapDeprotector
 {
@@ -45,19 +43,9 @@ namespace WC3MapDeprotector
 
     public partial class Deprotector : IDisposable
     {
-        protected static readonly HashSet<string> _nativeEditorFunctions;
         protected static readonly List<Encoding> _allEncodings;
         static Deprotector()
         {
-            _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreateNeutralHostileBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
-            for (var playerIdx = 0; playerIdx <= 23; playerIdx++)
-            {
-                _nativeEditorFunctions.Add($"InitUpgrades_Player{playerIdx}");
-                _nativeEditorFunctions.Add($"InitTechTree_Player{playerIdx}");
-                _nativeEditorFunctions.Add($"CreateBuildingsForPlayer{playerIdx}");
-                _nativeEditorFunctions.Add($"CreateUnitsForPlayer{playerIdx}");
-            }
-
             _allEncodings = Encoding.GetEncodings().Select(x =>
             {
                 try
@@ -248,62 +236,6 @@ namespace WC3MapDeprotector
             get
             {
                 return Path.GetFileName(_inMapFile);
-            }
-        }
-
-        protected class IndexedJassCompilationUnitSyntax
-        {
-            public JassCompilationUnitSyntax CompilationUnit { get; }
-            public Dictionary<string, JassFunctionDeclarationSyntax> IndexedFunctions { get; }
-
-            public IndexedJassCompilationUnitSyntax(JassCompilationUnitSyntax compilationUnit)
-            {
-                CompilationUnit = compilationUnit;
-                IndexedFunctions = CompilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
-            }
-        }
-
-        protected class ScriptMetaData
-        {
-            private MapSounds sounds;
-
-            public MapInfo Info { get; set; }
-            public MapSounds Sounds
-            {
-                get
-                {
-                    var result = sounds ?? new MapSounds(MapSoundsFormatVersion.v3);
-                    if (!result.Sounds.Any(x => x.FilePath == "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76"))
-                    {
-                        result.Sounds.Add(new Sound() { FilePath = "\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76", Name = "\x67\x67\x5F\x73\x6E\x64\x5F\x77\x61\x72\x33\x6D\x61\x70" });
-                    }
-                    return result;
-                }
-                set => sounds = value;
-            }
-            public MapCameras Cameras { get; set; }
-            public MapRegions Regions { get; set; }
-            public MapTriggers Triggers { get; set; }
-            public MapCustomTextTriggers CustomTextTriggers { get; set; }
-            public TriggerStrings TriggerStrings { get; set; }
-            public MapUnits Units { get; set; }
-            public Dictionary<UnitData, UnitDataDecompilationMetaData> UnitDecompilationMetaData { get; set; }
-            public Dictionary<Camera, ObjectManagerDecompilationMetaData> CameraDecompilationMetaData { get; set; }
-            public Dictionary<Sound, ObjectManagerDecompilationMetaData> SoundDecompilationMetaData { get; set; }
-            public Dictionary<Region, ObjectManagerDecompilationMetaData> RegionDecompilationMetaData { get; set; }
-            public List<string> Destructables { get; set; }
-
-            public List<MpqKnownFile> ConvertToFiles()
-            {
-                var map = new Map() { Info = Info, Units = Units, Sounds = Sounds, Cameras = Cameras, Regions = Regions, Triggers = Triggers, TriggerStrings = TriggerStrings, CustomTextTriggers = CustomTextTriggers };
-                try
-                {
-                    return map.GetAllFiles();
-                }
-                catch
-                {
-                    return new List<MpqKnownFile>();
-                }
             }
         }
 
@@ -1955,31 +1887,35 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"^[0-9a-z]{4}$", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptFourCC();
 
-        [GeneratedRegex(@"^\s*function\s+(\w+)\s+takes", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_JassFunctionDeclaration();
-
-        [GeneratedRegex(@"^\s*call\s+(\w+)\s*\(", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_JassFunctionCall();
-
         [GeneratedRegex(@"set\s+(\w+)\s*=\s*0[\r\n\s]+loop[\r\n\s]+exitwhen\s*\(\1\s*>\s*([0-9]+)\)[\r\n\s]+set\s+(\w+)\[\1\]\s*=\s*[^\r\n]*[\r\n\s]+set\s+\1\s*=\s*\1\s*\+\s*1[\r\n\s]+endloop[\r\n\s]+", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
         protected static partial Regex Regex_GetArraySize();
 
-        protected ScriptMetaData DecompileJassScriptMetaData_Internal(string jassScript, string editorSpecificJassScript)
+        protected ScriptMetaData DecompileJassScriptMetaData_Internal(IndexedJassCompilationUnitSyntax jassParsed, out DecompilationMetaData decompilationMetaData)
         {
+            decompilationMetaData = new DecompilationMetaData();
+
+            var statements = new List<IStatementSyntax>();
+            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
+            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
+            var allInlinedCodeFromConfigAndMain = statements.ToImmutableArray();
+
+            var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
+            var newDeclarations = inlined.CompilationUnit.Declarations.ToList();
+            foreach (var nativeEditorFunction in JassTriggerExtensions.NativeEditorFunctions)
+            {
+                newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
+            }
+
+            var editorSpecificJassParsed = new IndexedJassCompilationUnitSyntax(new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray()));
+
             var result = new ScriptMetaData();
-            result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global non-GUI custom script extracted from war3map.j. This may have compiler errors that need to be resolved manually. Editor-generated functions may be duplicated. If saving in world editor causes game to become corrupted, check the duplicate functions to determine the old version and comment it out (then test if any of it needs to be uncommented and moved to an initialization script)" };
 
             var map = DecompileMap();
             result.Info = map.Info;
-
             result.TriggerStrings = map.TriggerStrings;
+            result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global script. Please ensure JassHelper:EnableJassHelper and JassHelper:EnableVJass settings are turned on. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old and reverse-engineered ObjectManager functions have been commented out. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
 
             var mapInfoFormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderBy(x => x == map?.Info?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault();
-            if (result.Sounds != null && result.Cameras != null && result.Regions != null && result.Triggers != null && result.Units != null)
-            {
-                _logEvent("Decompiling script finished");
-            }
-
             var useNewFormat = map.Info.FormatVersion >= MapInfoFormatVersion.v28;
 
             JassScriptDecompiler jassScriptDecompiler;
@@ -1987,282 +1923,86 @@ namespace WC3MapDeprotector
             {
                 _logEvent("Decompiling war3map script file");
                 var tempMap = map.Clone_Shallow();
-                tempMap.Script = editorSpecificJassScript;
+                tempMap.Script = "globals\r\nendglobals";
                 tempMap.Info = new MapInfo(mapInfoFormatVersion) { ScriptLanguage = ScriptLanguage.Jass };
                 jassScriptDecompiler = new JassScriptDecompiler(tempMap);
+                jassScriptDecompiler.Context.SetCompilationUnit(editorSpecificJassParsed.CompilationUnit);
             }
             catch
             {
                 return null;
             }
 
-            if (result.Sounds == null || (result.Sounds.Sounds.Count == 1 && result.Sounds?.Sounds[0] != result.Sounds?.Sounds[0]))
+            _logEvent("Decompiling map sounds");
+            try
             {
-                try
+                if (jassScriptDecompiler.TryDecompileMapSounds(Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var sounds, out var decompilationMetadata))
                 {
-                    if (jassScriptDecompiler.TryDecompileMapSounds(Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var sounds, out var soundsDecompilationMetaData))
-                    {
-                        _logEvent("map sounds recovered");
-                        result.SoundDecompilationMetaData = soundsDecompilationMetaData;
-                        result.Sounds = sounds;
-                    }
+                    _logEvent("map sounds recovered");
+                    decompilationMetaData.Sounds = decompilationMetadata;
+                    result.Sounds = sounds;
                 }
-                catch { }
             }
+            catch { }
 
-            if (result.Cameras == null)
+            _logEvent("Decompiling map cameras");
+            try
             {
-                try
+                if (jassScriptDecompiler.TryDecompileMapCameras(Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var cameras, out var decompilationMetadata))
                 {
-                    if (jassScriptDecompiler.TryDecompileMapCameras(Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var cameras, out var camerasDecompilationMetaData))
-                    {
-                        _logEvent("map cameras recovered");
-                        result.CameraDecompilationMetaData = camerasDecompilationMetaData;
-                        result.Cameras = cameras;
-                    }
+                    _logEvent("map cameras recovered");
+                    decompilationMetaData.Cameras = decompilationMetadata;
+                    result.Cameras = cameras;
                 }
-                catch { }
             }
+            catch { }
 
-            if (result.Regions == null)
+            _logEvent("Decompiling map regions");
+            try
             {
-                try
+                if (jassScriptDecompiler.TryDecompileMapRegions(Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var regions, out var decompilationMetadata))
                 {
-                    if (jassScriptDecompiler.TryDecompileMapRegions(Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var regions, out var regionsDecompilationMetaData))
-                    {
-                        _logEvent("map regions recovered");
-                        result.RegionDecompilationMetaData = regionsDecompilationMetaData;
-                        result.Regions = regions;
-                    }
+                    _logEvent("map regions recovered");
+                    decompilationMetaData.Regions = decompilationMetadata;
+                    result.Regions = regions;
                 }
-                catch { }
             }
+            catch { }
 
-            if (result.Triggers == null)
+            _logEvent("Decompiling map units");
+            try
             {
-                var triggerItemIdx = 0;
-                var rootCategoryItemIdx = triggerItemIdx++;
-                var triggersCategoryItemIdx = triggerItemIdx++;
-
-                result.Triggers = new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4) { GameVersion = 2 };
-                result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition(TriggerItemType.RootCategory) { Id = rootCategoryItemIdx, ParentId = -1, Name = "script.w3x" });
-
-                var lines = jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
-
-                var functionDeclarations = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionDeclaration().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
-                var functionCalls = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionCall().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
-                var functions = functionDeclarations.Keys.Concat(functionCalls.Keys).ToHashSet();
-
-                //todo: decompile "CreateAllDestructables", "InitTechTree"
-                var oldNativeEditorFunctionsToExecute = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "main", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "InitTechTree" };
-                var nativeEditorFunctionIndexes = new Dictionary<string, Tuple<int, int>>();
-                var nativeEditorFunctionsRenamed = new Dictionary<string, string>();
-                foreach (var nativeEditorFunction in _nativeEditorFunctions)
+                if (jassScriptDecompiler.TryDecompileMapUnits(Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderBy(x => x == map?.Doodads?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderBy(x => x == map?.Doodads?.SubVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var units, out var decompilationMetadata) && units?.Units?.Any() == true)
                 {
-                    var renamed = nativeEditorFunction;
-                    do
-                    {
-                        renamed += "_old";
-                    } while (functions.Contains(renamed));
+                    result.Units = units;
+                    decompilationMetaData.Units = decompilationMetadata;
 
-                    nativeEditorFunctionsRenamed[nativeEditorFunction] = renamed;
-
-                    var executeFunction = oldNativeEditorFunctionsToExecute.Contains(nativeEditorFunction);
-                    if (functionDeclarations.TryGetValue(nativeEditorFunction, out var declarationMatches))
+                    _logEvent("map units recovered");
+                    if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
                     {
-                        foreach (var declaration in declarationMatches)
+                        _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                    }
+
+                    if (result.Units != null && decompilationMetaData.Units != null && result.Regions != null)
+                    {
+                        //NOTE: Must be done after regions are decompiled
+                        foreach (var unit in result.Units.Units)
                         {
-                            lines[declaration.lineIdx] = lines[declaration.lineIdx].Replace(nativeEditorFunction, renamed);
-
-                            if (!executeFunction)
+                            if (decompilationMetaData.Units.TryGetValue(unit, out var unitMetaData))
                             {
-                                var idx = declaration.lineIdx;
-                                while (true)
+                                var region = result.Regions.Regions.FirstOrDefault(x => x.GetVariableName() == unitMetaData.WaygateDestinationRegionName);
+                                if (region != null)
                                 {
-                                    var isEndFunction = lines[idx].Trim().StartsWith("endfunction");
-                                    lines[idx] = "// " + lines[idx];
-                                    if (isEndFunction)
-                                    {
-                                        break;
-                                    }
-                                    idx++;
+                                    unit.WaygateDestinationRegionId = region.CreationNumber;
                                 }
                             }
                         }
                     }
-
-                    if (functionCalls.TryGetValue(nativeEditorFunction, out var callMatches))
-                    {
-                        foreach (var call in callMatches)
-                        {
-                            if (executeFunction)
-                            {
-                                lines[call.lineIdx] = lines[call.lineIdx].Replace(nativeEditorFunction, renamed);
-                            }
-                            else
-                            {
-                                lines[call.lineIdx] = "// " + lines[call.lineIdx];
-                            }
-                        }
-                    }
-                }
-
-                var startGlobalsLineIdx = lines.FindIndex(x => x.Trim() == "globals");
-                var endGlobalsLineIdx = lines.FindIndex(x => x.Trim() == "endglobals");
-                var globalLines = lines.Skip(startGlobalsLineIdx + 1).Take(endGlobalsLineIdx - startGlobalsLineIdx - 1).ToArray();
-                var userGlobalLines = new List<string>();
-                if (startGlobalsLineIdx != -1)
-                {
-                    foreach (var globalLine in globalLines)
-                    {
-                        bool userGenerated = true;
-
-                        var match = Regex_ParseJassVariableDeclaration().Match(globalLine);
-                        if (match.Success)
-                        {
-                            var name = (match.Groups[4].Value ?? "").Trim();
-                            if (name.StartsWith("gg_", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                if (name.StartsWith("gg_trg_"))
-                                {
-                                    var editorName = name.Substring(3);
-                                    var userGeneratedName = "udg_" + editorName;
-                                    jassScript = jassScript.Replace(name, userGeneratedName);
-                                }
-                                else
-                                {
-                                    userGenerated = false;
-                                }
-                            }
-                            else if (!name.StartsWith("udg_", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                DebugSettings.Warn("Unknown variable prefix");
-                            }
-                        }
-                        else
-                        {
-                            DebugSettings.Warn("Unable to parse variable declaration");
-                        }
-
-                        if (userGenerated)
-                        {
-                            userGlobalLines.Add(globalLine);
-                        }
-                    }
-                }
-
-                lines.RemoveRange(startGlobalsLineIdx, endGlobalsLineIdx - startGlobalsLineIdx + 1);
-                lines.InsertRange(startGlobalsLineIdx, userGlobalLines);
-                lines.Insert(startGlobalsLineIdx, "globals");
-                lines.Insert(startGlobalsLineIdx, "//If you get compiler errors, Ensure vJASS is enabled");
-                lines.Insert(startGlobalsLineIdx + userGlobalLines.Count + 2, "endglobals");
-                jassScript = new StringBuilder().AppendJoin("\r\n", lines.ToArray()).ToString();
-                result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = jassScript.Replace("%", "%%") }, GlobalCustomScriptComment = "Deprotected global script. Please ensure JassHelper:EnableJassHelper and JassHelper:EnableVJass settings are turned on. This may have compiler errors that need to be resolved manually. Editor-generated functions have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script." };
-                result.Triggers.TriggerItems.Add(new TriggerCategoryDefinition() { Id = triggersCategoryItemIdx, ParentId = rootCategoryItemIdx, Name = "Triggers", IsExpanded = true });
-                var mainRenamed = nativeEditorFunctionsRenamed["main"];
-                result.Triggers.TriggerItems.Add(new TriggerDefinition() { Id = triggerItemIdx++, ParentId = triggersCategoryItemIdx, Name = "MainDeprotected", Functions = new List<TriggerFunction>() { new TriggerFunction() { IsEnabled = true, Type = TriggerFunctionType.Event, Name = "MapInitializationEvent" }, new TriggerFunction() { IsEnabled = true, Type = TriggerFunctionType.Action, Name = "CustomScriptCode", Parameters = new List<TriggerFunctionParameter>() { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = $"call {mainRenamed}()" } } } }, IsInitiallyOn = true, IsEnabled = true, RunOnMapInit = true, Description = $"Call {mainRenamed} which was extracted from protected map in case it had extra code that failed to decompile into GUI" });
-            }
-
-            if (result.Units == null)
-            {
-                _logEvent("Decompiling map units");
-                try
-                {
-                    if (jassScriptDecompiler.TryDecompileMapUnits(Enum.GetValues(typeof(MapWidgetsFormatVersion)).Cast<MapWidgetsFormatVersion>().OrderBy(x => x == map?.Doodads?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), Enum.GetValues(typeof(MapWidgetsSubVersion)).Cast<MapWidgetsSubVersion>().OrderBy(x => x == map?.Doodads?.SubVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var units, out var unitsDecompiledFromVariableName) && units?.Units?.Any() == true)
-                    {
-                        result.Units = units;
-                        result.UnitDecompilationMetaData = unitsDecompiledFromVariableName;
-
-                        _logEvent("map units recovered");
-                        if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
-                        {
-                            _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            if (result.UnitDecompilationMetaData?.Any() == true)
-            {
-                result.Triggers ??= new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4) { GameVersion = 2 };
-                var maxTriggerItemId = result.Triggers.TriggerItems?.Any() == true ? result.Triggers.TriggerItems.Select(x => x.Id).Max() + 1 : 0;
-                var rootCategory = result.Triggers.TriggerItems.FirstOrDefault(x => x.Type == TriggerItemType.RootCategory);
-                if (rootCategory == null)
-                {
-                    rootCategory = new TriggerCategoryDefinition(TriggerItemType.RootCategory) { Id = maxTriggerItemId++, ParentId = -1, Name = "script.w3x" };
-                    result.Triggers.TriggerItems.Add(rootCategory);
-                }
-                var category = result.Triggers.TriggerItems.FirstOrDefault(x => x.Type == TriggerItemType.Category);
-                if (category == null)
-                {
-                    category = new TriggerCategoryDefinition(TriggerItemType.Category) { Id = maxTriggerItemId++, ParentId = rootCategory.Id, Name = "Deprotect ObjectManager Variables", IsExpanded = true };
-                    result.Triggers.TriggerItems.Add(category);
-                }
-
-                result.Destructables = new List<string>();
-                var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = true, IsInitiallyOn = false };
-                var variables = (result.Units?.Units?.Select(x => x.GetVariableName_BugFixPendingPR()).ToList() ?? new List<string>()).Concat(result.Cameras?.Cameras?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).Concat(map.Doodads?.Doodads.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).ToList();
-                foreach (var variable in variables)
-                {
-                    var isUnit = variable.StartsWith("gg_unit_");
-                    var isItem = variable.StartsWith("gg_item_");
-                    var isDestructable = variable.StartsWith("gg_dest_");
-
-                    var jassVariableSearchString = isUnit || isItem ? variable.Substring(0, variable.Length - 5) : variable; // Removes _#### (CreationNumber) suffix since it changes after deprotection & having extra variables won't break anything
-
-                    if (!jassScript.Contains(jassVariableSearchString))
-                    {
-                        continue;
-                    }
-
-                    if (isUnit)
-                    {
-                        var triggerFunction = new TriggerFunction() { Name = "ResetUnitAnimation", Type = TriggerFunctionType.Action, IsEnabled = true };
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
-                        emptyVariableTrigger.Functions.Add(triggerFunction);
-                    }
-                    else if (isDestructable)
-                    {
-                        var triggerFunction = new TriggerFunction() { Name = "SetDestAnimationSpeedPercent", Type = TriggerFunctionType.Action, IsEnabled = true };
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "100" } });
-                        emptyVariableTrigger.Functions.Add(triggerFunction);
-                        result.Destructables.Add(variable);
-                    }
-                    else if (isItem)
-                    {
-                        var triggerFunction = new TriggerFunction() { Name = "UnitDropItemSlotBJ", Type = TriggerFunctionType.Action, IsEnabled = true };
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Function, Value = "GetLastCreatedUnit", Function = new TriggerFunction() { Name = "GetLastCreatedUnit", Type = TriggerFunctionType.Call, IsEnabled = true } } });
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "1" } });
-                        emptyVariableTrigger.Functions.Add(triggerFunction);
-                    }
-                    else if (variable.StartsWith("gg_cam_"))
-                    {
-                        var triggerFunction = new TriggerFunction() { Name = "BlzCameraSetupGetLabel", Type = TriggerFunctionType.Action, IsEnabled = true };
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
-                        emptyVariableTrigger.Functions.Add(triggerFunction);
-                    }
-                }
-                result.Triggers.TriggerItems.Add(emptyVariableTrigger);
-            }
-
-            if (result.Units != null && result.UnitDecompilationMetaData != null && result.Regions != null)
-            {
-                foreach (var unit in result.Units.Units)
-                {
-                    if (result.UnitDecompilationMetaData.TryGetValue(unit, out var decompilationMetaData))
-                    {
-                        var region = result.Regions.Regions.FirstOrDefault(x => x.GetVariableName() == decompilationMetaData.WaygateDestinationRegionName);
-                        if (region != null)
-                        {
-                            unit.WaygateDestinationRegionId = region.CreationNumber;
-                        }
-                    }
                 }
             }
+            catch { }
 
+            result.SetTriggersFromRawJass(map, jassParsed, decompilationMetaData);
             return result;
         }
 
@@ -2273,58 +2013,15 @@ namespace WC3MapDeprotector
                 Do DepthFirstSearch of all recursive lines of code executing from config/main (ignoring undefined functions assuming they're blizzard natives) & copy/paste them at the bottom of each native editor function
                 It doesn't matter that code would crash, because we only need decompiler to find patterns and generate editor-specific UI files.
                 Don't save this as new war3map script file, because editor will re-create any editor native functions from editor-specific UI files, however rename native editor functions to _old in visual trigger file to avoid conflict when saving.
-                Could delete instead of _old, since _old won't execute, but it's useful if programmer needs it as reference for bug fixes.
+                Comment code that was reverse-engineered into ObjectManager data so it doesn't duplicate code on next editor save. Could delete instead of comment, but it's useful if programmer needs it as reference for bug fixes.
             */
 
             var jassParsed = new IndexedJassCompilationUnitSyntax(ParseJassScript(jassScript));
-            var statements = new List<IStatementSyntax>();
-            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
-            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
-            var allInlinedCodeFromConfigAndMain = statements.ToImmutableArray();
-
-            var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
-
-            var commentedNativeFunctions = new List<JassFunctionDeclarationSyntax>();
-            string commentScript;
-            using (var scriptWriter = new StringWriter())
-            {
-                var renderer = new JassRenderer(scriptWriter);
-                foreach (var nativeEditorFunction in _nativeEditorFunctions)
-                {
-                    if (inlined.IndexedFunctions.TryGetValue(nativeEditorFunction, out var functionDeclaration))
-                    {
-                        commentedNativeFunctions.Add(functionDeclaration);
-                        renderer.Render(functionDeclaration);
-                        renderer.RenderNewLine();
-                        renderer.RenderNewLine();
-                    }
-                }
-                commentScript = scriptWriter.GetStringBuilder().ToString();
-            }
-            if (!string.IsNullOrWhiteSpace(commentScript))
-            {
-                commentScript = "//OLD Auto-Generated Native Editor Functions. Review for any lost code which may have occurred during deprotection. \r\n" + Regex_StartOfAllLines().Replace(commentScript, "// ");
-            }
-
-            var newDeclarations = inlined.CompilationUnit.Declarations.Except(commentedNativeFunctions).ToList();
-            foreach (var nativeEditorFunction in _nativeEditorFunctions)
-            {
-                newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
-            }
-
-            var editorSpecificCompilationUnit = new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray());
-            var editorSpecificJassScript = editorSpecificCompilationUnit.RenderScriptAsString();
-
-            var firstPass = DecompileJassScriptMetaData_Internal(jassScript, editorSpecificJassScript);
+            var firstPass = DecompileJassScriptMetaData_Internal(jassParsed, out var decompilationMetaData);
 
             if (firstPass == null)
             {
                 return null;
-            }
-
-            if (!string.IsNullOrWhiteSpace(commentScript))
-            {
-                firstPass.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
             }
 
             var correctedUnitVariableNames = new List<KeyValuePair<string, string>>();
@@ -2339,9 +2036,9 @@ namespace WC3MapDeprotector
             decompiled = decompiled.Select(x => x.Replace(" ", "_")).ToList();
             var notDecompiledGlobalGenerateds = globalGenerateds.Except(decompiled).ToList();
             correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
-            if (firstPass.UnitDecompilationMetaData != null)
+            if (decompilationMetaData.Units != null)
             {
-                correctedUnitVariableNames.AddRange(firstPass.UnitDecompilationMetaData.Where(x => x.Value.DecompiledFromVariableName.StartsWith("gg_")).Select(x => new KeyValuePair<string, string>(x.Value.DecompiledFromVariableName, x.Key.GetVariableName_BugFixPendingPR())));
+                correctedUnitVariableNames.AddRange(decompilationMetaData.Units.Where(x => x.Value.DecompiledFromVariableName?.StartsWith("gg_") == true).Select(x => new KeyValuePair<string, string>(x.Value.DecompiledFromVariableName, x.Key.GetVariableName_BugFixPendingPR())));
             }
 
             if (!correctedUnitVariableNames.Any())
@@ -2349,9 +2046,9 @@ namespace WC3MapDeprotector
                 return firstPass;
             }
 
-            // _#### (CreationNumber) suffix changes for everything in ObjectManager during deprotection so we have to rename the variables in script to match
+            // _#### (CreationNumber) suffix changes for everything in ObjectManager during deprotection so we have to rename the variables in script to match & then decompile a 2nd time
             var renamer = new JassRenamer(new Dictionary<string, JassIdentifierNameSyntax>(), correctedUnitVariableNames.GroupBy(x => x.Key).ToDictionary(x => x.Key, x => new JassIdentifierNameSyntax(x.Last().Value)));
-            if (!renamer.TryRenameCompilationUnit(jassParsed.CompilationUnit, out var secondPass) || !renamer.TryRenameCompilationUnit(editorSpecificCompilationUnit, out var editorSpecificSecondPass))
+            if (!renamer.TryRenameCompilationUnit(jassParsed.CompilationUnit, out var jassScript_2ndPass))
             {
                 return firstPass;
             }
@@ -2359,22 +2056,14 @@ namespace WC3MapDeprotector
             _logEvent("Global generated variables renamed.");
             _logEvent("Starting decompile war3map script 2nd pass.");
 
-            var result = DecompileJassScriptMetaData_Internal(secondPass.RenderScriptAsString(), editorSpecificSecondPass.RenderScriptAsString());
+            var jassParsed_2ndPass = new IndexedJassCompilationUnitSyntax(jassScript_2ndPass);
+
+            var result = DecompileJassScriptMetaData_Internal(jassParsed_2ndPass, out var _);
             if (result == null)
             {
                 return firstPass;
             }
 
-            if (!string.IsNullOrWhiteSpace(commentScript))
-            {
-                result.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
-            }
-
-            //no longer needed
-            result.UnitDecompilationMetaData = null;
-            result.CameraDecompilationMetaData = null;
-            result.SoundDecompilationMetaData = null;
-            result.RegionDecompilationMetaData = null;
             return result;
         }
 
@@ -2965,253 +2654,6 @@ namespace WC3MapDeprotector
         {
             //todo: Code this!
             return luaScript;
-        }
-
-        protected class GlobalVariable
-        {
-            public string vartype;
-            public bool isarray;
-            public string varname;
-            public string initial;
-            public bool initialized;
-        }
-
-        protected class WTGCategory
-        {
-            public int id;
-            public string name;
-            public int type;
-        }
-
-        protected class WTGTrigger
-        {
-            public string name;
-            public string desc;
-            public int type;
-            public bool enabled;
-            public bool custom;
-            public bool initial;
-            public bool runoninit;
-            public int category;
-            public int eca; // number of EventConditionAction
-            public string data;
-        }
-
-        [GeneratedRegex(@"\s*(constant\s*)?(\S+)\s+(array\s*)?([^ \t=]+)\s*(=)?\s*(.*)", RegexOptions.IgnoreCase)]
-        protected static partial Regex Regex_ParseJassVariableDeclaration();
-
-        protected void WriteWtg_PlainText_Jass_Old(string jassScript)
-        {
-            var strings = new List<string>();
-
-            //temporarily remove strings & later replace, to make regex's easier
-            jassScript = Regex.Replace(jassScript, "(?!ExecuteFunc\\()\"(?:\\\\.|[^\"\\\\])*\"", match =>
-            {
-                strings.Add(match.Groups[0].Value);
-                return $"###DEP_STRING_{strings.Count - 1}###";
-            });
-
-            // remove formatting to make regex's easier
-            var lines = jassScript.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            for (var lineIdx = 0; lineIdx < lines.Length; lineIdx++)
-            {
-                lines[lineIdx] = lines[lineIdx].Trim();
-                lines[lineIdx] = Regex.Replace(lines[lineIdx], @"\s+", " ");
-                lines[lineIdx] = Regex.Replace(lines[lineIdx], @"(?<=\W)\s", "");
-                lines[lineIdx] = Regex.Replace(lines[lineIdx], @"\s(?=\W)", "");
-            }
-            jassScript = string.Join("\n", lines);
-
-            _logEvent("Renaming reserved functions...");
-            int reservedFunctionReplacementCount = 0;
-            Dictionary<string, string> reservedFunctionReplacements = new Dictionary<string, string>();
-            foreach (string func in _nativeEditorFunctions)
-            {
-                if (func == "main")
-                {
-                    continue; // has special logic with regex later
-                }
-
-                if (Regex.IsMatch(jassScript, $@"function {func}\s"))
-                {
-                    string newname = $"{func}_old";
-                    while (Regex.IsMatch(jassScript, $@"function {newname}\s"))
-                    {
-                        newname = $"{newname}_old";
-                    }
-                    _logEvent($"Renaming {func} to {newname}");
-                    reservedFunctionReplacements[func] = newname;
-                    reservedFunctionReplacementCount++;
-                }
-            }
-            foreach (var replacement in reservedFunctionReplacements)
-            {
-                jassScript = Regex.Replace(jassScript, $@"\b(?<!('|\$)){replacement.Key}\b", replacement.Value);
-            }
-            _logEvent($"Renamed {reservedFunctionReplacementCount} reserved functions");
-
-            var globalvars = new List<GlobalVariable>();
-            var categories = new List<WTGCategory>();
-            var triggers = new List<WTGTrigger>();
-            foreach (var line in jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (line.Trim() == "endglobals")
-                {
-                    break;
-                }
-
-                var match = Regex.Match(line.Trim(), @"^(\w+)( | array )(\w+)(?:|\=(.*))$");
-                if (match.Success)
-                {
-                    globalvars.Add(new GlobalVariable
-                    {
-                        vartype = match.Groups[1].Value,
-                        isarray = match.Groups[2].Value == " array ",
-                        varname = match.Groups[3].Value,
-                        initial = match.Groups[4].Value ?? "",
-                        initialized = false
-                    });
-                }
-            }
-
-            var typecounts = new Dictionary<string, int>();
-            var globalVarReplacements = new Dictionary<string, string>();
-            foreach (var globalVariable in globalvars)
-            {
-                var varname = globalVariable.varname;
-                var vartype = $"{globalVariable.vartype}{(globalVariable.isarray ? "s" : "")}";
-                var newname = varname;
-                if (!typecounts.ContainsKey(vartype))
-                {
-                    typecounts[vartype] = 0;
-                }
-                newname = $"{vartype}{(++typecounts[vartype]).ToString("D2")}";
-                globalVariable.varname = newname;
-                globalVarReplacements[varname] = $"udg_{newname}";
-            }
-            foreach (var replacement in globalVarReplacements)
-            {
-                jassScript = Regex.Replace(jassScript, $@"\b(?<!('|\$)){replacement.Key}\b", replacement.Value);
-            }
-
-            var visualScript = jassScript;
-            var mainfunc = "main2";
-            while (Regex.IsMatch(visualScript, $@"function {mainfunc}"))
-            {
-                mainfunc += "2";
-            }
-            visualScript = Regex.Replace(visualScript, @"^.*?\sendglobals", "", RegexOptions.Singleline);
-            visualScript = Regex.Replace(visualScript, @"\sfunction InitCustomTeams takes nothing returns nothing.*?\sendfunction", "", RegexOptions.Singleline);
-            visualScript = Regex.Replace(visualScript, @"\nfunction main takes nothing returns nothing", $"\nfunction {mainfunc} takes nothing returns nothing");
-            visualScript = Regex.Replace(visualScript, @"\scall InitBlizzard\(\)", "");
-            var initcode = "";
-            foreach (var globalVariable in globalvars)
-            {
-                if (globalVariable.initial.ToString() != "" && !Regex.IsMatch(globalVariable.initial.ToString(), @"^(|""|false|0|null|Create(Timer|Group|Force)\(\))$"))
-                {
-                    if (Regex.IsMatch(globalVariable.vartype.ToString(), @"^(boolean|real|integer|string)$"))
-                    {
-                        globalVariable.initialized = true;
-                        continue;
-                    }
-                    initcode += $"set udg_{globalVariable.varname} = {globalVariable.initial}\n";
-                }
-            }
-            visualScript += @"
-function InitTrig_init takes nothing returns nothing
-" + initcode + @"
-call ExecuteFunc(""" + mainfunc + @""")
-endfunction
-";
-            categories.Add(new WTGCategory() { id = 1, name = "triggers", type = 0 });
-            triggers.Add(new WTGTrigger()
-            {
-                name = "init",
-                desc = "",
-                type = 0,
-                enabled = true,
-                custom = true,
-                initial = false,
-                runoninit = false,
-                category = 1,
-                eca = 0,
-                data = visualScript
-            });
-
-            var wctsections = new List<string>();
-
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wtg"), FileMode.Create))
-            using (var wtgFile = new BinaryWriter(stream))
-            {
-                _logEvent("Creating war3map.wtg...");
-                wtgFile.Write(Encoding.ASCII.GetBytes("WTG!"));
-                wtgFile.Write(7);
-                wtgFile.Write(categories.Count);
-                foreach (var category in categories)
-                {
-                    wtgFile.Write(category.id);
-                    wtgFile.Write(Encoding.ASCII.GetBytes($"{category.name}\0"));
-                    wtgFile.Write(category.type);
-                }
-                wtgFile.Write(2);
-                wtgFile.Write(globalvars.Count);
-                foreach (var globalvar in globalvars)
-                {
-                    wtgFile.Write(Encoding.ASCII.GetBytes($"{globalvar.varname}\0"));
-                    wtgFile.Write(Encoding.ASCII.GetBytes($"{globalvar.vartype}\0"));
-                    wtgFile.Write(1);
-                    wtgFile.Write(globalvar.isarray ? 1 : 0);
-                    wtgFile.Write(1);
-                    wtgFile.Write(globalvar.initialized ? 1 : 0);
-                    if (globalvar.initialized)
-                    {
-                        var initial = Regex.Replace(globalvar.initial, @"###DEP_STRING_(\d+)###", match =>
-                        {
-                            var index = int.Parse(match.Groups[1].Value);
-                            return strings[index];
-                        }).Trim('"');
-                        wtgFile.Write(Encoding.ASCII.GetBytes(initial));
-                    }
-                    wtgFile.Write(Encoding.ASCII.GetBytes("\0"));
-                }
-                wtgFile.Write(triggers.Count);
-                foreach (var trigger in triggers)
-                {
-                    wtgFile.Write(Encoding.ASCII.GetBytes($"{trigger.name}\0"));
-                    wtgFile.Write(Encoding.ASCII.GetBytes($"{trigger.desc}\0"));
-                    wtgFile.Write(trigger.type);
-                    wtgFile.Write(trigger.enabled ? 1 : 0);
-                    wtgFile.Write(trigger.custom ? 1 : 0);
-                    wtgFile.Write(trigger.initial ? 1 : 0);
-                    wtgFile.Write(trigger.runoninit ? 1 : 0);
-                    wtgFile.Write(trigger.category);
-                    wtgFile.Write(trigger.eca);
-                    wctsections.Add($"{trigger.data}\0");
-                }
-            }
-
-            _logEvent("Creating war3map.wct...");
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.wct"), FileMode.Create))
-            using (var wctFile = new BinaryWriter(stream))
-            {
-                var toolAdvertisement = $"// {ATTRIB}";
-
-                wctFile.Write(1);
-                wctFile.Write(Encoding.ASCII.GetBytes("\0"));
-                wctFile.Write(toolAdvertisement.Length + 1);
-                wctFile.Write(Encoding.ASCII.GetBytes($"{toolAdvertisement}\0"));
-                wctFile.Write(wctsections.Count);
-                foreach (var section in wctsections)
-                {
-                    var formattedSection = Regex.Replace($"{toolAdvertisement}{section}", @"###DEP_STRING_(\d+)###", match =>
-                    {
-                        var index = int.Parse(match.Groups[1].Value);
-                        return strings[index];
-                    }).Replace("\n", "\r\n");
-                    wctFile.Write(formattedSection.Length);
-                    wctFile.Write(Encoding.ASCII.GetBytes(formattedSection));
-                }
-            }
         }
 
         protected void DeleteAttributeListSignatureFiles()
