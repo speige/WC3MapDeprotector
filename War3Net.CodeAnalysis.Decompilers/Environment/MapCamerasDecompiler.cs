@@ -18,11 +18,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler
     {
-        public bool TryDecompileMapCameras(MapCamerasFormatVersion formatVersion, bool useNewFormat, [NotNullWhen(true)] out MapCameras? mapCameras)
+        public bool TryDecompileMapCameras(MapCamerasFormatVersion formatVersion, bool useNewFormat, [NotNullWhen(true)] out MapCameras? mapCameras, [NotNullWhen(true)] out Dictionary<Camera, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             foreach (var candidateFunction in GetCandidateFunctions("CreateCameras"))
             {
-                if (TryDecompileMapCameras(candidateFunction.FunctionDeclaration, formatVersion, useNewFormat, out mapCameras))
+                if (TryDecompileMapCameras(candidateFunction.FunctionDeclaration, formatVersion, useNewFormat, out mapCameras, out decompilationMetaData))
                 {
                     candidateFunction.Handled = true;
 
@@ -31,15 +31,18 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapCameras = null;
+            decompilationMetaData = null;
             return false;
         }
 
-        public bool TryDecompileMapCameras(JassFunctionDeclarationSyntax functionDeclaration, MapCamerasFormatVersion formatVersion, bool useNewFormat, [NotNullWhen(true)] out MapCameras? mapCameras)
+        public bool TryDecompileMapCameras(JassFunctionDeclarationSyntax functionDeclaration, MapCamerasFormatVersion formatVersion, bool useNewFormat, [NotNullWhen(true)] out MapCameras? mapCameras, [NotNullWhen(true)] out Dictionary<Camera, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             if (functionDeclaration is null)
             {
                 throw new ArgumentNullException(nameof(functionDeclaration));
             }
+
+            decompilationMetaData = new Dictionary<Camera, ObjectManagerDecompilationMetaData>();
 
             var cameras = new Dictionary<string, Camera>(StringComparer.Ordinal);
 
@@ -59,11 +62,16 @@ namespace War3Net.CodeAnalysis.Decompilers
                     {
                         if (invocationExpression.Arguments.Arguments.IsEmpty)
                         {
-                            cameras[setStatement.IdentifierName.Name] = new Camera
+                            var camera = new Camera
                             {
                                 Name = setStatement.IdentifierName.Name["gg_cam_".Length..].Replace('_', ' '),
                                 NearClippingPlane = useNewFormat ? default : 100f,
                             };
+
+                            var metaData = decompilationMetaData.GetOrAdd(camera);
+                            metaData.DecompiledFromStatements.Add(statement);
+
+                            cameras[setStatement.IdentifierName.Name] = camera;
                         }
                     }
                     else
@@ -83,6 +91,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                             duration == 0f &&
                             cameras.TryGetValue(cameraVariableReferenceExpression.IdentifierName.Name, out var camera))
                         {
+                            var setProperty = true;
                             switch (cameraFieldVariableReferenceExpression.IdentifierName.Name)
                             {
                                 case "CAMERA_FIELD_ZOFFSET":
@@ -118,6 +127,15 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 case "CAMERA_FIELD_LOCAL_ROLL":
                                     camera.LocalRoll = value;
                                     break;
+                                default:
+                                    setProperty = false;
+                                    break;
+                            }
+
+                            if (setProperty)
+                            {
+                                var metaData = decompilationMetaData.GetOrAdd(camera);
+                                metaData.DecompiledFromStatements.Add(statement);
                             }
                         }
                     }
@@ -131,6 +149,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             duration == 0f &&
                             cameras.TryGetValue(cameraVariableReferenceExpression.IdentifierName.Name, out var camera))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(camera);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             camera.TargetPosition = new(x, y);
                         }
                     }
@@ -145,6 +166,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapCameras = null;
+            decompilationMetaData = null;
             return false;
         }
     }

@@ -20,11 +20,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler
     {
-        public bool TryDecompileMapRegions(MapRegionsFormatVersion formatVersion, [NotNullWhen(true)] out MapRegions? mapRegions)
+        public bool TryDecompileMapRegions(MapRegionsFormatVersion formatVersion, [NotNullWhen(true)] out MapRegions? mapRegions, [NotNullWhen(true)] out Dictionary<Region, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             foreach (var candidateFunction in GetCandidateFunctions("CreateRegions"))
             {
-                if (TryDecompileMapRegions(candidateFunction.FunctionDeclaration, formatVersion, out mapRegions))
+                if (TryDecompileMapRegions(candidateFunction.FunctionDeclaration, formatVersion, out mapRegions, out decompilationMetaData))
                 {
                     candidateFunction.Handled = true;
 
@@ -33,15 +33,18 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapRegions = null;
+            decompilationMetaData = null;
             return false;
         }
 
-        public bool TryDecompileMapRegions(JassFunctionDeclarationSyntax functionDeclaration, MapRegionsFormatVersion formatVersion, [NotNullWhen(true)] out MapRegions? mapRegions)
+        public bool TryDecompileMapRegions(JassFunctionDeclarationSyntax functionDeclaration, MapRegionsFormatVersion formatVersion, [NotNullWhen(true)] out MapRegions? mapRegions, [NotNullWhen(true)] out Dictionary<Region, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             if (functionDeclaration is null)
             {
                 throw new ArgumentNullException(nameof(functionDeclaration));
             }
+
+            decompilationMetaData = new Dictionary<Region, ObjectManagerDecompilationMetaData>();
 
             Region? currentRegion = null;
             var createdRegions = new List<Region>();
@@ -83,6 +86,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                 createdRegions.Add(currentRegion);
 
+                                var metaData = decompilationMetaData.GetOrAdd(currentRegion);
+                                metaData.DecompiledFromStatements.Add(statement);
+
                                 regions[setStatement.IdentifierName.Name] = currentRegion;
                             }
                         }
@@ -94,6 +100,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 invocationExpression.Arguments.Arguments[1] is JassFourCCLiteralExpressionSyntax fourCCLiteralExpression &&
                                 regions.TryGetValue(regionVariableReferenceExpression.IdentifierName.Name, out var region))
                             {
+                                var metaData = decompilationMetaData.GetOrAdd(region);
+                                metaData.DecompiledFromStatements.Add(statement);
+
                                 region.WeatherType = (WeatherType)fourCCLiteralExpression.Value.InvertEndianness();
                             }
                         }
@@ -121,6 +130,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             (string.IsNullOrEmpty(currentRegion.AmbientSound) ||
                              string.Equals(currentRegion.AmbientSound, soundVariableReferenceExpression.IdentifierName.Name, StringComparison.Ordinal)))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(currentRegion);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             currentRegion.AmbientSound = soundVariableReferenceExpression.IdentifierName.Name;
                         }
                     }
@@ -136,6 +148,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             (string.IsNullOrEmpty(currentRegion.AmbientSound) ||
                              string.Equals(currentRegion.AmbientSound, soundVariableReferenceExpression.IdentifierName.Name, StringComparison.Ordinal)))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(currentRegion);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             currentRegion.AmbientSound = soundVariableReferenceExpression.IdentifierName.Name;
                         }
                     }
@@ -154,6 +169,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapRegions = null;
+            decompilationMetaData = null;
             return false;
         }
     }

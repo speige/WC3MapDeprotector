@@ -18,7 +18,7 @@ using War3Net.Common.Extensions;
 
 namespace War3Net.CodeAnalysis.Decompilers
 {
-    public class UnitDataDecompilationMetaData
+    public class UnitDataDecompilationMetaData : ObjectManagerDecompilationMetaData
     {
         public string DecompiledFromVariableName { get; set; }
         public string WaygateDestinationRegionName { get; set; }
@@ -104,13 +104,13 @@ namespace War3Net.CodeAnalysis.Decompilers
                 throw new ArgumentNullException(nameof(initCustomPlayerSlotsFunction));
             }
 
-            if (TryDecompileCreateUnitsFunction(createAllUnitsFunction, out var units, out var unitsDecompiledFromVariableName) &&
-                TryDecompileCreateItemsFunction(createAllItemsFunction, out var items, out var itemsDecompiledFromVariableName) &&
+            if (TryDecompileCreateUnitsFunction(createAllUnitsFunction, out var units, out var unitsDecompilationMetaData) &&
+                TryDecompileCreateItemsFunction(createAllItemsFunction, out var items, out var itemsDecompilationMetaData) &&
                 TryDecompileStartLocationPositionsConfigFunction(configFunction, out var startLocationPositions) &&
-                TryDecompileInitCustomPlayerSlotsFunction(initCustomPlayerSlotsFunction, startLocationPositions, out var startLocations))
+                TryDecompileInitCustomPlayerSlotsFunction(initCustomPlayerSlotsFunction, startLocationPositions, out var startLocations, out var slotsDecompilationMetaData))
             {
                 mapUnits = new MapUnits(formatVersion, subVersion, useNewFormat);
-                decompilationMetaData = unitsDecompiledFromVariableName.Concat(itemsDecompiledFromVariableName).ToDictionary(x => x.Key, x => x.Value);
+                decompilationMetaData = unitsDecompilationMetaData.Concat(itemsDecompilationMetaData).Concat(slotsDecompilationMetaData).ToDictionary(x => x.Key, x => x.Value);
 
                 mapUnits.Units.AddRange(units);
                 mapUnits.Units.AddRange(items);
@@ -202,11 +202,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                     unit.SkinId = unit.TypeId;
 
-                                    if (!decompilationMetaData.ContainsKey(unit))
-                                    {
-                                        decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
-                                    }
-                                    decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
+                                    var metaData = decompilationMetaData.GetOrAdd(unit);
+                                    metaData.DecompiledFromStatements.Add(statement);
+                                    metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                     units.Add(unit);
                                 }
                             }
@@ -235,11 +233,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                                         CreationNumber = CreationNumber++
                                     };
 
-                                    if (!decompilationMetaData.ContainsKey(unit))
-                                    {
-                                        decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
-                                    }
-                                    decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
+                                    var metaData = decompilationMetaData.GetOrAdd(unit);
+                                    metaData.DecompiledFromStatements.Add(statement);
+                                    metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                     units.Add(unit);
                                 }
                             }
@@ -274,6 +270,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax unitVariableReferenceExpression &&
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var amount))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].GoldAmount = amount;
                         }
                     }
@@ -286,6 +285,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             convertPlayerColorInvocationExpression.Arguments.Arguments.Length == 1 &&
                             convertPlayerColorInvocationExpression.Arguments.Arguments[0].TryGetIntegerExpressionValue_New(out var playerColorId))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].CustomPlayerColorId = playerColorId;
                         }
                     }
@@ -295,6 +297,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax unitVariableReferenceExpression &&
                             callStatement.Arguments.Arguments[1].TryGetRealExpressionValue(out var acquireRange))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             const float CampAcquireRange = 200f;
                             units[^1].TargetAcquisition = acquireRange == CampAcquireRange ? -2f : acquireRange;
                         }
@@ -312,6 +317,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     binaryExpression.Operator == BinaryOperatorType.Multiplication &&
                                     binaryExpression.Right is JassVariableReferenceExpressionSyntax)
                                 {
+                                    var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                                    metaData.DecompiledFromStatements.Add(statement);
+
                                     units[^1].HP = (int)(100 * hp);
                                 }
                             }
@@ -319,6 +327,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             {
                                 if (callStatement.Arguments.Arguments[2].TryGetIntegerExpressionValue_New(out var mp))
                                 {
+                                    var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                                    metaData.DecompiledFromStatements.Add(statement);
+
                                     units[^1].MP = mp;
                                 }
                             }
@@ -331,6 +342,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var itemId) &&
                             callStatement.Arguments.Arguments[2].TryGetIntegerExpressionValue_New(out var slot))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].InventoryData.Add(new InventoryItemData
                             {
                                 ItemId = itemId.InvertEndianness(),
@@ -345,6 +359,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var level) &&
                             callStatement.Arguments.Arguments[2] is JassBooleanLiteralExpressionSyntax)
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].HeroLevel = level;
                         }
                     }
@@ -355,6 +372,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var value) &&
                             callStatement.Arguments.Arguments[2] is JassBooleanLiteralExpressionSyntax)
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].HeroStrength = value;
                         }
                     }
@@ -365,6 +385,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var value) &&
                             callStatement.Arguments.Arguments[2] is JassBooleanLiteralExpressionSyntax)
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].HeroAgility = value;
                         }
                     }
@@ -375,11 +398,17 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var value) &&
                             callStatement.Arguments.Arguments[2] is JassBooleanLiteralExpressionSyntax)
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             units[^1].HeroIntelligence = value;
                         }
                     }
                     else if (string.Equals(callStatement.IdentifierName.Name, "SelectHeroSkill", StringComparison.Ordinal) && callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var heroSkillAbilityId))
                     {
+                        var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                        metaData.DecompiledFromStatements.Add(statement);
+
                         var ability = units[^1].AbilityData.FirstOrDefault(x => x.AbilityId == heroSkillAbilityId.InvertEndianness());
                         if (ability == null)
                         {
@@ -411,6 +440,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             {
                                 continue;
                             }
+
+                            var metaData = decompilationMetaData.GetOrAdd(unit);
+                            metaData.DecompiledFromStatements.Add(statement);
 
                             var ability = unit.AbilityData.FirstOrDefault(x => x.AbilityId == abilityId);
                             if (ability == null)
@@ -449,6 +481,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                                         var actionFunction = actionFunctionName != null ? GetFunction(actionFunctionName) : null;
                                         if (actionFunction != null && TryDecompileDropItemsFunction(actionFunction, out var itemTableSets))
                                         {
+                                            var metaData = decompilationMetaData.GetOrAdd(units[^1]);
+                                            metaData.DecompiledFromStatements.Add(statement);
+
                                             unit.ItemTableSets.AddRange(itemTableSets);
                                             break;
                                         }
@@ -466,11 +501,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             if (region != null)
                             {
                                 var unit = units[^1];
-                                if (!decompilationMetaData.ContainsKey(unit))
-                                {
-                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
-                                }
-                                decompilationMetaData[unit].WaygateDestinationRegionName = region?.IdentifierName?.Name;
+                                var metaData = decompilationMetaData.GetOrAdd(unit);
+                                metaData.DecompiledFromStatements.Add(statement);
+                                metaData.WaygateDestinationRegionName = region?.IdentifierName?.Name;
                             }
                         }
                         continue;
@@ -548,11 +581,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                                 unit.SkinId = unit.TypeId;
 
-                                if (!decompilationMetaData.ContainsKey(unit))
-                                {
-                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
-                                }
-                                decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
+                                var metaData = decompilationMetaData.GetOrAdd(unit);
+                                metaData.DecompiledFromStatements.Add(statement);
+                                metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
                                 items.Add(unit);
                             }
                         }
@@ -564,7 +595,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 invocationExpression.Arguments.Arguments[2].TryGetRealExpressionValue(out var y) &&
                                 invocationExpression.Arguments.Arguments[3].TryGetIntegerExpressionValue_New(out var skinId))
                             {
-                                var unit = new UnitData
+                                var item = new UnitData
                                 {
                                     OwnerId = Context.MaxPlayerSlots + 3, // NEUTRAL_PASSIVE
                                     TypeId = unitId.InvertEndianness(),
@@ -578,12 +609,10 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     CreationNumber = CreationNumber++
                                 };
 
-                                if (!decompilationMetaData.ContainsKey(unit))
-                                {
-                                    decompilationMetaData[unit] = new UnitDataDecompilationMetaData();
-                                }
-                                decompilationMetaData[unit].DecompiledFromVariableName = setStatement.IdentifierName.Name;
-                                items.Add(unit);
+                                var metaData = decompilationMetaData.GetOrAdd(item);
+                                metaData.DecompiledFromStatements.Add(statement);
+                                metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
+                                items.Add(item);
                             }
                         }
                     }
@@ -612,6 +641,8 @@ namespace War3Net.CodeAnalysis.Decompilers
 
                             item.SkinId = item.TypeId;
 
+                            var metaData = decompilationMetaData.GetOrAdd(item);
+                            metaData.DecompiledFromStatements.Add(statement);
                             items.Add(item);
                         }
                     }
@@ -637,6 +668,8 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 CreationNumber = CreationNumber++
                             };
 
+                            var metaData = decompilationMetaData.GetOrAdd(item);
+                            metaData.DecompiledFromStatements.Add(statement);
                             items.Add(item);
                         }
                     }
@@ -676,9 +709,11 @@ namespace War3Net.CodeAnalysis.Decompilers
         private bool TryDecompileInitCustomPlayerSlotsFunction(
             JassFunctionDeclarationSyntax initCustomPlayerSlotsFunction,
             Dictionary<int, Vector2> startLocationPositions,
-            [NotNullWhen(true)] out List<UnitData>? startLocations)
+            [NotNullWhen(true)] out List<UnitData>? startLocations,
+            [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             startLocations = new List<UnitData>();
+            decompilationMetaData = new Dictionary<UnitData, UnitDataDecompilationMetaData>();
 
             foreach (var statement in initCustomPlayerSlotsFunction.Body.Statements)
             {
@@ -714,6 +749,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             };
 
                             unit.SkinId = unit.TypeId;
+
+                            var metaData = decompilationMetaData.GetOrAdd(unit);
+                            metaData.DecompiledFromStatements.Add(statement);
 
                             startLocations.Add(unit);
                         }

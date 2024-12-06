@@ -21,11 +21,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 
     public partial class JassScriptDecompiler
     {
-        public bool TryDecompileMapSounds(MapSoundsFormatVersion formatVersion, [NotNullWhen(true)] out MapSounds? mapSounds)
+        public bool TryDecompileMapSounds(MapSoundsFormatVersion formatVersion, [NotNullWhen(true)] out MapSounds? mapSounds, [NotNullWhen(true)] out Dictionary<Sound, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             foreach (var candidateFunction in GetCandidateFunctions("InitSounds"))
             {
-                if (TryDecompileMapSounds(candidateFunction.FunctionDeclaration, formatVersion, out mapSounds))
+                if (TryDecompileMapSounds(candidateFunction.FunctionDeclaration, formatVersion, out mapSounds, out decompilationMetaData))
                 {
                     candidateFunction.Handled = true;
 
@@ -34,15 +34,18 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapSounds = null;
+            decompilationMetaData = null;
             return false;
         }
 
-        public bool TryDecompileMapSounds(JassFunctionDeclarationSyntax functionDeclaration, MapSoundsFormatVersion formatVersion, [NotNullWhen(true)] out MapSounds? mapSounds)
+        public bool TryDecompileMapSounds(JassFunctionDeclarationSyntax functionDeclaration, MapSoundsFormatVersion formatVersion, [NotNullWhen(true)] out MapSounds? mapSounds, [NotNullWhen(true)] out Dictionary<Sound, ObjectManagerDecompilationMetaData>? decompilationMetaData)
         {
             if (functionDeclaration is null)
             {
                 throw new ArgumentNullException(nameof(functionDeclaration));
             }
+
+            decompilationMetaData = new Dictionary<Sound, ObjectManagerDecompilationMetaData>();
 
             var sounds = new Dictionary<string, Sound>(StringComparer.Ordinal);
 
@@ -94,7 +97,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     flags |= SoundFlags.UNK16;
                                 }
 
-                                sounds[setStatement.IdentifierName.Name] = new Sound
+                                var sound = new Sound
                                 {
                                     Name = setStatement.IdentifierName.Name,
                                     FilePath = filePath,
@@ -109,6 +112,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                                     FacialAnimationGroupLabel = string.Empty,
                                     FacialAnimationSetFilepath = string.Empty,
                                 };
+
+                                var metaData = decompilationMetaData.GetOrAdd(sound);
+                                metaData.DecompiledFromStatements.Add(statement);
+
+                                sounds[setStatement.IdentifierName.Name] = sound;
                             }
                         }
                         else if (setStatement.Value.Expression is JassStringLiteralExpressionSyntax stringLiteralExpression)
@@ -123,7 +131,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 flags |= SoundFlags.UNK16;
                             }
 
-                            sounds[setStatement.IdentifierName.Name] = new Sound
+                            var sound = new Sound
                             {
                                 Name = setStatement.IdentifierName.Name,
                                 FilePath = filePath,
@@ -132,6 +140,11 @@ namespace War3Net.CodeAnalysis.Decompilers
                                 FadeInRate = 10,
                                 FadeOutRate = 10,
                             };
+
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
+                            sounds[setStatement.IdentifierName.Name] = sound;
                         }
                         else
                         {
@@ -152,6 +165,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1] is JassStringLiteralExpressionSyntax stringLiteralExpression &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.SoundName = stringLiteralExpression.Value;
                         }
                     }
@@ -162,6 +178,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1] is JassStringLiteralExpressionSyntax stringLiteralExpression &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.FacialAnimationLabel = stringLiteralExpression.Value;
                         }
                     }
@@ -172,6 +191,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1] is JassStringLiteralExpressionSyntax stringLiteralExpression &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.FacialAnimationGroupLabel = stringLiteralExpression.Value;
                         }
                     }
@@ -182,6 +204,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1] is JassStringLiteralExpressionSyntax stringLiteralExpression &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.FacialAnimationSetFilepath = stringLiteralExpression.Value;
                         }
                     }
@@ -194,6 +219,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             stringLiteralExpression.Value.StartsWith("TRIGSTR_", StringComparison.Ordinal) &&
                             int.TryParse(stringLiteralExpression.Value["TRIGSTR_".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var dialogueSpeakerNameKey))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.DialogueSpeakerNameKey = dialogueSpeakerNameKey;
                         }
                     }
@@ -206,6 +234,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             stringLiteralExpression.Value.StartsWith("TRIGSTR_", StringComparison.Ordinal) &&
                             int.TryParse(stringLiteralExpression.Value["TRIGSTR_".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var dialogueTextKey))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.DialogueTextKey = dialogueTextKey;
                         }
                     }
@@ -220,6 +251,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetRealExpressionValue(out var cutoff) &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.DistanceCutoff = cutoff;
                         }
                     }
@@ -230,6 +264,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var channel) &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.Channel = (SoundChannel)channel;
                         }
                     }
@@ -240,6 +277,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var volume) &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.Volume = volume;
                         }
                     }
@@ -250,6 +290,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             callStatement.Arguments.Arguments[1].TryGetRealExpressionValue(out var pitch) &&
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.Pitch = pitch;
                         }
                     }
@@ -262,6 +305,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound) &&
                             sound.Flags.HasFlag(SoundFlags.Is3DSound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.MinDistance = minDist;
                             sound.MaxDistance = maxDist;
                         }
@@ -276,6 +322,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound) &&
                             sound.Flags.HasFlag(SoundFlags.Is3DSound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.ConeAngleInside = inside;
                             sound.ConeAngleOutside = outside;
                             sound.ConeOutsideVolume = outsideVolume;
@@ -291,6 +340,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                             sounds.TryGetValue(variableReferenceExpression.IdentifierName.Name, out var sound) &&
                             sound.Flags.HasFlag(SoundFlags.Is3DSound))
                         {
+                            var metaData = decompilationMetaData.GetOrAdd(sound);
+                            metaData.DecompiledFromStatements.Add(statement);
+
                             sound.ConeOrientation = new(x, y, z);
                         }
                     }
@@ -305,6 +357,7 @@ namespace War3Net.CodeAnalysis.Decompilers
             }
 
             mapSounds = null;
+            decompilationMetaData = null;
             return false;
         }
 

@@ -29,6 +29,8 @@ using System.Collections.Concurrent;
 using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
+using Camera = War3Net.Build.Environment.Camera;
+using Region = War3Net.Build.Environment.Region;
 
 namespace WC3MapDeprotector
 {
@@ -286,6 +288,9 @@ namespace WC3MapDeprotector
             public TriggerStrings TriggerStrings { get; set; }
             public MapUnits Units { get; set; }
             public Dictionary<UnitData, UnitDataDecompilationMetaData> UnitDecompilationMetaData { get; set; }
+            public Dictionary<Camera, ObjectManagerDecompilationMetaData> CameraDecompilationMetaData { get; set; }
+            public Dictionary<Sound, ObjectManagerDecompilationMetaData> SoundDecompilationMetaData { get; set; }
+            public Dictionary<Region, ObjectManagerDecompilationMetaData> RegionDecompilationMetaData { get; set; }
             public List<string> Destructables { get; set; }
 
             public List<MpqKnownFile> ConvertToFiles()
@@ -480,13 +485,13 @@ namespace WC3MapDeprotector
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
             _deprotectionResult.WarningMessages.Add($"NOTE: World Editor has SD & HD modes. HD is prone to crashing and should not be used, it's find to use HD in game itself. The setting can be changed in WorldEditor.exe via File/Preferences/AssetMode");
 
-            var blankMapFilesZip = Path.Combine(ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip"); 
+            var blankMapFilesZip = Path.Combine(ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip");
             if (!Directory.Exists(BlankMapFilesPath) && File.Exists(blankMapFilesZip))
             {
                 ZipFile.ExtractToDirectory(blankMapFilesZip, BlankMapFilesPath, true);
             }
 
-            var gameDataFilesZip = Path.Combine(ExeFolderPath, "GameDataFiles_2.0.0.22389.zip"); 
+            var gameDataFilesZip = Path.Combine(ExeFolderPath, "GameDataFiles_2.0.0.22389.zip");
             if (!Directory.Exists(GameDataFilesPath) && File.Exists(gameDataFilesZip))
             {
                 ZipFile.ExtractToDirectory(gameDataFilesZip, GameDataFilesPath, true);
@@ -1335,7 +1340,7 @@ namespace WC3MapDeprotector
             var map = Map.Open(tempMapFileName);
             var mapFiles = map.GetAllFiles();
             foreach (var file in mapFiles)
-            {                
+            {
                 if (!notRepairableFiles.Contains(file.FileName))
                 {
                     SaveDecompiledArchiveFile(file);
@@ -1958,7 +1963,7 @@ namespace WC3MapDeprotector
 
             //NOTE: Searches for contents of InitGlobals() by structure so it can still work on obfuscated code
             var idx = initBlizzardIndex;
-            var initGlobalsIndex = initBlizzardIndex+1;
+            var initGlobalsIndex = initBlizzardIndex + 1;
             var currentStreakStartIdx = initGlobalsIndex;
             var longestStreak = 0;
             foreach (var statement in mainStatements.Skip(initBlizzardIndex))
@@ -2050,12 +2055,12 @@ namespace WC3MapDeprotector
 
             if (result.Sounds == null || (result.Sounds.Sounds.Count == 1 && result.Sounds?.Sounds[0] != result.Sounds?.Sounds[0]))
             {
-                _logEvent("Decompiling map sounds");
                 try
                 {
-                    if (jassScriptDecompiler.TryDecompileMapSounds(Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var sounds))
+                    if (jassScriptDecompiler.TryDecompileMapSounds(Enum.GetValues(typeof(MapSoundsFormatVersion)).Cast<MapSoundsFormatVersion>().OrderBy(x => x == map?.Sounds?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var sounds, out var soundsDecompilationMetaData))
                     {
                         _logEvent("map sounds recovered");
+                        result.SoundDecompilationMetaData = soundsDecompilationMetaData;
                         result.Sounds = sounds;
                     }
                 }
@@ -2064,12 +2069,12 @@ namespace WC3MapDeprotector
 
             if (result.Cameras == null)
             {
-                _logEvent("Decompiling map cameras");
                 try
                 {
-                    if (jassScriptDecompiler.TryDecompileMapCameras(Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var cameras))
-                    {                          
+                    if (jassScriptDecompiler.TryDecompileMapCameras(Enum.GetValues(typeof(MapCamerasFormatVersion)).Cast<MapCamerasFormatVersion>().OrderBy(x => x == map?.Cameras?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), useNewFormat, out var cameras, out var camerasDecompilationMetaData))
+                    {
                         _logEvent("map cameras recovered");
+                        result.CameraDecompilationMetaData = camerasDecompilationMetaData;
                         result.Cameras = cameras;
                     }
                 }
@@ -2078,12 +2083,12 @@ namespace WC3MapDeprotector
 
             if (result.Regions == null)
             {
-                _logEvent("Decompiling map regions");
                 try
                 {
-                    if (jassScriptDecompiler.TryDecompileMapRegions(Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var regions))
+                    if (jassScriptDecompiler.TryDecompileMapRegions(Enum.GetValues(typeof(MapRegionsFormatVersion)).Cast<MapRegionsFormatVersion>().OrderBy(x => x == map?.Regions?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault(), out var regions, out var regionsDecompilationMetaData))
                     {
                         _logEvent("map regions recovered");
+                        result.RegionDecompilationMetaData = regionsDecompilationMetaData;
                         result.Regions = regions;
                     }
                 }
@@ -2474,7 +2479,7 @@ namespace WC3MapDeprotector
             if (result.UnitDecompilationMetaData?.Any() == true)
             {
                 result.Triggers ??= new MapTriggers(MapTriggersFormatVersion.v7, MapTriggersSubVersion.v4) { GameVersion = 2 };
-                var maxTriggerItemId = result.Triggers.TriggerItems?.Any() == true ? result.Triggers.TriggerItems.Select(x => x.Id).Max()+1 : 0;
+                var maxTriggerItemId = result.Triggers.TriggerItems?.Any() == true ? result.Triggers.TriggerItems.Select(x => x.Id).Max() + 1 : 0;
                 var rootCategory = result.Triggers.TriggerItems.FirstOrDefault(x => x.Type == TriggerItemType.RootCategory);
                 if (rootCategory == null)
                 {
@@ -2657,7 +2662,12 @@ namespace WC3MapDeprotector
             {
                 result.CustomTextTriggers.GlobalCustomScriptCode.Code += commentScript;
             }
+
+            //no longer needed
             result.UnitDecompilationMetaData = null;
+            result.CameraDecompilationMetaData = null;
+            result.SoundDecompilationMetaData = null;
+            result.RegionDecompilationMetaData = null;
             return result;
         }
 
