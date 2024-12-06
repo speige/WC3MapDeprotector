@@ -1014,23 +1014,6 @@ namespace WC3MapDeprotector
             {
                 autoUpgradeError = true;
             }
-            //todo: test which of these significantly speed up world editor when loading an empty file
-            try
-            {
-                MoveObjectEditorStringsToTriggerStrings(); // remove if possible
-            }
-            catch
-            {
-                autoUpgradeError = true;
-            }
-            try
-            {
-                RefactorSkinnableProperties(); // remove if possible
-            }
-            catch
-            {
-                autoUpgradeError = true;
-            }
             try
             {
                 UpgradeToLatestFileFormats();
@@ -1198,79 +1181,6 @@ namespace WC3MapDeprotector
             return fileName;
         }
 
-        protected void RefactorSkinnableProperties()
-        {
-            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
-            var tempMapFileName = Path.Combine(WorkingFolderPath, "skinObjectData.w3x");
-            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
-            var map = Map.Open(tempMapFileName);
-
-            var supportedFourCCAttributes = new HashSet<string>() { "ahky", "anam", "aret", "arhk", "arut", "asat", "atp1", "aub1", "atat", "auhk", "aut1", "auu1", "alig", "amat", "ansf", "aeat", "acat", "aart", "aaea", "auar", "abpx", "abpy", "arar", "arpx", "aani", "acap", "aubx", "amac", "arpy", "fnam", "ftat", "ftip", "fube", "fsat", "feat", "fnsf", "fart", "fta0", "fmat", "fspt", "fta1", "ftac", "fspd", "bgpm", "bmas", "bmis", "bnam", "bsuf", "bmmb", "bmmg", "bmmr", "bsel", "bdsn", "bfil", "bgsc", "bvar", "blit", "ides", "unam", "utip", "utub", "uhot", "ubpx", "ubpy", "iclb", "iclg", "iclr", "iico", "ifil", "isca", "uawt", "uico", "umdl", "upro", "usca", "uspa", "utpr", "unsf", "ulpz", "ua1m", "ussi", "uimz", "utaa", "ucun", "ucut", "ussc", "uble", "uma1", "usnd", "umxp", "ushu", "ushb", "uclg", "uclr", "uclb", "uubs", "ucua", "uslz", "uver", "uaap", "uerd", "upru", "ushh", "ushw", "ushx", "ushy", "umxr", "uani", "ushr", "ua2m", "ghk1", "gnam", "gtp1", "gub1", "gar1", "gbpx", "gbpy" };
-            var objectDataCollection = map.GetObjectDataCollection_War3Net();
-            foreach ((var dataType, var objectData) in objectDataCollection)
-            {
-                foreach (var data in objectData.CoreData.OriginalOverrides)
-                {
-                    var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
-                    var modifications = data.Modifications;
-                    foreach (var modification in modifications)
-                    {
-                        if (supportedFourCCAttributes.Contains(modification.ToString()) && modification.Value is string)
-                        {
-                            modificationsToMove.Add(modification);
-                        }
-                    }
-                    data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
-                    var skinData = objectData.SkinData.OriginalOverrides.FirstOrDefault(x => x.ToString() == data.ToString());
-                    if (skinData == null)
-                    {
-                        skinData = ObjectEditor.GetEmptyObjectModificationWrapper(dataType);
-                        skinData.OldId = data.OldId;
-                        skinData.NewId = data.NewId;
-                        skinData.Unk = data.Unk;
-                        objectData.SkinData.OriginalOverrides = objectData.SkinData.OriginalOverrides.Concat(new[] { skinData }).ToList().AsReadOnly();
-                    }
-                    skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
-                }
-
-                foreach (var data in objectData.CoreData.CustomOverrides)
-                {
-                    var modificationsToMove = new List<War3NetObjectDataModificationWrapper>();
-                    var modifications = data.Modifications;
-                    foreach (var modification in modifications)
-                    {
-                        if (supportedFourCCAttributes.Contains(modification.ToString()) && modification.Value is string)
-                        {
-                            modificationsToMove.Add(modification);
-                        }
-                    }
-                    data.Modifications = data.Modifications.Except(modificationsToMove).ToList().AsReadOnly();
-                    var skinData = objectData.SkinData.CustomOverrides.FirstOrDefault(x => x.ToString() == data.ToString());
-                    if (skinData == null)
-                    {
-                        skinData = ObjectEditor.GetEmptyObjectModificationWrapper(dataType);
-                        skinData.OldId = data.OldId;
-                        skinData.NewId = data.NewId;
-                        skinData.Unk = data.Unk;
-                        objectData.SkinData.CustomOverrides = objectData.SkinData.CustomOverrides.Concat(new[] { skinData }).ToList().AsReadOnly();
-                    }
-                    skinData.Modifications = skinData.Modifications.Concat(modificationsToMove).ToList().AsReadOnly();
-                }
-            }
-
-            var mapFiles = map.GetAllFiles();
-            foreach (var file in mapFiles)
-            {
-                SaveDecompiledArchiveFile(file);
-            }
-
-            try
-            {
-                File.Delete(tempMapFileName);
-            }
-            catch { }
-        }
-
         protected void UpgradeToLatestFileFormats()
         {
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
@@ -1367,54 +1277,6 @@ namespace WC3MapDeprotector
                 }
             }
 
-            var mapFiles = map.GetAllFiles();
-            foreach (var file in mapFiles)
-            {
-                SaveDecompiledArchiveFile(file);
-            }
-
-            try
-            {
-                File.Delete(tempMapFileName);
-            }
-            catch { }
-        }
-
-        protected void MoveObjectEditorStringsToTriggerStrings()
-        {
-            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
-            var tempMapFileName = Path.Combine(WorkingFolderPath, "triggerStrings.w3x");
-            BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
-            var map = Map.Open(tempMapFileName);
-
-            const string TRIGSTR_ = "TRIGSTR_";
-            var triggerStringSupportedObjectAttributeFourCCs = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "gef1", "gcls", "gef2", "gef3", "gef4", "ahky", "anam", "aret", "arhk", "arut", "atp1", "aub1", "auhk", "aut1", "auu1", "ftip", "fube", "fnam", "bnam", "bsuf", "ides", "unam", "utip", "utub", "uhot", "uawt", "upro", "utpr", "ucun", "ucut", "ghk1", "gnam", "gtp1", "gub1" };
-            
-            map.TriggerStrings ??= new TriggerStrings();
-            var maxTriggerKey = map.TriggerStrings.Strings.Select(x => x.Key).Concat(new uint[] { 0 }).Max();
-            var objectDataCollection = map.GetObjectDataCollection_War3Net();
-            foreach ((var dataType, var objectData) in objectDataCollection)
-            {
-                var combinedObjectData = objectData.OriginalOverrides.Concat(objectData.CustomOverrides).ToList();
-                foreach (var data in combinedObjectData)
-                {
-                    foreach (var modification in data.Modifications)
-                    {
-                        if (triggerStringSupportedObjectAttributeFourCCs.Contains(modification.ToString()) && modification.Value is string valueString && valueString.Length > 1)
-                        {
-                            if (!valueString.StartsWith(TRIGSTR_, StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                maxTriggerKey++;
-                                var triggerString = new TriggerString() { Key = maxTriggerKey, Value = valueString };
-                                modification.SetValue(TRIGSTR_ + maxTriggerKey, War3Net.Build.Object.ObjectDataType.String);
-                                map.TriggerStrings.Strings.Add(triggerString);
-                            }
-                        }
-                    }
-                }
-            }
-
-            AnnotateMap(map);
             var mapFiles = map.GetAllFiles();
             foreach (var file in mapFiles)
             {
