@@ -394,11 +394,20 @@ namespace WC3MapDeprotector
 
         public void RepairInvalidData()
         {
+            ForcePlaceableInEditor();
             AddDefaultValuesToCustomObjects();
             FillGapsInPerLevelValuesForCustomObjects();
             RemoveInvalidParents();
             FixMissingParents();
             RemoveSpecificPropertiesWithWrongParent();
+        }
+
+        protected void ForcePlaceableInEditor()
+        {
+            foreach (var objectData in _objectDataCollection_overrides.Where(x => x.Value.ObjectDataType == ObjectDataType.Unit))
+            {
+                objectData.Value.SetValue("uine", 1);
+            }
         }
 
         protected void RemoveSpecificPropertiesWithWrongParent()
