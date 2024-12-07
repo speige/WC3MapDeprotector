@@ -10,7 +10,10 @@ namespace WC3MapDeprotector
         static StormLibrary()
         {
             string directoryName = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
-            File.Copy(Path.Combine(directoryName, Environment.Is64BitProcess ? "StormLib_x64.dll" : "StormLib_x86.dll"), Path.Combine(directoryName, STORMLIB), true);
+            if (!File.Exists(Path.Combine(directoryName, STORMLIB)))
+            {
+                File.Copy(Path.Combine(directoryName, Environment.Is64BitProcess ? "StormLib_x64.dll" : "StormLib_x86.dll"), Path.Combine(directoryName, STORMLIB), false);
+            }
         }
 
         [DllImport("kernel32.dll")]

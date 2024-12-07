@@ -470,7 +470,6 @@ namespace WC3MapDeprotector
             lines.Insert(startGlobalsLineIdx + userGlobalLines.Count + 2, "endglobals");
             jassScript = new StringBuilder().AppendJoin("\r\n", lines.ToArray()).ToString();
 
-
             var triggerItemIdx = 0;
             var rootCategoryItemIdx = triggerItemIdx++;
             var triggersCategoryItemIdx = triggerItemIdx++;
