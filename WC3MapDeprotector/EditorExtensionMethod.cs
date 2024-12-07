@@ -357,13 +357,12 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        public static void SetTriggersFromRawJass(this ScriptMetaData result, Map map, IndexedJassCompilationUnitSyntax jassParsed, DecompilationMetaData decompilationMetaData)
+        public static void SetTriggersFromDecompiledJass(this ScriptMetaData result, Map map, JassCompilationUnitSyntax jassParsed, DecompilationMetaData decompilationMetaData)
         {
             //todo: review all non-commented lines in _old functions after deprotection to find pieces I'm not decompiling (example: "CreateAllDestructables", "InitTechTree")
 
-            //todo: comment out decompiled auto-generated functions (CreateAllUnits/etc)
-
-            var astNodeToParent = JassAST_CreateChildToParentMapping(jassParsed.CompilationUnit);
+            var commentReplacements = new List<(object parent, object originalStatement, object commentedStatement)>();
+            var astNodeToParent = JassAST_CreateChildToParentMapping(jassParsed);
             var allDecompiledFromStatements = decompilationMetaData.AllMetaData.SelectMany(x => x.DecompiledFromStatements).ToList();
             foreach (var statement in allDecompiledFromStatements)
             {
@@ -372,17 +371,29 @@ namespace WC3MapDeprotector
                     continue;
                 }
 
+
                 using (var writer = new StringWriter())
                 {
                     var renderer = new JassRenderer(writer);
                     renderer.Render(statement);
                     var statementAsString = writer.GetStringBuilder().ToString();
 
-                    JassASTNode_ReplaceChild(parent, statement, new JassCommentSyntax(statementAsString));
+                    commentReplacements.Add((parent, statement, new JassCommentSyntax(statementAsString)));
                 }
             }
 
-            var jassScript = jassParsed.CompilationUnit.RenderScriptAsString();
+            //Note: We compare objects by-reference between JassCompilationUnitSyntax & DecompilationMetaData to find statements to comment, so we can't clone JassCompilationUnitSyntax. By not cloning, we break the original JassCompilationUnitSyntax when adding comments, so we revert the changes afterwards.
+            foreach (var replacement in commentReplacements)
+            {
+                JassASTNode_ReplaceChild(replacement.parent, replacement.originalStatement, replacement.commentedStatement);
+            }
+
+            var jassScript = jassParsed.RenderScriptAsString();
+
+            foreach (var replacement in commentReplacements)
+            {
+                JassASTNode_ReplaceChild(replacement.parent, replacement.commentedStatement, replacement.originalStatement);
+            }
 
             var lines = jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
 

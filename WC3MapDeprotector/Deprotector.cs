@@ -1935,7 +1935,7 @@ namespace WC3MapDeprotector
             }
             catch { }
 
-            result.SetTriggersFromRawJass(map, jassParsed, decompilationMetaData);
+            result.SetTriggersFromDecompiledJass(map, jassParsed.CompilationUnit, decompilationMetaData);
             return result;
         }
 
