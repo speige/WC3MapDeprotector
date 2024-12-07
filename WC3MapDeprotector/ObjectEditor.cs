@@ -394,7 +394,6 @@ namespace WC3MapDeprotector
 
         public void RepairInvalidData()
         {
-            ForcePlaceableInEditor();
             AddDefaultValuesToCustomObjects();
             FillGapsInPerLevelValuesForCustomObjects();
             RemoveInvalidParents();
@@ -402,7 +401,7 @@ namespace WC3MapDeprotector
             RemoveSpecificPropertiesWithWrongParent();
         }
 
-        protected void ForcePlaceableInEditor()
+        public void ForceUnitsPlaceableInEditor()
         {
             foreach (var objectData in _objectDataCollection_overrides.Where(x => x.Value.ObjectDataType == ObjectDataType.Unit))
             {

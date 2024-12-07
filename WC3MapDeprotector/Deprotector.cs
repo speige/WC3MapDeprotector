@@ -495,12 +495,10 @@ namespace WC3MapDeprotector
                     DebugSettings.Warn("Can't open map object editor files");
                 }
 
-                _objectEditor.ImportObjectDataCollectionFromMap(map_ObjectDataCollectionOnly);
-
                 var slkFiles = Directory.GetFiles(DiscoveredFilesPath, "*.slk", SearchOption.AllDirectories).ToList();
                 var txtFiles = Directory.GetFiles(DiscoveredFilesPath, "*.txt", SearchOption.AllDirectories).ToList();
 
-                foreach (var fileName in slkFiles.Concat(txtFiles))
+                foreach (var fileName in slkFiles.Concat(txtFiles).ToList())
                 {
                     /*
                         NOTE: TXT files must come last for proper merging of ObjectData
@@ -521,6 +519,10 @@ namespace WC3MapDeprotector
                 }
                 _logEvent($"Cleaning up imported ObjectEditor data");
                 _objectEditor.RepairInvalidData();
+
+                _objectEditor.ImportObjectDataCollectionFromMap(map_ObjectDataCollectionOnly);
+                _objectEditor.ForceUnitsPlaceableInEditor();
+
                 _logEvent($"Exporting ObjectEditor data to WorldEditor binary format");
                 _objectEditor.SetWar3NetObjectFiles(map_ObjectDataCollectionOnly);
 
