@@ -1761,66 +1761,6 @@ namespace WC3MapDeprotector
             return DeObfuscateFourCC(jassScript, "FourCC(\"", "\")");
         }
 
-        protected List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out List<string> inlinedFunctions)
-        {
-            var outInlinedFunctions = new List<string>();
-
-            if (!indexedCompilationUnit.IndexedFunctions.TryGetValue(startingFunctionName, out var function))
-            {
-                inlinedFunctions = outInlinedFunctions;
-                return new List<IStatementSyntax>();
-            }
-
-            var result = function.Body.Statements.DFS_Flatten(x =>
-            {
-                if (x is JassFunctionReferenceExpressionSyntax functionReference)
-                {
-                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(functionReference.IdentifierName.Name, out var nestedFunctionCall))
-                    {
-                        outInlinedFunctions.Add(functionReference.IdentifierName.Name);
-                        return nestedFunctionCall.Body.Statements;
-                    }
-                }
-                else if (x is JassCallStatementSyntax callStatement)
-                {
-                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(callStatement.IdentifierName.Name, out var nestedFunctionCall))
-                    {
-                        outInlinedFunctions.Add(callStatement.IdentifierName.Name);
-                        return nestedFunctionCall.Body.Statements;
-                    }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "ExecuteFunc", StringComparison.InvariantCultureIgnoreCase) && callStatement.Arguments.Arguments.FirstOrDefault() is JassStringLiteralExpressionSyntax execFunctionName)
-                    {
-                        if (indexedCompilationUnit.IndexedFunctions.TryGetValue(execFunctionName.Value, out var execNestedFunctionCall))
-                        {
-                            outInlinedFunctions.Add(execFunctionName.Value);
-                            return execNestedFunctionCall.Body.Statements;
-                        }
-                    }
-                }
-                else if (x is JassIfStatementSyntax ifStatement)
-                {
-                    return ifStatement.Body.Statements;
-                }
-                else if (x is JassElseIfClauseSyntax elseIfClause)
-                {
-                    return elseIfClause.Body.Statements;
-                }
-                else if (x is JassElseClauseSyntax elseClause)
-                {
-                    return elseClause.Body.Statements;
-                }
-                else if (x is JassLoopStatementSyntax loop)
-                {
-                    return loop.Body.Statements;
-                }
-
-                return null;
-            }).ToList();
-
-            inlinedFunctions = outInlinedFunctions;
-            return result;
-        }
-
         protected JassCompilationUnitSyntax ParseJassScript(string jassScript)
         {
             return JassSyntaxFactory.ParseCompilationUnit(jassScript);
@@ -1833,7 +1773,7 @@ namespace WC3MapDeprotector
             var globals = jassParsed.CompilationUnit.Declarations.OfType<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
 
             var probablyUserDefined = new HashSet<string>();
-            var mainStatements = ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions);
+            var mainStatements = JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions);
             var initBlizzardIndex = mainStatements.FindIndex(x => x is JassCallStatementSyntax callStatement && string.Equals(callStatement.IdentifierName.Name, "InitBlizzard", StringComparison.InvariantCultureIgnoreCase));
 
             //NOTE: Searches for contents of InitGlobals() by structure so it can still work on obfuscated code
@@ -1895,8 +1835,8 @@ namespace WC3MapDeprotector
             decompilationMetaData = new DecompilationMetaData();
 
             var statements = new List<IStatementSyntax>();
-            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
-            statements.AddRange(ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
+            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
+            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
             var allInlinedCodeFromConfigAndMain = statements.ToImmutableArray();
 
             var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
@@ -2384,9 +2324,9 @@ namespace WC3MapDeprotector
 
             var parsed = ParseLuaScript(luaScript);
             var functions = parsed.Body.Where(x => x.Type == LuaASTType.FunctionDeclaration).ToDictionary(x => x.Identifier.Name, x => x); //Note: only top-level functions, not functions defined inside another function
-            var flattened = parsed.Body.DFS_Flatten(x => x.AllNodes).ToList();
+            var flattened = parsed.Body.DFS_Flatten_Lazy(x => x.AllNodes).ToList();
             var functionCallExpressionLargestArgumentCount = flattened.Where(x => x.Type == LuaASTType.CallExpression && x.Base.Name != null).GroupBy(x => x.Base.Name).ToDictionary(x => x.Key, x => x.Max(y => y.Arguments.Length));
-            var noParameterOrLocalVariableFunctions = functions.Where(x => functionCallExpressionLargestArgumentCount.TryGetValue(x.Key, out var parameterCount) && parameterCount == 0 && x.Value.Body.DFS_Flatten(x => x.AllNodes).Where(x => x.Type == LuaASTType.LocalStatement).Count() == 0).Select(x => x.Key).ToList();
+            var noParameterOrLocalVariableFunctions = functions.Where(x => functionCallExpressionLargestArgumentCount.TryGetValue(x.Key, out var parameterCount) && parameterCount == 0 && x.Value.Body.DFS_Flatten_Lazy(x => x.AllNodes).Where(x => x.Type == LuaASTType.LocalStatement).Count() == 0).Select(x => x.Key).ToList();
             //todo: still allow inline if local variable is not used or parameters are not used or global function defined inside another function
             var newGlobalBody = parsed.Body.ToList();
             do
@@ -2404,7 +2344,7 @@ namespace WC3MapDeprotector
                     LuaASTNode executionParent = null;
                     foreach (var executionCheck in functions.Where(x => x.Key != functionName))
                     {
-                        var executionCount = executionCheck.Value.DFS_Flatten(x => x.AllNodes).Count(x => x.Type == LuaASTType.CallExpression && x.Base.Name == functionName);
+                        var executionCount = executionCheck.Value.DFS_Flatten_Lazy(x => x.AllNodes).Count(x => x.Type == LuaASTType.CallExpression && x.Base.Name == functionName);
                         if (executionCount >= 1)
                         {
                             if (executionParent != null || executionCount > 1)

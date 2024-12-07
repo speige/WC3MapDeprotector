@@ -154,7 +154,7 @@ namespace WC3MapDeprotector
 
         public static List<object> GetAllChildSyntaxNodes_Recursive(object syntaxNode)
         {
-            return syntaxNode.DFS_Flatten(GetAllChildSyntaxNodes).ToList();
+            return syntaxNode.DFS_Flatten_Lazy(GetAllChildSyntaxNodes).ToList();
         }
 
         public static List<MpqKnownFile> GetObjectDataFiles(this Map map, bool ignoreExceptions = false)

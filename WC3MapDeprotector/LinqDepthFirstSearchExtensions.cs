@@ -2,27 +2,27 @@
 {
     public static class LinqDepthFirstSearchExtensions
     {
-        private static IEnumerable<T> AsEnumerable<T>(T item)
+        private static IEnumerable<T> AsEnumerable_Lazy<T>(T item)
         {
             yield return item;
         }
 
-        public static IEnumerable<T> DFS_Flatten<T>(this T source, Func<T, IEnumerable<T>> getChildren) where T : class
+        public static IEnumerable<T> DFS_Flatten_Lazy<T>(this T source, Func<T, IEnumerable<T>> getChildren) where T : class
         {
-            return AsEnumerable(source).DFS_Flatten(getChildren);
+            return AsEnumerable_Lazy(source).DFS_Flatten_Lazy(getChildren);
         }
 
-        public static IEnumerable<T> DFS_Flatten<T>(this T source, Func<T, T> getChild) where T : class
+        public static IEnumerable<T> DFS_Flatten_Lazy<T>(this T source, Func<T, T> getChild) where T : class
         {
-            return AsEnumerable(source).DFS_Flatten(getChild);
+            return AsEnumerable_Lazy(source).DFS_Flatten_Lazy(getChild);
         }
 
-        public static IEnumerable<T> DFS_Flatten<T>(this IEnumerable<T> source, Func<T, T> getChild) where T : class
+        public static IEnumerable<T> DFS_Flatten_Lazy<T>(this IEnumerable<T> source, Func<T, T> getChild) where T : class
         {
-            return source.DFS_Flatten(x => AsEnumerable(getChild(x)));
+            return source.DFS_Flatten_Lazy(x => AsEnumerable_Lazy(getChild(x)));
         }
 
-        public static IEnumerable<T> DFS_Flatten<T>(this IEnumerable<T> source, Func<T, IEnumerable<T>> getChildren) where T : class
+        public static IEnumerable<T> DFS_Flatten_Lazy<T>(this IEnumerable<T> source, Func<T, IEnumerable<T>> getChildren) where T : class
         {
             if (source == null)
             {

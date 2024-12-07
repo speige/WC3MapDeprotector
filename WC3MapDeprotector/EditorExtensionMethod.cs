@@ -1,6 +1,7 @@
 ﻿using CSharpLua;
 using ICSharpCode.Decompiler.Util;
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using War3Net.Build;
@@ -11,6 +12,7 @@ using War3Net.Build.Info;
 using War3Net.Build.Script;
 using War3Net.Build.Widget;
 using War3Net.CodeAnalysis.Decompilers;
+using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using Camera = War3Net.Build.Environment.Camera;
@@ -18,17 +20,15 @@ using Region = War3Net.Build.Environment.Region;
 
 namespace WC3MapDeprotector
 {
+
     public class IndexedJassCompilationUnitSyntax
     {
         public JassCompilationUnitSyntax CompilationUnit { get; }
         public Dictionary<string, JassFunctionDeclarationSyntax> IndexedFunctions { get; }
-        //public Dictionary<object, object> ASTNodeToParent { get; }
-
         public IndexedJassCompilationUnitSyntax(JassCompilationUnitSyntax compilationUnit)
         {
             CompilationUnit = compilationUnit;
             IndexedFunctions = CompilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
-            //ASTNodeToParent = ;
         }
     }
 
@@ -38,6 +38,31 @@ namespace WC3MapDeprotector
         public Dictionary<Camera, ObjectManagerDecompilationMetaData> Cameras { get; set; }
         public Dictionary<Sound, ObjectManagerDecompilationMetaData> Sounds { get; set; }
         public Dictionary<Region, ObjectManagerDecompilationMetaData> Regions { get; set; }
+
+        public List<ObjectManagerDecompilationMetaData> AllMetaData
+        {
+            get
+            {
+                var result = new List<ObjectManagerDecompilationMetaData>();
+                if (Units?.Values?.Any() == true)
+                {
+                    result.AddRange(Units.Values);
+                }
+                if (Cameras?.Values?.Any() == true)
+                {
+                    result.AddRange(Cameras.Values);
+                }
+                if (Sounds?.Values?.Any() == true)
+                {
+                    result.AddRange(Sounds.Values);
+                }
+                if (Regions?.Values?.Any() == true)
+                {
+                    result.AddRange(Regions.Values);
+                }
+                return result;
+            }
+        }
     }
 
     public class ScriptMetaData
@@ -91,6 +116,7 @@ namespace WC3MapDeprotector
         }
 
         private static readonly HashSet<string> _nativeEditorFunctions;
+        private static readonly Dictionary<Type, List<MemberInfo>> _jassParserASTNodeChildren;
         static JassTriggerExtensions()
         {
             _nativeEditorFunctions = new HashSet<string>() { "config", "main", "CreateAllUnits", "CreateAllItems", "CreateNeutralPassiveBuildings", "CreateNeutralHostileBuildings", "CreatePlayerBuildings", "CreatePlayerUnits", "InitCustomPlayerSlots", "InitGlobals", "InitCustomTriggers", "RunInitializationTriggers", "CreateRegions", "CreateCameras", "InitSounds", "InitCustomTeams", "InitAllyPriorities", "CreateNeutralPassive", "CreateNeutralHostile", "InitUpgrades", "InitTechTree", "CreateAllDestructables", "InitBlizzard" };
@@ -101,6 +127,28 @@ namespace WC3MapDeprotector
                 _nativeEditorFunctions.Add($"CreateBuildingsForPlayer{playerIdx}");
                 _nativeEditorFunctions.Add($"CreateUnitsForPlayer{playerIdx}");
             }
+
+            var jassParserSyntaxTypes = new HashSet<Type>(typeof(JassCompilationUnitSyntax).Assembly.GetTypes().Where(x => x.Namespace.Equals("War3Net.CodeAnalysis.Jass.Syntax", StringComparison.InvariantCultureIgnoreCase)));
+            _jassParserASTNodeChildren = jassParserSyntaxTypes.ToDictionary(x => x, astNodeType => astNodeType.GetMembers(BindingFlags.Public | BindingFlags.Instance).Where(property =>
+            {
+                var memberType = (property as FieldInfo)?.FieldType ?? (property as PropertyInfo)?.PropertyType;
+                if (memberType == null)
+                {
+                    return false;
+                }
+
+                if (jassParserSyntaxTypes.Contains(memberType))
+                {
+                    return true;
+                }
+
+                if (memberType.IsGenericType && memberType.GenericTypeArguments.Any(x => jassParserSyntaxTypes.Contains(x)))
+                {
+                    return true;
+                }
+
+                return false;
+            }).ToList());
         }
 
         [GeneratedRegex(@"^\s*function\s+(\w+)\s+takes", RegexOptions.IgnoreCase)]
@@ -112,11 +160,227 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"\s*(constant\s*)?(\S+)\s+(array\s*)?([^ \t=]+)\s*(=)?\s*(.*)", RegexOptions.IgnoreCase)]
         public static partial Regex Regex_ParseJassVariableDeclaration();
 
+        public static Dictionary<object, object> JassAST_CreateChildToParentMapping(JassCompilationUnitSyntax compilationUnit)
+        {
+            var result = new Dictionary<object, object>();
+            JassAST_RecurseChildren(compilationUnit.Declarations.Cast<object>().ToList(), x =>
+            {
+                result[x.child] = x.parent;
+            });
+            return result;
+        }
+
+        private static List<object> JassASTNode_GetChildren(object parent_jassASTNode)
+        {
+            var parentType = parent_jassASTNode.GetType();
+
+            if (!_jassParserASTNodeChildren.TryGetValue(parentType, out var childrenProperties))
+            {
+                return null;
+            }
+
+            return childrenProperties.SelectMany(y =>
+            {
+                object value = null;
+                if (y is PropertyInfo propertyInfo)
+                {
+                    value = propertyInfo.GetValue(parent_jassASTNode);
+                }
+                if (y is FieldInfo fieldInfo)
+                {
+                    value = fieldInfo.GetValue(parent_jassASTNode);
+                }
+
+                if (value is System.Collections.IList list)
+                {
+                    return list.Cast<object>();
+                }
+
+                return new object[] { value };
+            }).Where(x => x != null).ToList();
+        }
+
+        private static void JassASTNode_ReplaceChild(object parent_jassASTNode, object oldChild_jassASTNode, object replacementChild_jassASTNode)
+        {
+            var parentType = parent_jassASTNode.GetType();
+
+            if (!_jassParserASTNodeChildren.TryGetValue(parentType, out var childrenProperties))
+            {
+                return;
+            }
+
+            foreach (var childProperty in childrenProperties)
+            {
+                object value = null;
+                if (childProperty is PropertyInfo propertyInfo)
+                {
+                    value = propertyInfo.GetValue(parent_jassASTNode);
+                    if (value == oldChild_jassASTNode)
+                    {
+                        propertyInfo.SetValue(parent_jassASTNode, replacementChild_jassASTNode);
+                    }
+                }
+                if (childProperty is FieldInfo fieldInfo)
+                {
+                    value = fieldInfo.GetValue(parent_jassASTNode);
+                    if (value == oldChild_jassASTNode)
+                    {
+                        fieldInfo.SetValue(parent_jassASTNode, replacementChild_jassASTNode);
+                    }
+                }
+
+                if (value is System.Collections.IList list)
+                {
+                    var valueType = value.GetType();
+                    var isImmutable = valueType.Name.StartsWith("Immutable") || valueType.Name.StartsWith("ReadOnly");
+                    if (isImmutable)
+                    {
+                        list = list.Cast<object>().ToList();
+                    }
+
+                    var oldIndex = list.IndexOf(oldChild_jassASTNode);
+                    if (oldIndex != -1)
+                    {
+                        list.RemoveAt(oldIndex);
+                        list.Insert(oldIndex, replacementChild_jassASTNode);
+                    }
+
+                    if (isImmutable)
+                    {
+                        if (valueType.IsGenericType && valueType.Name.StartsWith(nameof(ImmutableArray) + "`"))
+                        {
+                            var childGenericType = valueType.GenericTypeArguments[0];
+                            var genericList = list.ToGenericListOfType(childGenericType);
+                            var methodInfo_toImmutableArray = typeof(ImmutableArray).GetMethods(BindingFlags.Public | BindingFlags.Static).First(x => x.Name == nameof(ImmutableArray.ToImmutableArray) && x.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>)).MakeGenericMethod(childGenericType);
+                            var immutableArray = methodInfo_toImmutableArray.Invoke(null, new[] { genericList });
+
+                            //var asEnumerableMethod = typeof(Enumerable).GetMethod(nameof(Enumerable.AsEnumerable)).MakeGenericMethod(childGenericType);
+                            //var immutableArray = methodInfo_toImmutableArray.Invoke(null, new[] { asEnumerableMethod.Invoke(null, new[] { genericList }) });
+
+                            if (childProperty is PropertyInfo listPropertyInfo)
+                            {
+                                listPropertyInfo.SetValue(parent_jassASTNode, immutableArray);
+                            }
+                            if (childProperty is FieldInfo listFieldInfo)
+                            {
+                                listFieldInfo.SetValue(parent_jassASTNode, immutableArray);
+                            }
+                        }
+                        else
+                        {
+                            DebugSettings.Warn("Unknown readonly type");
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void JassAST_RecurseChildren(List<object> jassParserASTNodes, Action<(object child, object parent)> action)
+        {
+            foreach (var node in jassParserASTNodes)
+            {
+                var lazy = node.DFS_Flatten_Lazy(parent =>
+                {
+                    var children = JassASTNode_GetChildren(parent);
+                    if (children != null)
+                    {
+                        foreach (var child in children)
+                        {
+                            action((child, parent));
+                        }
+                    }
+
+                    return children;
+                });
+
+                var _ = lazy.ToList(); //Force materialization because we only need side-effect & not result itself
+            }
+        }
+
+        public static List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out List<string> inlinedFunctions)
+        {
+            var inlinedFunctions_temp = new List<string>();
+
+            if (!indexedCompilationUnit.IndexedFunctions.TryGetValue(startingFunctionName, out var function))
+            {
+                inlinedFunctions = inlinedFunctions_temp;
+                return new List<IStatementSyntax>();
+            }
+
+            var result = function.Body.Statements.DFS_Flatten_Lazy(x =>
+            {
+                if (x is JassFunctionReferenceExpressionSyntax functionReference)
+                {
+                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(functionReference.IdentifierName.Name, out var nestedFunctionCall))
+                    {
+                        inlinedFunctions_temp.Add(functionReference.IdentifierName.Name);
+                        return nestedFunctionCall.Body.Statements;
+                    }
+                }
+                else if (x is JassCallStatementSyntax callStatement)
+                {
+                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(callStatement.IdentifierName.Name, out var nestedFunctionCall))
+                    {
+                        inlinedFunctions_temp.Add(callStatement.IdentifierName.Name);
+                        return nestedFunctionCall.Body.Statements;
+                    }
+                    else if (string.Equals(callStatement.IdentifierName.Name, "ExecuteFunc", StringComparison.InvariantCultureIgnoreCase) && callStatement.Arguments.Arguments.FirstOrDefault() is JassStringLiteralExpressionSyntax execFunctionName)
+                    {
+                        if (indexedCompilationUnit.IndexedFunctions.TryGetValue(execFunctionName.Value, out var execNestedFunctionCall))
+                        {
+                            inlinedFunctions_temp.Add(execFunctionName.Value);
+                            return execNestedFunctionCall.Body.Statements;
+                        }
+                    }
+                }
+                else if (x is JassIfStatementSyntax ifStatement)
+                {
+                    return ifStatement.Body.Statements;
+                }
+                else if (x is JassElseIfClauseSyntax elseIfClause)
+                {
+                    return elseIfClause.Body.Statements;
+                }
+                else if (x is JassElseClauseSyntax elseClause)
+                {
+                    return elseClause.Body.Statements;
+                }
+                else if (x is JassLoopStatementSyntax loop)
+                {
+                    return loop.Body.Statements;
+                }
+
+                return null;
+            }).ToList();
+
+            inlinedFunctions = inlinedFunctions_temp;
+            return result;
+        }
+
         public static void SetTriggersFromRawJass(this ScriptMetaData result, Map map, IndexedJassCompilationUnitSyntax jassParsed, DecompilationMetaData decompilationMetaData)
         {
             //todo: review all non-commented lines in _old functions after deprotection to find pieces I'm not decompiling (example: "CreateAllDestructables", "InitTechTree")
 
             //todo: comment out decompiled auto-generated functions (CreateAllUnits/etc)
+
+            var astNodeToParent = JassAST_CreateChildToParentMapping(jassParsed.CompilationUnit);
+            var allDecompiledFromStatements = decompilationMetaData.AllMetaData.SelectMany(x => x.DecompiledFromStatements).ToList();
+            foreach (var statement in allDecompiledFromStatements)
+            {
+                if (!astNodeToParent.TryGetValue(statement, out var parent))
+                {
+                    continue;
+                }
+
+                using (var writer = new StringWriter())
+                {
+                    var renderer = new JassRenderer(writer);
+                    renderer.Render(statement);
+                    var statementAsString = writer.GetStringBuilder().ToString();
+
+                    JassASTNode_ReplaceChild(parent, statement, new JassCommentSyntax(statementAsString));
+                }
+            }
 
             var jassScript = jassParsed.CompilationUnit.RenderScriptAsString();
 
