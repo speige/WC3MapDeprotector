@@ -131,7 +131,7 @@ namespace WC3MapDeprotector
                 if (fdInputFile.FileName.EndsWith(".w3n", StringComparison.InvariantCultureIgnoreCase))
                 {
                     tbInputFile.Text = "";
-                    MessageBox.Show("w3n file format is a custom campaign file with multiple missions. You must split the files into separate w3x files first before running this tool. There are instructions in the help document.");
+                    MessageBox.Show("w3n file format is a custom campaign file with a separate embedded map file for each mission. You must split the files into separate w3x files first before running this tool. Please see \"Campaigns\" in Help document");
                     btnHelp_Click(sender, e);
                     return;
                 }

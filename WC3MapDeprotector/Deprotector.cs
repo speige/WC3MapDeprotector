@@ -414,8 +414,7 @@ namespace WC3MapDeprotector
             Directory.CreateDirectory(Path.GetDirectoryName(_outMapFile));
 
             _deprotectionResult = new DeprotectionResult();
-            _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. If objects are missing or script has compilation errors, you will need to fix these by hand. You can get help from my YouTube channel or report defects by clicking the bug icon.");
-            _deprotectionResult.WarningMessages.Add($"NOTE: World Editor has SD & HD modes. HD is prone to crashing and should not be used, it's find to use HD in game itself. The setting can be changed in WorldEditor.exe via File/Preferences/AssetMode");
+            _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. You will need to make fixes manually. Click the \"Help\" button for instructions. You can also get help from my YouTube channel or report defects by clicking the \"Bug Report\" button.");
 
             var blankMapFilesZip = Path.Combine(ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip");
             if (!Directory.Exists(BlankMapFilesPath) && File.Exists(blankMapFilesZip))
@@ -713,7 +712,7 @@ namespace WC3MapDeprotector
 
                     if (string.IsNullOrWhiteSpace(predictedExtension))
                     {
-                        _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. If game can't read file, you may need to discover the real file name using 'W3X Name Scanner' tool in MPQEditor.exe");
+                        _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. See \"Unknown Files\" in Help document");
                     }
                 }
 
@@ -729,14 +728,12 @@ namespace WC3MapDeprotector
 
                 if (inMPQArchive.FakeFileCount > 0)
                 {
-                    _deprotectionResult.WarningMessages.Add($"WARNING: MPQ Archive had some fake files and/or fake filenames. Some legimitimate files may have failed to extract or been extracted with the wrong file names.");
+                    _deprotectionResult.WarningMessages.Add($"WARNING: MPQ Archive had some fake files and/or fake filenames. See \"Unknown Files\" in Help document");
                 }
                 _deprotectionResult.UnknownFileCount = inMPQArchive.UnknownFileCount;
                 if (_deprotectionResult.UnknownFileCount > 0)
                 {
-                    _deprotectionResult.WarningMessages.Add($"WARNING: {_deprotectionResult.UnknownFileCount} files have unresolved names");
-                    _deprotectionResult.WarningMessages.Add("These files will be lost and deprotected map may be incomplete or even unusable!");
-                    _deprotectionResult.WarningMessages.Add("You can try fixing by searching online for listfile.txt, using 'Brute force unknown files (SLOW)' option, or by using 'W3X Name Scanner' tool in MPQEditor.exe");
+                    _deprotectionResult.WarningMessages.Add($"WARNING: {_deprotectionResult.UnknownFileCount} files have unresolved names. See \"Unknown Files\" in Help document");
                 }
             }
 
@@ -797,7 +794,7 @@ namespace WC3MapDeprotector
                     if (ReadAllText(scriptFile) != ReadAllText(basePathScriptFileName))
                     {
                         _deprotectionResult.CriticalWarningCount++;
-                        _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor or use MPQ tool to replace war3map.j or war3map.lua file");
+                        _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor.");
                         _deprotectionResult.WarningMessages.Add($"TempFilePath: {WorkingFolderPath}");
                     }
                 }
@@ -823,7 +820,7 @@ namespace WC3MapDeprotector
 
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
-                _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. It will open in the editor, but the render screen will be missing units/items/regions/cameras/sounds.");
+                _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. See \"Object Manager\" in Help document");
                 luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
                 var temporaryScriptMetaData = DecompileLuaScriptMetaData(luaScript);
                 if (scriptMetaData == null)
@@ -860,7 +857,7 @@ namespace WC3MapDeprotector
                 _deprotectionResult.CountOfProtectionsFound++;
                 File.Copy(Path.Combine(BlankMapFilesPath, "war3mapunits.doo"), Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"), true);
                 _deprotectionResult.CriticalWarningCount++;
-                _deprotectionResult.WarningMessages.Add("WARNING: war3mapunits.doo could not be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                _deprotectionResult.WarningMessages.Add("WARNING: war3mapunits.doo could not be recovered. See \"Object Manager\" in Help document");
             }
 
             if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.wtg")))
@@ -869,7 +866,8 @@ namespace WC3MapDeprotector
                 File.Copy(Path.Combine(BlankMapFilesPath, "war3map.wtg"), Path.Combine(DiscoveredFilesPath, "war3map.wtg"), true);
                 MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
                 _deprotectionResult.CriticalWarningCount++;
-                _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Map will still open in WorldEditor & run, but saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor.");
+                _deprotectionResult.WarningMessages.Add($"TempFilePath: {WorkingFolderPath}");
             }
 
 
@@ -914,7 +912,7 @@ namespace WC3MapDeprotector
             if (autoUpgradeError)
             {
                 _deprotectionResult.CriticalWarningCount++;
-                _deprotectionResult.WarningMessages.Add("WARNING: Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor, but not very likely.");
+                _deprotectionResult.WarningMessages.Add("WARNING: Failed to upgrade to latest reforged file format. Map may still load correctly in WorldEditor, but not very likely. Please click \"Bug Report\" and send me the map file to research");
             }
 
             AnnotateScriptFile();
@@ -922,11 +920,6 @@ namespace WC3MapDeprotector
             BuildW3X(_outMapFile, DiscoveredFilesPath, Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList());
 
             //todo: open final file in WorldEditor with "Local Files" to find remaining textures/3dModels?
-
-            _deprotectionResult.WarningMessages.Add("NOTE: You may need to fix script compiler errors before saving in world editor.");
-            _deprotectionResult.WarningMessages.Add("NOTE: Objects added directly to editor render screen, like units/doodads/items/etc are stored in an editor-only file called war3mapunits.doo and converted to script code on save. Protection deletes the editor file and obfuscates the script code to make it harder to recover. Decompiling the war3map script file back into war3mapunits.doo is not 100% perfect for most maps. Please do extensive testing to ensure everything still behaves correctly, you may have to do many manual bug fixes in world editor after deprotection.");
-            _deprotectionResult.WarningMessages.Add("NOTE: If deprotected map works correctly, but becomes corrupted after saving in world editor, it is due to editor-generated code in your war3map.j or war3map.lua. You should delete WorldEditor triggers, keep a backup of the war3map.j or war3map.lua script file, edit with visual studio code, and add it with MPQ tool after saving in WorldEditor. The downside to this approach is any objects you manually add to the rendering screen will get saved to the broken script file, so you will need to use a tool like WinMerge to diff the old/new script file and copy any editor-generated changes to your backup script file.");
-            _deprotectionResult.WarningMessages.Add("NOTE: Editor-generated functions in trigger window have been renamed with a suffix of _old. If saving in world editor causes game to become corrupted, check the _old functions to find code that may need to be moved to an initialization script.");
 
             _deprotectionResult.WarningMessages = _deprotectionResult.WarningMessages.Distinct().ToList();
 
@@ -1920,7 +1913,7 @@ namespace WC3MapDeprotector
                     _logEvent("map units recovered");
                     if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
                     {
-                        _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. Map will still open in WorldEditor & run, but units will not be visible in WorldEditor rendering and saving in world editor will corrupt your war3map.j or war3map.lua script file.");
+                        _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. See \"Object Manager\" in Help document");
                     }
 
                     if (result.Units != null && decompilationMetaData.Units != null && result.Regions != null)

@@ -584,7 +584,7 @@ namespace WC3MapDeprotector
             _deprotectionResult = deprotectionResult;
             if (!StormLibrary.SFileOpenArchive(mpqFileName, 0, StormLibrary.SFileOpenArchiveFlags.AccessReadOnly, out _archiveHandle))
             {
-                throw new Exception("Unable to open MPQ Archive");
+                throw new Exception("Unable to open MPQ Archive. File may be corrupt or locked by another program.");
             }
 
             _logEvent("Opening MPQ Archive");
