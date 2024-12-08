@@ -1,10 +1,8 @@
 ﻿using CSharpLua;
-using ICSharpCode.Decompiler.Util;
 using IniParser;
 using IniParser.Model.Configuration;
 using Microsoft.ClearScript.V8;
 using Newtonsoft.Json;
-using NuGet.Packaging;
 using System.Collections.Immutable;
 using System.IO.Compression;
 using System.Reflection;

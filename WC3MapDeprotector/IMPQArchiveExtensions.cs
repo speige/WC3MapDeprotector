@@ -1,6 +1,5 @@
 ﻿using CSharpLua;
 using NAudio.Wave;
-using NuGet.Packaging;
 
 namespace WC3MapDeprotector
 {

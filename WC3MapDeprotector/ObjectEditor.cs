@@ -6,7 +6,6 @@ using War3Net.Build.Object;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.CodeAnalysis.Jass.Extensions;
 using System.Text.RegularExpressions;
-using NuGet.Packaging;
 using ObjectData = WC3MapDeprotector.GenericObjectData<WC3MapDeprotector.FourCC>;
 
 namespace WC3MapDeprotector

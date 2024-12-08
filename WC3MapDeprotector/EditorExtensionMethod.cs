@@ -1,5 +1,4 @@
 ﻿using CSharpLua;
-using ICSharpCode.Decompiler.Util;
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Text;
