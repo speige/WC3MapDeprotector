@@ -124,6 +124,142 @@ namespace War3Net.CodeAnalysis.Decompilers
             return false;
         }
 
+        private UnitData ParseJassCallStatementSyntax(string localPlayerVariableName, int? localPlayerVariableValue, JassCallStatementSyntax callStatement)
+        {
+            if (string.Equals(callStatement.IdentifierName.Name, "CreateUnit", StringComparison.Ordinal))
+            {
+                if (callStatement.Arguments.Arguments.Length == 5 &&
+                    callStatement.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
+                    callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
+                    callStatement.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
+                    callStatement.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
+                    callStatement.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
+                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
+                {
+                    var unit = new UnitData
+                    {
+                        OwnerId = localPlayerVariableValue.Value,
+                        TypeId = unitId.InvertEndianness(),
+                        Position = new Vector3(x, y, 0f),
+                        Rotation = face * (MathF.PI / 180f),
+                        Scale = Vector3.One,
+                        Flags = 2,
+                        GoldAmount = 12500,
+                        HeroLevel = 1,
+                        CreationNumber = CreationNumber++
+                    };
+
+                    unit.SkinId = unit.TypeId;
+
+                    return unit;
+                }
+            }
+            else if (localPlayerVariableValue != null && string.Equals(callStatement.IdentifierName.Name, "BlzCreateUnitWithSkin", StringComparison.Ordinal))
+            {
+                if (callStatement.Arguments.Arguments.Length == 6 &&
+                    callStatement.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
+                    callStatement.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
+                    callStatement.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
+                    callStatement.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
+                    callStatement.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
+                    callStatement.Arguments.Arguments[5].TryGetIntegerExpressionValue_New(out var skinId) &&
+                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
+                {
+                    var unit = new UnitData
+                    {
+                        OwnerId = localPlayerVariableValue.Value,
+                        TypeId = unitId.InvertEndianness(),
+                        Position = new Vector3(x, y, 0f),
+                        Rotation = face * (MathF.PI / 180f),
+                        Scale = Vector3.One,
+                        SkinId = skinId.InvertEndianness(),
+                        Flags = 2,
+                        GoldAmount = 12500,
+                        HeroLevel = 1,
+                        CreationNumber = CreationNumber++
+                    };
+
+                    return unit;
+                }
+            }
+
+            return null;
+        }
+
+        private UnitData ParseJassInvocationExpressionSyntax(string localPlayerVariableName, int? localPlayerVariableValue, JassInvocationExpressionSyntax invocationExpression)
+        {
+            if (string.Equals(invocationExpression.IdentifierName.Name, "CreateUnit", StringComparison.Ordinal))
+            {
+                if (invocationExpression.Arguments.Arguments.Length == 5 &&
+                    invocationExpression.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
+                    invocationExpression.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
+                    invocationExpression.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
+                    invocationExpression.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
+                    invocationExpression.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
+                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
+                {
+                    var unit = new UnitData
+                    {
+                        OwnerId = localPlayerVariableValue.Value,
+                        TypeId = unitId.InvertEndianness(),
+                        Position = new Vector3(x, y, 0f),
+                        Rotation = face * (MathF.PI / 180f),
+                        Scale = Vector3.One,
+                        Flags = 2,
+                        GoldAmount = 12500,
+                        HeroLevel = 1,
+                        CreationNumber = CreationNumber++
+                    };
+
+                    unit.SkinId = unit.TypeId;
+
+                    return unit;
+                }
+            }
+            else if (localPlayerVariableValue != null && string.Equals(invocationExpression.IdentifierName.Name, "BlzCreateUnitWithSkin", StringComparison.Ordinal))
+            {
+                if (invocationExpression.Arguments.Arguments.Length == 6 &&
+                    invocationExpression.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
+                    invocationExpression.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
+                    invocationExpression.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
+                    invocationExpression.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
+                    invocationExpression.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
+                    invocationExpression.Arguments.Arguments[5].TryGetIntegerExpressionValue_New(out var skinId) &&
+                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
+                {
+                    var unit = new UnitData
+                    {
+                        OwnerId = localPlayerVariableValue.Value,
+                        TypeId = unitId.InvertEndianness(),
+                        Position = new Vector3(x, y, 0f),
+                        Rotation = face * (MathF.PI / 180f),
+                        Scale = Vector3.One,
+                        SkinId = skinId.InvertEndianness(),
+                        Flags = 2,
+                        GoldAmount = 12500,
+                        HeroLevel = 1,
+                        CreationNumber = CreationNumber++
+                    };
+
+                    return unit;
+                }
+            }
+            else if (string.Equals(invocationExpression.IdentifierName.Name, "CreateTrigger", StringComparison.Ordinal))
+            {
+                // TODO
+            }
+            else if (string.Equals(invocationExpression.IdentifierName.Name, "GetUnitState", StringComparison.Ordinal))
+            {
+                // TODO
+            }
+            else if (string.Equals(invocationExpression.IdentifierName.Name, "RandomDistChoose", StringComparison.Ordinal))
+            {
+                // TODO
+            }
+
+            return null;
+        }
+
         private bool TryDecompileCreateUnitsFunction(JassFunctionDeclarationSyntax createUnitsFunction, [NotNullWhen(true)] out List<UnitData>? units, [NotNullWhen(true)] out Dictionary<UnitData, UnitDataDecompilationMetaData>? decompilationMetaData)
         {
             var localPlayerVariableName = (string?)null;
@@ -138,6 +274,18 @@ namespace War3Net.CodeAnalysis.Decompilers
                     statement is JassEmptySyntax)
                 {
                     continue;
+                }
+                else if (statement is JassCallStatementSyntax createUnitCallStatement && (string.Equals(createUnitCallStatement.IdentifierName.Name, "CreateUnit", StringComparison.Ordinal) || string.Equals(createUnitCallStatement.IdentifierName.Name, "BlzCreateUnitWithSkin", StringComparison.Ordinal)))
+                {
+                    var unit = ParseJassCallStatementSyntax(localPlayerVariableName, localPlayerVariableValue, createUnitCallStatement);
+                    if (unit == null)
+                    {
+                        continue;
+                    }
+
+                    var metaData = decompilationMetaData.GetOrAdd(unit);
+                    metaData.DecompiledFromStatements.Add(statement);
+                    units.Add(unit);
                 }
                 else if (statement is JassLocalVariableDeclarationStatementSyntax localVariableDeclarationStatement)
                 {
@@ -157,8 +305,23 @@ namespace War3Net.CodeAnalysis.Decompilers
                             }
                         }
                     }
-                    else if (string.Equals(typeName, "unit", StringComparison.Ordinal) ||
-                             string.Equals(typeName, "integer", StringComparison.Ordinal) ||
+                    else if (string.Equals(typeName, "unit", StringComparison.Ordinal))
+                    {
+                        if (localVariableDeclarationStatement.Declarator is JassVariableDeclaratorSyntax variableDeclarator && variableDeclarator.Value is JassEqualsValueClauseSyntax equalsValueClause && equalsValueClause.Expression is JassInvocationExpressionSyntax invocationExpression)
+                        {
+                            var unit = ParseJassInvocationExpressionSyntax(localPlayerVariableName, localPlayerVariableValue, invocationExpression);
+                            if (unit == null)
+                            {
+                                continue;
+                            }
+
+                            var metaData = decompilationMetaData.GetOrAdd(unit);
+                            metaData.DecompiledFromStatements.Add(statement);
+                            metaData.DecompiledFromVariableName = variableDeclarator.IdentifierName.Name;
+                            units.Add(unit);
+                        }
+                    }
+                    else if (string.Equals(typeName, "integer", StringComparison.Ordinal) ||
                              string.Equals(typeName, "trigger", StringComparison.Ordinal) ||
                              string.Equals(typeName, "real", StringComparison.Ordinal))
                     {
@@ -168,98 +331,28 @@ namespace War3Net.CodeAnalysis.Decompilers
                 }
                 else if (statement is JassSetStatementSyntax setStatement)
                 {
-                    if (setStatement.Indexer is null)
+                    if (setStatement.IdentifierName.Name == localPlayerVariableName && setStatement.Value.Expression is JassInvocationExpressionSyntax playerInvocationExpression && string.Equals(playerInvocationExpression.IdentifierName.Name, "Player", StringComparison.Ordinal)
+                        && playerInvocationExpression.Arguments.Arguments.Length == 1 && playerInvocationExpression.Arguments.Arguments[0].TryGetPlayerIdExpressionValue_New(Context.MaxPlayerSlots, out var playerId))
                     {
-                        if (setStatement.IdentifierName.Name == localPlayerVariableName && setStatement.Value.Expression is JassInvocationExpressionSyntax playerInvocationExpression && string.Equals(playerInvocationExpression.IdentifierName.Name, "Player", StringComparison.Ordinal)
-                            && playerInvocationExpression.Arguments.Arguments.Length == 1 && playerInvocationExpression.Arguments.Arguments[0].TryGetPlayerIdExpressionValue_New(Context.MaxPlayerSlots, out var playerId))
+                        localPlayerVariableValue = playerId;
+                    }
+                    else if (localPlayerVariableValue != null && setStatement.Value.Expression is JassInvocationExpressionSyntax invocationExpression)
+                    {
+                        var unit = ParseJassInvocationExpressionSyntax(localPlayerVariableName, localPlayerVariableValue, invocationExpression);
+                        if (unit == null)
                         {
-                            localPlayerVariableValue = playerId;
-                        }
-                        else if (localPlayerVariableValue != null && setStatement.Value.Expression is JassInvocationExpressionSyntax invocationExpression)
-                        {
-                            if (string.Equals(invocationExpression.IdentifierName.Name, "CreateUnit", StringComparison.Ordinal))
-                            {
-                                if (invocationExpression.Arguments.Arguments.Length == 5 &&
-                                    invocationExpression.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
-                                    invocationExpression.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
-                                    invocationExpression.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
-                                    invocationExpression.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
-                                    invocationExpression.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
-                                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
-                                {
-                                    var unit = new UnitData
-                                    {
-                                        OwnerId = localPlayerVariableValue.Value,
-                                        TypeId = unitId.InvertEndianness(),
-                                        Position = new Vector3(x, y, 0f),
-                                        Rotation = face * (MathF.PI / 180f),
-                                        Scale = Vector3.One,
-                                        Flags = 2,
-                                        GoldAmount = 12500,
-                                        HeroLevel = 1,
-                                        CreationNumber = CreationNumber++
-                                    };
-
-                                    unit.SkinId = unit.TypeId;
-
-                                    var metaData = decompilationMetaData.GetOrAdd(unit);
-                                    metaData.DecompiledFromStatements.Add(statement);
-                                    metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
-                                    units.Add(unit);
-                                }
-                            }
-                            else if (localPlayerVariableValue != null && string.Equals(invocationExpression.IdentifierName.Name, "BlzCreateUnitWithSkin", StringComparison.Ordinal))
-                            {
-                                if (invocationExpression.Arguments.Arguments.Length == 6 &&
-                                    invocationExpression.Arguments.Arguments[0] is JassVariableReferenceExpressionSyntax playerVariableReferenceExpression &&
-                                    invocationExpression.Arguments.Arguments[1].TryGetIntegerExpressionValue_New(out var unitId) &&
-                                    invocationExpression.Arguments.Arguments[2].TryGetRealExpressionValue(out var x) &&
-                                    invocationExpression.Arguments.Arguments[3].TryGetRealExpressionValue(out var y) &&
-                                    invocationExpression.Arguments.Arguments[4].TryGetRealExpressionValue(out var face) &&
-                                    invocationExpression.Arguments.Arguments[5].TryGetIntegerExpressionValue_New(out var skinId) &&
-                                    string.Equals(playerVariableReferenceExpression.IdentifierName.Name, localPlayerVariableName, StringComparison.Ordinal))
-                                {
-                                    var unit = new UnitData
-                                    {
-                                        OwnerId = localPlayerVariableValue.Value,
-                                        TypeId = unitId.InvertEndianness(),
-                                        Position = new Vector3(x, y, 0f),
-                                        Rotation = face * (MathF.PI / 180f),
-                                        Scale = Vector3.One,
-                                        SkinId = skinId.InvertEndianness(),
-                                        Flags = 2,
-                                        GoldAmount = 12500,
-                                        HeroLevel = 1,
-                                        CreationNumber = CreationNumber++
-                                    };
-
-                                    var metaData = decompilationMetaData.GetOrAdd(unit);
-                                    metaData.DecompiledFromStatements.Add(statement);
-                                    metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name;
-                                    units.Add(unit);
-                                }
-                            }
-                            else if (string.Equals(invocationExpression.IdentifierName.Name, "CreateTrigger", StringComparison.Ordinal))
-                            {
-                                // TODO
-                                continue;
-                            }
-                            else if (string.Equals(invocationExpression.IdentifierName.Name, "GetUnitState", StringComparison.Ordinal))
-                            {
-                                // TODO
-                                continue;
-                            }
-                            else if (string.Equals(invocationExpression.IdentifierName.Name, "RandomDistChoose", StringComparison.Ordinal))
-                            {
-                                // TODO
-                                continue;
-                            }
-                        }
-                        else if (setStatement.Value.Expression is JassArrayReferenceExpressionSyntax)
-                        {
-                            // TODO
                             continue;
                         }
+
+                        var metaData = decompilationMetaData.GetOrAdd(unit);
+                        metaData.DecompiledFromStatements.Add(statement);
+                        metaData.DecompiledFromVariableName = setStatement.IdentifierName.Name + (setStatement.Indexer != null ? "[]" : "");
+                        units.Add(unit);
+                    }
+                    else if (setStatement.Value.Expression is JassArrayReferenceExpressionSyntax)
+                    {
+                        // TODO
+                        continue;
                     }
                 }
                 else if (units.Any() && statement is JassCallStatementSyntax callStatement)
@@ -724,7 +817,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 }
                 else if (statement is JassCallStatementSyntax callStatement)
                 {
-                    if (string.Equals(callStatement.IdentifierName.Name, "SetPlayerStartLocation", StringComparison.Ordinal))
+                    if (string.Equals(callStatement.IdentifierName.Name, "SetPlayerStartLocation", StringComparison.Ordinal) || string.Equals(callStatement.IdentifierName.Name, "ForcePlayerStartLocation", StringComparison.Ordinal))
                     {
                         if (callStatement.Arguments.Arguments.Length == 2 &&
                             callStatement.Arguments.Arguments[0] is JassInvocationExpressionSyntax playerInvocationExpression &&

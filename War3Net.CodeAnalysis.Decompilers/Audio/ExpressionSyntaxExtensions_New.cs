@@ -21,6 +21,14 @@ namespace War3Net.CodeAnalysis.Decompilers
                     value = decimalLiteralExpression.Value;
                     return true;
 
+                case JassRealLiteralExpressionSyntax realLiteralExpression:
+                    if (int.TryParse(realLiteralExpression.IntPart, out var intValue))
+                    {
+                        value = intValue;
+                        return true;
+                    }
+                    break;
+
                 case JassOctalLiteralExpressionSyntax octalLiteralExpression:
                     value = octalLiteralExpression.Value;
                     return true;
@@ -35,11 +43,10 @@ namespace War3Net.CodeAnalysis.Decompilers
                 case JassHexadecimalLiteralExpressionSyntax hexLiteralExpression:
                     value = hexLiteralExpression.Value;
                     return true;
-
-                default:
-                    value = default;
-                    return false;
             }
+
+            value = default;
+            return false;
         }
 
         public static bool TryGetPlayerIdExpressionValue_New(this IExpressionSyntax expression, int maxPlayerSlots, out int value)
