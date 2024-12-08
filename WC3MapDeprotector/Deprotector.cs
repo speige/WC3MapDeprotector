@@ -374,9 +374,10 @@ namespace WC3MapDeprotector
             }
         }
 
-        public string ReadAllText(string fileName)
+        public string ReadFile_NoEncoding(string fileName)
         {
-            return File.ReadAllText(fileName);
+            //ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading script files to avoid corrupting non-ascii or international characters.
+            return File.ReadAllText(fileName, Encoding.GetEncoding("ISO-8859-1"));
         }
 
         public string ConvertBytesToAscii(byte[] bytes)
@@ -793,7 +794,7 @@ namespace WC3MapDeprotector
                 var basePathScriptFileName = Path.Combine(DiscoveredFilesPath, Path.GetFileName(scriptFile));
                 if (File.Exists(basePathScriptFileName) && !string.Equals(scriptFile, basePathScriptFileName, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (ReadAllText(scriptFile) != ReadAllText(basePathScriptFileName))
+                    if (ReadFile_NoEncoding(scriptFile) != ReadFile_NoEncoding(basePathScriptFileName))
                     {
                         _deprotectionResult.CriticalWarningCount++;
                         _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor.");
@@ -811,7 +812,7 @@ namespace WC3MapDeprotector
             ScriptMetaData scriptMetaData = null;
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                jassScript = $"// {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
+                jassScript = $"// {ATTRIB}{ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
                     jassScript = DeObfuscateJassScript(map_ObjectDataCollectionOnly, jassScript);
@@ -823,7 +824,7 @@ namespace WC3MapDeprotector
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
                 _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. See \"Object Manager\" in Help document");
-                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
+                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
                 var temporaryScriptMetaData = DecompileLuaScriptMetaData(luaScript);
                 if (scriptMetaData == null)
                 {
@@ -967,7 +968,7 @@ namespace WC3MapDeprotector
         {
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                var script = ReadAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"));
+                var script = ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"));
                 var blz = Regex_JassScriptInitBlizzard().Match(script);
                 if (blz.Success)
                 {
@@ -1007,8 +1008,8 @@ namespace WC3MapDeprotector
                 transpiler.IgnoreEmptyStatements = true;
                 transpiler.KeepFunctionsSeparated = true;
 
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllText(Path.Combine(ExeFolderPath, "common.j"))));
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadAllText(Path.Combine(ExeFolderPath, "blizzard.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "common.j"))));
+                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "blizzard.j"))));
                 var jassParsed = JassSyntaxFactory.ParseCompilationUnit(jassScript);
 
                 var luaCompilationUnit = transpiler.Transpile(jassParsed);
@@ -2391,7 +2392,7 @@ namespace WC3MapDeprotector
         {
             using (var v8 = new V8ScriptEngine())
             {
-                v8.Execute(ReadAllText(Path.Combine(ExeFolderPath, "luaparse.js")));
+                v8.Execute(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "luaparse.js")));
                 v8.Script.luaScript = luaScript;
                 v8.Execute("ast = JSON.stringify(luaparse.parse(luaScript, { luaVersion: '5.3' }));");
                 return JsonConvert.DeserializeObject<LuaAST>((string)v8.Script.ast, new JsonSerializerSettings() { MissingMemberHandling = MissingMemberHandling.Ignore, MaxDepth = Int32.MaxValue });
@@ -3113,7 +3114,7 @@ namespace WC3MapDeprotector
         protected static partial Regex Regex_ScanMDX();
         protected List<string> ScanMDXForPossibleFileNames_Regex(string mdxFileName)
         {
-            var line = File.ReadAllText(mdxFileName);
+            var line = ReadFile_NoEncoding(mdxFileName);
             var mdxMatch = Regex_ScanMDX().Match(line);
             if (mdxMatch.Success)
             {
