@@ -1967,7 +1967,7 @@ namespace WC3MapDeprotector
             correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
             if (decompilationMetaData.Units != null)
             {
-                correctedUnitVariableNames.AddRange(decompilationMetaData.Units.Where(x => x.Value.DecompiledFromVariableName?.StartsWith("gg_") == true).Select(x => new KeyValuePair<string, string>(x.Value.DecompiledFromVariableName, x.Key.GetVariableName_BugFixPendingPR())));
+                correctedUnitVariableNames.AddRange(decompilationMetaData.Units.Where(x => x.Value.DecompiledFromVariableName?.StartsWith("gg_") == true).Select(x => new KeyValuePair<string, string>(x.Value.DecompiledFromVariableName, x.Key.GetVariableName())));
             }
 
             if (!correctedUnitVariableNames.Any())

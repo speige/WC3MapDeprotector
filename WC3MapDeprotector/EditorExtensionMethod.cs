@@ -511,7 +511,7 @@ namespace WC3MapDeprotector
 
                 result.Destructables = new List<string>();
                 var emptyVariableTrigger = new TriggerDefinition() { Description = "Disabled GUI trigger with fake code, just to convert ObjectManager units/items/cameras to global generated variables", Name = "GlobalGeneratedObjectManagerVariables", ParentId = category.Id, IsEnabled = true, IsInitiallyOn = false };
-                var variables = (result.Units?.Units?.Select(x => x.GetVariableName_BugFixPendingPR()).ToList() ?? new List<string>()).Concat(result.Cameras?.Cameras?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).Concat(map.Doodads?.Doodads.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).ToList();
+                var variables = (result.Units?.Units?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).Concat(result.Cameras?.Cameras?.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).Concat(map.Doodads?.Doodads.Select(x => x.GetVariableName()).ToList() ?? new List<string>()).ToList();
                 foreach (var variable in variables)
                 {
                     var isUnit = variable.StartsWith("gg_unit_");
