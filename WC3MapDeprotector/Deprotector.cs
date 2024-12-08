@@ -27,6 +27,7 @@ using System.Collections.Concurrent;
 using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
+using War3Net.IO.Slk;
 
 namespace WC3MapDeprotector
 {
@@ -2794,13 +2795,11 @@ namespace WC3MapDeprotector
             {
                 try
                 {
-                    var slkData = SLKParser.Parse(fileName);
-                    var maxX = slkData.Select(x => x.Key.x).Max();
-                    var maxY = slkData.Select(x => x.Key.y).Max();
+                    var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
                     var columns = new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
-                    for (var x = 0; x <= maxX; x++)
+                    for (var x = 0; x < slkTable.Width; x++)
                     {
-                        var columnName = slkData.GetValueOrDefault((x, 0))?.ToString();
+                        var columnName = slkTable[x, 0]?.ToString();
                         if (!string.IsNullOrWhiteSpace(columnName))
                         {
                             columns[columnName] = x;
@@ -2809,12 +2808,12 @@ namespace WC3MapDeprotector
                     var files = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
                     if (columns.TryGetValue("dir", out var directoryColumn) && columns.TryGetValue("file", out var fileColumn))
                     {
-                        for (var y = 1; y <= maxY; y++)
+                        for (var y = 1; y < slkTable.Height; y++)
                         {
                             try
                             {
-                                var directory = slkData.GetValueOrDefault((directoryColumn, y))?.ToString();
-                                var file = slkData.GetValueOrDefault((fileColumn, y))?.ToString();
+                                var directory = slkTable[directoryColumn, y]?.ToString();
+                                var file = slkTable[fileColumn, y]?.ToString();
                                 if (!string.IsNullOrWhiteSpace(directory) && !string.IsNullOrWhiteSpace(file))
                                 {
                                     files.Add(Path.Combine(directory, file));

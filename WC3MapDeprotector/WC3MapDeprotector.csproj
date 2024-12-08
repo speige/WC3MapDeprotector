@@ -167,6 +167,9 @@
     <Reference Include="War3Net.IO.Mpq">
       <HintPath>..\War3Net\Binaries\War3Net.IO.Mpq.dll</HintPath>
     </Reference>
+    <Reference Include="War3Net.IO.Slk">
+      <HintPath>..\War3Net\Binaries\War3Net.IO.Slk.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
