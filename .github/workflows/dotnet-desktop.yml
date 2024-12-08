@@ -39,6 +39,12 @@
 name: .NET Core Desktop
 
 on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to run the workflow on'
+        required: true
+        default: 'main'
   push:
     branches: [ "main" ]
   pull_request:
