@@ -395,7 +395,8 @@ namespace WC3MapDeprotector
                 JassASTNode_ReplaceChild(replacement.parent, replacement.commentedStatement, replacement.originalStatement);
             }
 
-            var lines = jassScript.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+            //todo: re-code this string manipulation to use AST
+            var lines = jassScript.Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
 
             var functionDeclarations = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionDeclaration().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
             var functionCalls = lines.Select((x, y) => new { lineIdx = y, match = Regex_JassFunctionCall().Match(x) }).Where(x => x.match.Success).GroupBy(x => x.match.Groups[1].Value).ToDictionary(x => x.Key, x => x.ToList());
@@ -557,7 +558,9 @@ namespace WC3MapDeprotector
                 result.Triggers.TriggerItems.Add(emptyVariableTrigger);
             }
 
-            result.CustomTextTriggers.GlobalCustomScriptCode.Code = jassScript.Replace("%", "%%");
+            var reformatted = JassSyntaxFactory.ParseCompilationUnit(jassScript).RenderScriptAsString();
+
+            result.CustomTextTriggers.GlobalCustomScriptCode.Code = reformatted.Replace("%", "%%");
         }
     }
 }
