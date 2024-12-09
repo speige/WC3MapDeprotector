@@ -17,7 +17,7 @@ namespace WC3MapDeprotector
 
         private void rtbExplanation_LinkClicked(object sender, LinkClickedEventArgs e)
         {
-            Process.Start("explorer", "e.LinkText");
+            Process.Start("explorer", e.LinkText);
         }
     }
 }
