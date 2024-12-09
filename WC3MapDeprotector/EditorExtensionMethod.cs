@@ -159,44 +159,19 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"\s*(constant\s*)?(\S+)\s+(array\s*)?([^ \t=]+)\s*(=)?\s*(.*)", RegexOptions.IgnoreCase)]
         public static partial Regex Regex_ParseJassVariableDeclaration();
 
-        public static Dictionary<object, object> JassAST_CreateChildToParentMapping(JassCompilationUnitSyntax compilationUnit)
+        public static Dictionary<IJassSyntaxToken, IJassSyntaxToken> JassAST_CreateChildToParentMapping(JassCompilationUnitSyntax compilationUnit)
         {
-            var result = new Dictionary<object, object>();
-            JassAST_RecurseChildren(compilationUnit.Declarations.Cast<object>().ToList(), x =>
+            var result = new Dictionary<IJassSyntaxToken, IJassSyntaxToken>();
+            var allTokens = compilationUnit.GetChildren_RecursiveDepthFirst();
+            foreach (var parent in allTokens)
             {
-                result[x.child] = x.parent;
-            });
-            return result;
-        }
-
-        private static List<object> JassASTNode_GetChildren(object parent_jassASTNode)
-        {
-            var parentType = parent_jassASTNode.GetType();
-
-            if (!_jassParserASTNodeChildren.TryGetValue(parentType, out var childrenProperties))
-            {
-                return null;
+                foreach (var child in parent.GetChildren())
+                {
+                    result[child] = parent;
+                }
             }
 
-            return childrenProperties.SelectMany(y =>
-            {
-                object value = null;
-                if (y is PropertyInfo propertyInfo)
-                {
-                    value = propertyInfo.GetValue(parent_jassASTNode);
-                }
-                if (y is FieldInfo fieldInfo)
-                {
-                    value = fieldInfo.GetValue(parent_jassASTNode);
-                }
-
-                if (value is System.Collections.IList list)
-                {
-                    return list.Cast<object>();
-                }
-
-                return new object[] { value };
-            }).Where(x => x != null).ToList();
+            return result;
         }
 
         private static void JassASTNode_ReplaceChild(object parent_jassASTNode, object oldChild_jassASTNode, object replacementChild_jassASTNode)
@@ -253,9 +228,6 @@ namespace WC3MapDeprotector
                             var methodInfo_toImmutableArray = typeof(ImmutableArray).GetMethods(BindingFlags.Public | BindingFlags.Static).First(x => x.Name == nameof(ImmutableArray.ToImmutableArray) && x.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>)).MakeGenericMethod(childGenericType);
                             var immutableArray = methodInfo_toImmutableArray.Invoke(null, new[] { genericList });
 
-                            //var asEnumerableMethod = typeof(Enumerable).GetMethod(nameof(Enumerable.AsEnumerable)).MakeGenericMethod(childGenericType);
-                            //var immutableArray = methodInfo_toImmutableArray.Invoke(null, new[] { asEnumerableMethod.Invoke(null, new[] { genericList }) });
-
                             if (childProperty is PropertyInfo listPropertyInfo)
                             {
                                 listPropertyInfo.SetValue(parent_jassASTNode, immutableArray);
@@ -271,28 +243,6 @@ namespace WC3MapDeprotector
                         }
                     }
                 }
-            }
-        }
-
-        private static void JassAST_RecurseChildren(List<object> jassParserASTNodes, Action<(object child, object parent)> action)
-        {
-            foreach (var node in jassParserASTNodes)
-            {
-                var lazy = node.DFS_Flatten_Lazy(parent =>
-                {
-                    var children = JassASTNode_GetChildren(parent);
-                    if (children != null)
-                    {
-                        foreach (var child in children)
-                        {
-                            action((child, parent));
-                        }
-                    }
-
-                    return children;
-                });
-
-                var _ = lazy.ToList(); //Force materialization because we only need side-effect & not result itself
             }
         }
 
@@ -369,7 +319,6 @@ namespace WC3MapDeprotector
                 {
                     continue;
                 }
-
 
                 using (var writer = new StringWriter())
                 {

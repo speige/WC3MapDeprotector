@@ -2051,12 +2051,12 @@ namespace WC3MapDeprotector
             return map;
         }
 
-        protected string RenderJassAST(object jassAST)
+        protected string RenderJassAST(IJassSyntaxToken jassAST)
         {
             using (var writer = new StringWriter())
             {
                 var renderer = new JassRenderer(writer);
-                renderer.GetType().GetMethod("Render", new[] { jassAST.GetType() }).Invoke(renderer, new[] { jassAST });
+                renderer.Render(jassAST);
                 return writer.GetStringBuilder().ToString();
             }
         }
@@ -2753,13 +2753,6 @@ namespace WC3MapDeprotector
                 }
                 catch { }
             }
-            /*
-            try
-            {
-                allLines.AddRange(ConvertBytesToAscii(bytes).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
-            }
-            catch { }
-            */
 
             var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(bytes).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
