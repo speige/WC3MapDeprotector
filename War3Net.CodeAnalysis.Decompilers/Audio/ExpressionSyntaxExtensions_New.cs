@@ -6,13 +6,57 @@
 // ------------------------------------------------------------------------------
 
 using System;
-using War3Net.CodeAnalysis.Jass.Extensions;
 using War3Net.CodeAnalysis.Jass.Syntax;
 
 namespace War3Net.CodeAnalysis.Decompilers
 {
     public static class ExpressionSyntaxExtensions_New
     {
+        public static decimal GetDecimalExpressionValueOrDefault(this IExpressionSyntax expression, decimal defaultValue = default(decimal))
+        {
+            if (expression.TryGetDecimalExpressionValue(out var value))
+            {
+                return value;
+            }
+
+            return defaultValue;
+        }
+
+        public static bool TryGetDecimalExpressionValue(this IExpressionSyntax expression, out decimal value)
+        {
+            switch (expression)
+            {
+                case JassDecimalLiteralExpressionSyntax decimalLiteralExpression:
+                    value = decimalLiteralExpression.Value;
+                    return true;
+
+                case JassRealLiteralExpressionSyntax realLiteralExpression:
+                    if (decimal.TryParse(realLiteralExpression.IntPart + "." + realLiteralExpression.FracPart, out value))
+                    {
+                        return true;
+                    }
+                    break;
+
+                case JassOctalLiteralExpressionSyntax octalLiteralExpression:
+                    value = octalLiteralExpression.Value;
+                    return true;
+
+                case JassFourCCLiteralExpressionSyntax fourCCLiteralExpression:
+                    value = fourCCLiteralExpression.Value;
+                    return true;
+
+                case JassUnaryExpressionSyntax unaryExpression:
+                    return decimal.TryParse(unaryExpression.ToString(), out value);
+
+                case JassHexadecimalLiteralExpressionSyntax hexLiteralExpression:
+                    value = hexLiteralExpression.Value;
+                    return true;
+            }
+
+            value = default;
+            return false;
+        }
+
         public static bool TryGetIntegerExpressionValue_New(this IExpressionSyntax expression, out int value)
         {
             switch (expression)

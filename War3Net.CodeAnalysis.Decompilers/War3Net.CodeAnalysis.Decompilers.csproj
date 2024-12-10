@@ -11,6 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="Pidgin">
+      <HintPath>..\War3Net\Binaries\Pidgin.dll</HintPath>
+    </Reference>
     <Reference Include="War3Net.Build">
       <HintPath>..\War3Net\Binaries\War3Net.Build.dll</HintPath>
     </Reference>
