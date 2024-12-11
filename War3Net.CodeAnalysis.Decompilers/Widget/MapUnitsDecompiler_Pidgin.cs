@@ -18,7 +18,7 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public partial class JassScriptDecompiler_Pidgin
     {
-        public bool TryDecompileMapUnits(JassCompilationUnitSyntax compilationUnit, out UnitData[] units)
+        public bool TryDecompileMapUnits(JassCompilationUnitSyntax compilationUnit, MapWidgetsFormatVersion mapWidgetsFormatVersion, MapWidgetsSubVersion mapWidgetsSubVersion, bool useNewFormat, out MapUnits units)
         {
             _context = new();
 
@@ -42,14 +42,14 @@ namespace War3Net.CodeAnalysis.Decompilers
                 ParseRandomDistribution(statementChildren);
             }
 
-            units = _context.AllUnits.ToArray();
+            units = new MapUnits(mapWidgetsFormatVersion, mapWidgetsSubVersion, useNewFormat) { Units = _context.AllUnits };
             return true;
         }
 
         private void ParseUnitCreation(List<IJassSyntaxToken> statementChildren)
         {
-            var unitPattern = GetVariableAssignmentParser().Optional().SelectMany(x => GetUnitParser(), (x, y) => (VariableAssignment: x.HasValue ? x.Value : null, UnitData: y)).IgnoreExceptionsAndExtraTokens();
-            var matchResult = unitPattern.Parse(statementChildren);
+            var pattern = GetVariableAssignmentParser().Optional().SelectMany(x => GetCreateUnitParser(), (x, y) => (VariableAssignment: x.HasValue ? x.Value : null, UnitData: y));
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
 
             if (matchResult.Success)
             {
@@ -57,7 +57,7 @@ namespace War3Net.CodeAnalysis.Decompilers
                 var variableName = matchResult.Value.VariableAssignment;
                 _context.AllUnits.Add(unitData);
 
-                if (!string.IsNullOrWhiteSpace(variableName))
+                if (variableName != null)
                 {
                     _context.VariableNameToUnitMapping[variableName] = unitData;
                 }
@@ -66,9 +66,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseHeroLevel(List<IJassSyntaxToken> statementChildren)
         {
-            var heroLevelPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "SetHeroLevel").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "SetHeroLevel")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -77,9 +77,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     Level = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = heroLevelPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -92,9 +92,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseResourceAmount(List<IJassSyntaxToken> statementChildren)
         {
-            var resourceAmountPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "SetResourceAmount").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "SetResourceAmount")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -103,9 +103,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     Amount = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = resourceAmountPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -118,9 +118,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseUnitColor(List<IJassSyntaxToken> statementChildren)
         {
-            var unitColorPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "SetUnitColor").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "SetUnitColor")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -129,9 +129,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     ColorId = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = unitColorPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -144,7 +144,7 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseAcquireRange(List<IJassSyntaxToken> statementChildren)
         {
-            var acquireRangePattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
                 syntax.IdentifierName.Name == "SetUnitAcquireRange")
             .Select(x =>
@@ -155,9 +155,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     Range = (float)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = acquireRangePattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -170,9 +170,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseUnitState(List<IJassSyntaxToken> statementChildren)
         {
-            var unitStatePattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "SetUnitState").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "SetUnitState")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -182,9 +182,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     StateType = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[1]).IdentifierName.Name,
                     Value = (float)syntax.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = unitStatePattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -204,11 +204,11 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseHeroAttributes(List<IJassSyntaxToken> statementChildren)
         {
-            var heroAttributePattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
                 (syntax.IdentifierName.Name == "SetHeroStr" ||
                  syntax.IdentifierName.Name == "SetHeroAgi" ||
-                 syntax.IdentifierName.Name == "SetHeroInt")).IgnoreExceptionsAndExtraTokens()
+                 syntax.IdentifierName.Name == "SetHeroInt"))
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -218,9 +218,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     Attribute = syntax.IdentifierName.Name,
                     Value = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = heroAttributePattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -244,9 +244,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseHeroSkills(List<IJassSyntaxToken> statementChildren)
         {
-            var heroSkillPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "SelectHeroSkill").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "SelectHeroSkill")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -255,9 +255,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     SkillId = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = heroSkillPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -275,9 +275,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseItemCreation(List<IJassSyntaxToken> statementChildren)
         {
-            var itemCreationPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                (syntax.IdentifierName.Name == "CreateItem" || syntax.IdentifierName.Name == "BlzCreateItemWithSkin")).IgnoreExceptionsAndExtraTokens()
+                (syntax.IdentifierName.Name == "CreateItem" || syntax.IdentifierName.Name == "BlzCreateItemWithSkin"))
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -291,9 +291,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                         0f),
                     SkinId = isWithSkin ? (int)syntax.Arguments.Arguments[3].GetDecimalExpressionValueOrDefault() : (int)syntax.Arguments.Arguments[0].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = itemCreationPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 // Handle item creation as needed.
@@ -302,9 +302,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseUnitInventory(List<IJassSyntaxToken> statementChildren)
         {
-            var unitInventoryPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "UnitAddItemToSlotById").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "UnitAddItemToSlotById")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -314,9 +314,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     ItemId = (int)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
                     Slot = (int)syntax.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault()
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = unitInventoryPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -333,9 +333,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseTriggerEvent(List<IJassSyntaxToken> statementChildren)
         {
-            var triggerEventPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "TriggerRegisterUnitEvent").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "TriggerRegisterUnitEvent")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -344,9 +344,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                     VariableName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
                     EventName = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[1]).IdentifierName.Name
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = triggerEventPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -359,9 +359,9 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseWaygateDestination(List<IJassSyntaxToken> statementChildren)
         {
-            var waygatePattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "WaygateSetDestination").IgnoreExceptionsAndExtraTokens()
+                syntax.IdentifierName.Name == "WaygateSetDestination")
             .Select(x =>
             {
                 var syntax = (IInvocationSyntax)x;
@@ -372,9 +372,9 @@ namespace War3Net.CodeAnalysis.Decompilers
                         (float)syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
                         (float)syntax.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault())
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = waygatePattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 var unit = _context.VariableNameToUnitMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllUnits.LastOrDefault();
@@ -387,22 +387,22 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseRandomDistribution(List<IJassSyntaxToken> statementChildren)
         {
-            var randomDistPattern = Token(x =>
+            var pattern = Token(x =>
                 x is IInvocationSyntax syntax &&
-                syntax.IdentifierName.Name == "RandomDistReset").IgnoreExceptionsAndExtraTokens()
-            .Select(x => true).IgnoreExceptionsAndExtraTokens();
+                syntax.IdentifierName.Name == "RandomDistReset")
+            .Select(x => true);
 
-            var matchResult = randomDistPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
                 // Reset random distribution logic as needed.
             }
         }
 
-        private Parser<IJassSyntaxToken, UnitData> GetUnitParser()
+        private Parser<IJassSyntaxToken, UnitData> GetCreateUnitParser()
         {
             return Token(x =>
-                x is IInvocationSyntax syntax && (syntax.IdentifierName.Name == "CreateUnit" || syntax.IdentifierName.Name == "BlzCreateUnitWithSkin")).IgnoreExceptionsAndExtraTokens()
+                x is IInvocationSyntax syntax && (syntax.IdentifierName.Name == "CreateUnit" || syntax.IdentifierName.Name == "BlzCreateUnitWithSkin"))
                 .Select(x =>
                 {
                     var args = ((IInvocationSyntax)x).Arguments.Arguments;

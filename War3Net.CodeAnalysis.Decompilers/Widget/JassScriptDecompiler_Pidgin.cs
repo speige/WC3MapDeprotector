@@ -5,7 +5,6 @@
 // ------------------------------------------------------------------------------
 
 using Pidgin;
-using System;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using static Pidgin.Parser<War3Net.CodeAnalysis.Jass.Syntax.IJassSyntaxToken>;
 

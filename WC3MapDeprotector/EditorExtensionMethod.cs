@@ -1,4 +1,5 @@
 ﻿using CSharpLua;
+using Pidgin;
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Text;
@@ -246,64 +247,69 @@ namespace WC3MapDeprotector
             }
         }
 
-        public static List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out List<string> inlinedFunctions)
+        public static List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out HashSet<string> inlinedFunctions)
         {
-            var inlinedFunctions_temp = new List<string>();
+            inlinedFunctions = new HashSet<string>();
 
             if (!indexedCompilationUnit.IndexedFunctions.TryGetValue(startingFunctionName, out var function))
             {
-                inlinedFunctions = inlinedFunctions_temp;
                 return new List<IStatementSyntax>();
             }
 
-            var result = function.Body.Statements.DFS_Flatten_Lazy(x =>
+            var result = new List<IJassSyntaxToken>();
+            var stack = new Stack<IJassSyntaxToken>();
+            stack.Push(function);
+
+            while (stack.Count > 0)
             {
-                if (x is JassFunctionReferenceExpressionSyntax functionReference)
+                var current = stack.Pop();
+                result.Add(current);
+
+                var children = current.GetChildren();
+                if (children != null)
                 {
-                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(functionReference.IdentifierName.Name, out var nestedFunctionCall))
+                    foreach (var child in children.Reverse())
                     {
-                        inlinedFunctions_temp.Add(functionReference.IdentifierName.Name);
-                        return nestedFunctionCall.Body.Statements;
-                    }
-                }
-                else if (x is JassCallStatementSyntax callStatement)
-                {
-                    if (indexedCompilationUnit.IndexedFunctions.TryGetValue(callStatement.IdentifierName.Name, out var nestedFunctionCall))
-                    {
-                        inlinedFunctions_temp.Add(callStatement.IdentifierName.Name);
-                        return nestedFunctionCall.Body.Statements;
-                    }
-                    else if (string.Equals(callStatement.IdentifierName.Name, "ExecuteFunc", StringComparison.InvariantCultureIgnoreCase) && callStatement.Arguments.Arguments.FirstOrDefault() is JassStringLiteralExpressionSyntax execFunctionName)
-                    {
-                        if (indexedCompilationUnit.IndexedFunctions.TryGetValue(execFunctionName.Value, out var execNestedFunctionCall))
+                        stack.Push(child);
+
+                        if (child is JassFunctionReferenceExpressionSyntax functionReference)
                         {
-                            inlinedFunctions_temp.Add(execFunctionName.Value);
-                            return execNestedFunctionCall.Body.Statements;
+                            if (indexedCompilationUnit.IndexedFunctions.TryGetValue(functionReference.IdentifierName.Name, out var nestedFunctionCall))
+                            {
+                                if (!inlinedFunctions.Contains(functionReference.IdentifierName.Name))
+                                {
+                                    inlinedFunctions.Add(functionReference.IdentifierName.Name);
+                                    stack.Push(nestedFunctionCall);
+                                }
+                            }
+                        }
+                        else if (child is JassCallStatementSyntax callStatement)
+                        {
+                            if (indexedCompilationUnit.IndexedFunctions.TryGetValue(callStatement.IdentifierName.Name, out var nestedFunctionCall))
+                            {
+                                if (!inlinedFunctions.Contains(callStatement.IdentifierName.Name))
+                                {
+                                    inlinedFunctions.Add(callStatement.IdentifierName.Name);
+                                    stack.Push(nestedFunctionCall);
+                                }
+                            }
+                            else if (string.Equals(callStatement.IdentifierName.Name, "ExecuteFunc", StringComparison.InvariantCultureIgnoreCase) && callStatement.Arguments.Arguments.FirstOrDefault() is JassStringLiteralExpressionSyntax execFunctionName)
+                            {
+                                if (indexedCompilationUnit.IndexedFunctions.TryGetValue(execFunctionName.Value, out var execNestedFunctionCall))
+                                {
+                                    if (!inlinedFunctions.Contains(execFunctionName.Value))
+                                    {
+                                        inlinedFunctions.Add(execFunctionName.Value);
+                                        stack.Push(nestedFunctionCall);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                else if (x is JassIfStatementSyntax ifStatement)
-                {
-                    return ifStatement.Body.Statements;
-                }
-                else if (x is JassElseIfClauseSyntax elseIfClause)
-                {
-                    return elseIfClause.Body.Statements;
-                }
-                else if (x is JassElseClauseSyntax elseClause)
-                {
-                    return elseClause.Body.Statements;
-                }
-                else if (x is JassLoopStatementSyntax loop)
-                {
-                    return loop.Body.Statements;
-                }
+            }
 
-                return null;
-            }).ToList();
-
-            inlinedFunctions = inlinedFunctions_temp;
-            return result;
+            return result.OfType<IStatementSyntax>().ToList();
         }
 
         public static void SetTriggersFromDecompiledJass(this ScriptMetaData result, Map map, JassCompilationUnitSyntax jassParsed, DecompilationMetaData decompilationMetaData)

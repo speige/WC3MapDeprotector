@@ -1820,10 +1820,8 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"set\s+(\w+)\s*=\s*0[\r\n\s]+loop[\r\n\s]+exitwhen\s*\(\1\s*>\s*([0-9]+)\)[\r\n\s]+set\s+(\w+)\[\1\]\s*=\s*[^\r\n]*[\r\n\s]+set\s+\1\s*=\s*\1\s*\+\s*1[\r\n\s]+endloop[\r\n\s]+", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
         protected static partial Regex Regex_GetArraySize();
 
-        protected ScriptMetaData DecompileJassScriptMetaData_Internal(IndexedJassCompilationUnitSyntax jassParsed, out DecompilationMetaData decompilationMetaData)
+        protected IndexedJassCompilationUnitSyntax PrepObfuscatedJassScriptForEditorFileDecompilation(IndexedJassCompilationUnitSyntax jassParsed)
         {
-            decompilationMetaData = new DecompilationMetaData();
-
             var statements = new List<IStatementSyntax>();
             statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
             statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
@@ -1836,7 +1834,14 @@ namespace WC3MapDeprotector
                 newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
             }
 
-            var editorSpecificJassParsed = new IndexedJassCompilationUnitSyntax(new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray()));
+            return new IndexedJassCompilationUnitSyntax(new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray()));
+        }
+
+        protected ScriptMetaData DecompileJassScriptMetaData_Internal(IndexedJassCompilationUnitSyntax jassParsed, out DecompilationMetaData decompilationMetaData)
+        {
+            decompilationMetaData = new DecompilationMetaData();
+
+            var editorSpecificJassParsed = PrepObfuscatedJassScriptForEditorFileDecompilation(jassParsed);
 
             var result = new ScriptMetaData();
 

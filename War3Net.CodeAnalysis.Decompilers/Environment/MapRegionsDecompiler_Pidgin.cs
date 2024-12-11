@@ -9,7 +9,10 @@ using Pidgin;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using War3Net.Build;
+using War3Net.Build.Audio;
 using War3Net.Build.Environment;
 using War3Net.CodeAnalysis.Jass.Extensions;
 using War3Net.CodeAnalysis.Jass.Syntax;
@@ -30,7 +33,8 @@ namespace War3Net.CodeAnalysis.Decompilers
             {
                 var statementChildren = statement.GetChildren_RecursiveDepthFirst().ToList();
                 ParseRegionCreation(statementChildren);
-                ParseRegionProperties(statementChildren);
+                ParseAddWeatherEffect(statementChildren);
+                ParseSetSoundPosition(statementChildren);
             }
 
             mapRegions = _context.AllRegions.Any() ? new MapRegions(formatVersion) { Regions = _context.AllRegions } : null;
@@ -39,59 +43,90 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseRegionCreation(List<IJassSyntaxToken> statementChildren)
         {
-            var regionCreationPattern = Token(x =>
-                x is JassSetStatementSyntax setStatement &&
-                setStatement.Value.Expression is JassInvocationExpressionSyntax invocation &&
-                invocation.IdentifierName.Name == "Rect")
+            var createCameraSetupParser = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "Rect")
             .Select(x =>
             {
-                var setStatement = (JassSetStatementSyntax)x;
-                var invocation = (JassInvocationExpressionSyntax)setStatement.Value.Expression;
+                var invocation = (IInvocationSyntax)x;
                 return new Region
                 {
-                    Name = setStatement.IdentifierName.Name["gg_rct_".Length..].Replace('_', ' '),
                     Left = (float)invocation.Arguments.Arguments[0].GetDecimalExpressionValueOrDefault(),
                     Bottom = (float)invocation.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
                     Right = (float)invocation.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault(),
                     Top = (float)invocation.Arguments.Arguments[3].GetDecimalExpressionValueOrDefault(),
                     Color = System.Drawing.Color.FromArgb(unchecked((int)0xFF8080FF)),
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = regionCreationPattern.Parse(statementChildren);
+            var pattern = GetVariableAssignmentParser().Optional().SelectMany(x => createCameraSetupParser, (x, y) => (VariableAssignment: x.HasValue ? x.Value : null, Sound: y));
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
-                var region = matchResult.Value;
-                _context.AllRegions.Add(region);
-                _context.VariableNameToRegionMapping[region.Name] = region;
+                var variableName = matchResult.Value.VariableAssignment;
+                var region = matchResult.Value.Sound;
+                if (region != null)
+                {
+                    _context.AllRegions.Add(region);
+
+                    if (region.Name != null)
+                    {
+                        region.Name = variableName;
+                        if (region.Name.StartsWith("gg_rct_"))
+                        {
+                            region.Name = region.Name["gg_rct_".Length..];
+                        }
+                        region.Name = region.Name.Replace('_', ' ');
+                        _context.VariableNameToRegionMapping[region.Name] = region;
+                    }
+                }
             }
         }
 
-        private void ParseRegionProperties(List<IJassSyntaxToken> statementChildren)
+        private void ParseAddWeatherEffect(List<IJassSyntaxToken> statementChildren)
         {
-            var regionPropertyPattern = Token(x =>
-                x is JassCallStatementSyntax callStatement &&
-                _context.VariableNameToRegionMapping.ContainsKey(((JassVariableReferenceExpressionSyntax)callStatement.Arguments.Arguments[0]).IdentifierName.Name))
+            var pattern = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "AddWeatherEffect")
             .Select(x =>
             {
-                var callStatement = (JassCallStatementSyntax)x;
-                var region = _context.VariableNameToRegionMapping[((JassVariableReferenceExpressionSyntax)callStatement.Arguments.Arguments[0]).IdentifierName.Name];
-
-                switch (callStatement.IdentifierName.Name)
+                var syntax = (IInvocationSyntax)x;
+                return new
                 {
-                    case "AddWeatherEffect":
-                        region.WeatherType = (WeatherType)((JassFourCCLiteralExpressionSyntax)callStatement.Arguments.Arguments[1]).Value.InvertEndianness();
-                        break;
-                    case "SetSoundPosition":
-                        region.AmbientSound = ((JassVariableReferenceExpressionSyntax)callStatement.Arguments.Arguments[0]).IdentifierName.Name;
-                        break;
+                    VariableName = (syntax.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax).IdentifierName.Name,
+                    WeatherType = (WeatherType)((JassFourCCLiteralExpressionSyntax)syntax.Arguments.Arguments[1]).Value.InvertEndianness(),
+                };
+            });
+
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
+            if (matchResult.Success)
+            {
+                var region = _context.VariableNameToRegionMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllRegions.LastOrDefault();
+                if (region != null)
+                {
+                    region.WeatherType = matchResult.Value.WeatherType;
                 }
+            }
+        }
 
-                return region;
-            }).IgnoreExceptionsAndExtraTokens();
+        private void ParseSetSoundPosition(List<IJassSyntaxToken> statementChildren)
+        {
+            var pattern = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "SetSoundPosition")
+            .Select(x =>
+            {
+                var syntax = (IInvocationSyntax)x;
+                return new
+                {
+                    VariableName = (syntax.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax).IdentifierName.Name,
+                    AmbientSound = ((JassVariableReferenceExpressionSyntax)syntax.Arguments.Arguments[0]).IdentifierName.Name,
+                };
+            });
 
-            regionPropertyPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
+            if (matchResult.Success)
+            {
+                var region = _context.VariableNameToRegionMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllRegions.LastOrDefault();
+                if (region != null)
+                {
+                    region.AmbientSound = matchResult.Value.AmbientSound;
+                }
+            }
         }
     }
-
 }

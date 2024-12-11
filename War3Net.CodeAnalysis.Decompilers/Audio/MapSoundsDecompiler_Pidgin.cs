@@ -6,7 +6,6 @@
 // ------------------------------------------------------------------------------
 
 using Pidgin;
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -23,19 +22,15 @@ namespace War3Net.CodeAnalysis.Decompilers
         {
             _context = new();
 
-            var functions = compilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>()
-                .Where(f => f.FunctionDeclarator.IdentifierName.Name == "InitSounds");
-
-            foreach (var function in functions)
+            var functions = new[] { compilationUnit.GetFunction("InitSounds") };
+            var statements = functions.Where(x => x != null).SelectMany(x => x.GetChildren_RecursiveDepthFirst().OfType<IStatementSyntax>()).ToList();
+            foreach (var statement in statements)
             {
-                var statements = function.Body.Statements;
-
-                foreach (var statement in statements)
-                {
-                    var statementChildren = statement.GetChildren_RecursiveDepthFirst().ToList();
-                    ParseSoundCreation(statementChildren);
-                    ParseSoundProperties(statementChildren);
-                }
+                var statementChildren = statement.GetChildren_RecursiveDepthFirst().ToList();
+                ParseSoundCreation(statementChildren);
+                ParseSetSoundVolume(statementChildren);
+                ParseSetSoundPitch(statementChildren);
+                ParseSetSoundDistances(statementChildren);
             }
 
             mapSounds = _context.AllSounds.Any() ? new MapSounds(formatVersion) { Sounds = _context.AllSounds } : null;
@@ -44,63 +39,111 @@ namespace War3Net.CodeAnalysis.Decompilers
 
         private void ParseSoundCreation(List<IJassSyntaxToken> statementChildren)
         {
-            var soundCreationPattern = Token(x =>
-                x is JassSetStatementSyntax setStatement &&
-                setStatement.Value.Expression is JassInvocationExpressionSyntax invocation &&
-                invocation.IdentifierName.Name == "CreateSound")
+            var createCameraSetupParser = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "CreateSound")
             .Select(x =>
             {
-                var setStatement = (JassSetStatementSyntax)x;
-                var invocation = (JassInvocationExpressionSyntax)setStatement.Value.Expression;
+                var invocation = (IInvocationSyntax)x;
                 return new Sound
                 {
-                    Name = setStatement.IdentifierName.Name,
                     FilePath = Regex.Unescape(((JassStringLiteralExpressionSyntax)invocation.Arguments.Arguments[0]).Value),
                     Flags = ParseSoundFlags(invocation.Arguments.Arguments),
                     FadeInRate = (int)invocation.Arguments.Arguments[4].GetDecimalExpressionValueOrDefault(),
                     FadeOutRate = (int)invocation.Arguments.Arguments[5].GetDecimalExpressionValueOrDefault(),
-                    EaxSetting = ((JassStringLiteralExpressionSyntax)invocation.Arguments.Arguments[6]).Value,
+                    EaxSetting = ((JassStringLiteralExpressionSyntax)invocation.Arguments.Arguments[6]).Value
                 };
-            }).IgnoreExceptionsAndExtraTokens();
+            });
 
-            var matchResult = soundCreationPattern.Parse(statementChildren);
+            var pattern = GetVariableAssignmentParser().Optional().SelectMany(x => createCameraSetupParser, (x, y) => (VariableAssignment: x.HasValue ? x.Value : null, Sound: y));
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
             if (matchResult.Success)
             {
-                var sound = matchResult.Value;
-                _context.AllSounds.Add(sound);
-                _context.VariableNameToSoundMapping[sound.Name] = sound;
+                var variableName = matchResult.Value.VariableAssignment;
+                var sound = matchResult.Value.Sound;
+                if (sound != null)
+                {
+                    _context.AllSounds.Add(sound);
+
+                    if (!string.IsNullOrWhiteSpace(variableName))
+                    {
+                        sound.Name = variableName;
+                        _context.VariableNameToSoundMapping[sound.Name] = sound;
+                    }
+                }
             }
         }
 
-        private void ParseSoundProperties(List<IJassSyntaxToken> statementChildren)
+        private void ParseSetSoundVolume(List<IJassSyntaxToken> statementChildren)
         {
-            var soundPropertyPattern = Token(x =>
-            {
-                return x is JassCallStatementSyntax callStatement && _context.VariableNameToSoundMapping.ContainsKey(((JassVariableReferenceExpressionSyntax)callStatement.Arguments.Arguments[0]).IdentifierName.Name);
-            })
+            var pattern = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "SetSoundVolume")
             .Select(x =>
             {
-                var callStatement = (JassCallStatementSyntax)x;
-                var sound = _context.VariableNameToSoundMapping[((JassVariableReferenceExpressionSyntax)callStatement.Arguments.Arguments[0]).IdentifierName.Name];
-
-                switch (callStatement.IdentifierName.Name)
+                var syntax = (IInvocationSyntax)x;
+                return new
                 {
-                    case "SetSoundVolume":
-                        sound.Volume = (int)callStatement.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault();
-                        break;
-                    case "SetSoundPitch":
-                        sound.Pitch = (float)callStatement.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault();
-                        break;
-                    case "SetSoundDistances":
-                        sound.MinDistance = (float)callStatement.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault();
-                        sound.MaxDistance = (float)callStatement.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault();
-                        break;
+                    VariableName = (syntax.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax).IdentifierName.Name,
+                    Volume = syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
+                };
+            });
+
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
+            if (matchResult.Success)
+            {
+                var sound = _context.VariableNameToSoundMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllSounds.LastOrDefault();
+                if (sound != null)
+                {
+                    sound.Volume = (int)matchResult.Value.Volume;
                 }
+            }
+        }
 
-                return sound;
-            }).IgnoreExceptionsAndExtraTokens();
+        private void ParseSetSoundPitch(List<IJassSyntaxToken> statementChildren)
+        {
+            var pattern = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "SetSoundPitch")
+            .Select(x =>
+            {
+                var syntax = (IInvocationSyntax)x;
+                return new
+                {
+                    VariableName = (syntax.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax).IdentifierName.Name,
+                    Pitch = syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
+                };
+            });
 
-            soundPropertyPattern.Parse(statementChildren);
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
+            if (matchResult.Success)
+            {
+                var sound = _context.VariableNameToSoundMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllSounds.LastOrDefault();
+                if (sound != null)
+                {
+                    sound.Pitch = (float)matchResult.Value.Pitch;
+                }
+            }
+        }
+
+        private void ParseSetSoundDistances(List<IJassSyntaxToken> statementChildren)
+        {
+            var pattern = Token(x => x is IInvocationSyntax syntax && syntax.IdentifierName.Name == "SetSoundDistances")
+            .Select(x =>
+            {
+                var syntax = (IInvocationSyntax)x;
+                return new
+                {
+                    VariableName = (syntax.Arguments.Arguments[0] as JassVariableReferenceExpressionSyntax).IdentifierName.Name,
+                    MinDistance = syntax.Arguments.Arguments[1].GetDecimalExpressionValueOrDefault(),
+                    MaxDistance = syntax.Arguments.Arguments[2].GetDecimalExpressionValueOrDefault(),
+                };
+            });
+
+            var matchResult = pattern.IgnoreExceptionsAndExtraTokens().Parse(statementChildren);
+            if (matchResult.Success)
+            {
+                var sound = _context.VariableNameToSoundMapping.GetValueOrDefault(matchResult.Value.VariableName) ?? _context.AllSounds.LastOrDefault();
+                if (sound != null)
+                {
+                    sound.MinDistance = (float)matchResult.Value.MinDistance;
+                    sound.MaxDistance = (float)matchResult.Value.MaxDistance;
+                }
+            }
         }
 
         private SoundFlags ParseSoundFlags(ImmutableArray<IExpressionSyntax> arguments)
