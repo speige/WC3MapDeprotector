@@ -392,6 +392,21 @@ namespace WC3MapDeprotector
 
         public async Task<DeprotectionResult> Deprotect()
         {
+            var mapFiles = Directory.GetFiles(@"C:\temp\Jass Decompilation", "*.j", SearchOption.TopDirectoryOnly);
+            foreach (var file in mapFiles)
+            {
+                var editorSpecificJassScript = PrepObfuscatedJassScriptForEditorFileDecompilation(new IndexedJassCompilationUnitSyntax(JassSyntaxFactory.ParseCompilationUnit(ReadFile_NoEncoding(file))));
+                try
+                {
+                    var map = JassScriptDecompiler_New.DecompileMap(editorSpecificJassScript.CompilationUnit);
+                }
+                catch (Exception e)
+                {
+                    Debugger.Break();
+                }
+            }
+            Debugger.Break();
+
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
             {
                 MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
@@ -1763,8 +1778,8 @@ namespace WC3MapDeprotector
             var globals = jassParsed.CompilationUnit.Declarations.OfType<JassGlobalDeclarationListSyntax>().SelectMany(x => x.Globals).Where(x => x is JassGlobalDeclarationSyntax).Cast<JassGlobalDeclarationSyntax>().ToList();
 
             var probablyUserDefined = new HashSet<string>();
-            var mainStatements = JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions);
-            var initBlizzardIndex = mainStatements.FindIndex(x => x is JassCallStatementSyntax callStatement && string.Equals(callStatement.IdentifierName.Name, "InitBlizzard", StringComparison.InvariantCultureIgnoreCase));
+            var mainStatements = JassTriggerExtensions.ExtractStatements_IncludingEnteringFirstExecutionOfEachFunctionCall(jassParsed, "main");
+            var initBlizzardIndex = mainStatements.FindIndex(x => x is IInvocationSyntax callStatement && string.Equals(callStatement.IdentifierName.Name, "InitBlizzard", StringComparison.InvariantCultureIgnoreCase));
 
             //NOTE: Searches for contents of InitGlobals() by structure so it can still work on obfuscated code
             var idx = initBlizzardIndex;
@@ -1823,12 +1838,11 @@ namespace WC3MapDeprotector
         protected IndexedJassCompilationUnitSyntax PrepObfuscatedJassScriptForEditorFileDecompilation(IndexedJassCompilationUnitSyntax jassParsed)
         {
             var statements = new List<IStatementSyntax>();
-            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "config", out var configInlinedFunctions));
-            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFunctionCalls(jassParsed, "main", out var mainInlinedFunctions));
+            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFirstExecutionOfEachFunctionCall(jassParsed, "config"));
+            statements.AddRange(JassTriggerExtensions.ExtractStatements_IncludingEnteringFirstExecutionOfEachFunctionCall(jassParsed, "main"));
             var allInlinedCodeFromConfigAndMain = statements.ToImmutableArray();
 
-            var inlined = new IndexedJassCompilationUnitSyntax(InlineJassFunctions(jassParsed.CompilationUnit, new HashSet<string>(configInlinedFunctions.Concat(mainInlinedFunctions))));
-            var newDeclarations = inlined.CompilationUnit.Declarations.ToList();
+            var newDeclarations = new List<ITopLevelDeclarationSyntax>();
             foreach (var nativeEditorFunction in JassTriggerExtensions.NativeEditorFunctions)
             {
                 newDeclarations.Add(new JassFunctionDeclarationSyntax(new JassFunctionDeclaratorSyntax(new JassIdentifierNameSyntax(nativeEditorFunction), JassParameterListSyntax.Empty, JassTypeSyntax.Nothing), new JassStatementListSyntax(allInlinedCodeFromConfigAndMain)));
@@ -2213,101 +2227,6 @@ namespace WC3MapDeprotector
             }
 
             throw new NotImplementedException();
-        }
-
-        protected JassCompilationUnitSyntax InlineJassFunctions(JassCompilationUnitSyntax compilationUnit, HashSet<string> functionNamesToInclude = null)
-        {
-            _logEvent("Inlining functions...");
-            var inlineCount = 0;
-            var oldInlineCount = inlineCount;
-            var functions = compilationUnit.Declarations.OfType<JassFunctionDeclarationSyntax>().GroupBy(x => x.FunctionDeclarator.IdentifierName.Name).ToDictionary(x => x.Key, x => x.First());
-            var newDeclarations = compilationUnit.Declarations.ToList();
-            do
-            {
-                oldInlineCount = inlineCount;
-                foreach (var toInline in functions)
-                {
-                    var functionName = toInline.Key;
-                    var function = toInline.Value;
-
-                    if (functionNamesToInclude != null && !functionNamesToInclude.Contains(functionName))
-                    {
-                        continue;
-                    }
-
-                    if (function.FunctionDeclarator.ParameterList.Parameters.Any())
-                    {
-                        //todo: still allow if parameters are not used
-                        continue;
-                    }
-
-                    if (function.Body.Statements.Any(x => x is JassLocalVariableDeclarationStatementSyntax))
-                    {
-                        //todo: still allow if local variables are not used
-                        continue;
-                    }
-
-                    var body = function.Body;
-                    var regex = new Regex(functionName, RegexOptions.Compiled);
-                    var singleExecution = true;
-                    JassFunctionDeclarationSyntax executionParent = null;
-                    foreach (var executionCheck in functions.Where(x => x.Key != functionName))
-                    {
-                        var bodyAsString = RenderJassAST(new JassStatementListSyntax(executionCheck.Value.Body.Statements.ToImmutableArray()));
-                        var matches = regex.Matches(bodyAsString); // regex on body is easiest, but imperfect due to strings & comments. however failing to inline isn't critical
-                        if (matches.Count >= 1)
-                        {
-                            if (executionParent != null || matches.Count > 1)
-                            {
-                                singleExecution = false;
-                                executionParent = null;
-                                break;
-                            }
-                            executionParent = executionCheck.Value;
-                        }
-                    }
-
-                    if (singleExecution && executionParent != null)
-                    {
-                        var newBody = new List<IStatementSyntax>();
-
-                        var inlined = false;
-                        for (var i = 0; i < executionParent.Body.Statements.Length; i++)
-                        {
-                            var statement = executionParent.Body.Statements[i];
-                            if (statement is JassCallStatementSyntax callStatement && callStatement.IdentifierName.Name == functionName)
-                            {
-                                newBody.AddRange(body.Statements);
-                                inlined = true;
-                            }
-                            else
-                            {
-                                newBody.Add(statement);
-                            }
-                        }
-
-                        if (inlined)
-                        {
-                            functions.Remove(functionName);
-                            newDeclarations.Remove(function);
-
-                            var index = newDeclarations.IndexOf(executionParent);
-                            newDeclarations.RemoveAt(index);
-                            var newExecutionParent = new JassFunctionDeclarationSyntax(executionParent.FunctionDeclarator, new JassStatementListSyntax(newBody.ToImmutableArray()));
-                            newDeclarations.Insert(index, newExecutionParent);
-
-                            functions[executionParent.FunctionDeclarator.IdentifierName.Name] = newExecutionParent;
-
-                            inlineCount++;
-                            _logEvent($"Inlining function {functionName}...");
-                        }
-                    }
-                }
-            } while (oldInlineCount != inlineCount);
-
-            _logEvent($"Inlined {inlineCount} functions");
-
-            return new JassCompilationUnitSyntax(newDeclarations.ToImmutableArray());
         }
 
         protected string InlineLuaFunctions(string luaScript)

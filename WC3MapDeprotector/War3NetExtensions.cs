@@ -6,56 +6,14 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
-using War3Net.Build.Widget;
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.Build.Object;
-using War3Net.Build.Environment;
 
 namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
-        public static Map TryDecompileObjectManagerData(this JassCompilationUnitSyntax compilationUnit, MapCamerasFormatVersion mapCamerasFormatVersion = default, bool mapCamerasUseNewFormat = default, MapRegionsFormatVersion mapRegionsFormatVersion = default, War3Net.Build.Audio.MapSoundsFormatVersion mapSoundsFormatVersion = default, MapWidgetsFormatVersion mapWidgetsFormatVersion = default, MapWidgetsSubVersion mapWidgetsSubVersion = default, bool mapWidgetsUseNewFormat = default)
-        {
-            var map = new Map();
-            try
-            {
-                var decompiler = new JassScriptDecompiler_Pidgin();
-
-                if (!decompiler.TryDecompileMapCameras(compilationUnit, mapCamerasFormatVersion, mapCamerasUseNewFormat, out var mapCameras))
-                {
-                    DebugSettings.Warn("ObjectManager Decompilation failed");
-                }
-
-                if (!decompiler.TryDecompileMapRegions(compilationUnit, mapRegionsFormatVersion, out var mapRegions))
-                {
-                    DebugSettings.Warn("ObjectManager Decompilation failed");
-                }
-
-                if (!decompiler.TryDecompileMapSounds(compilationUnit, mapSoundsFormatVersion, out var mapSounds))
-                {
-                    DebugSettings.Warn("ObjectManager Decompilation failed");
-                }
-
-                if (!decompiler.TryDecompileMapUnits(compilationUnit, mapWidgetsFormatVersion, mapWidgetsSubVersion, mapWidgetsUseNewFormat, out var mapUnits))
-                {
-                    DebugSettings.Warn("ObjectManager Decompilation failed");
-                }
-
-                map.Cameras = mapCameras;
-                map.Regions = mapRegions;
-                map.Sounds = mapSounds;
-                map.Units = mapUnits;
-            }
-            catch (Exception e)
-            {
-                DebugSettings.Warn(e.Message);
-            }
-
-            return map;
-        }
-
         public static Dictionary<ObjectDataType, War3NetSkinnableObjectDataWrapper> GetObjectDataCollection_War3Net(this Map map)
         {
             return Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().Select(x => new KeyValuePair<ObjectDataType, War3NetSkinnableObjectDataWrapper>(x, GetObjectDataCollectionByType(map, x))).Where(x => x.Value != null).ToDictionary(x => x.Key, x => x.Value);

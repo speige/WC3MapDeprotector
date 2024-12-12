@@ -12,6 +12,13 @@ namespace War3Net.CodeAnalysis.Decompilers
 {
     public static class ExpressionSyntaxExtensions_New
     {
+        /*
+        public static T GetValueOrDefault<T>(this IExpressionSyntax expression, T defaultValue = default(T))
+        {
+
+        }
+        */
+
         public static decimal GetDecimalExpressionValueOrDefault(this IExpressionSyntax expression, decimal defaultValue = default(decimal))
         {
             if (expression.TryGetDecimalExpressionValue(out var value))
@@ -26,6 +33,10 @@ namespace War3Net.CodeAnalysis.Decompilers
         {
             switch (expression)
             {
+                case JassBooleanLiteralExpressionSyntax booleanLiteralExpression:
+                    value = booleanLiteralExpression.Value ? 1 : 0;
+                    return true;
+
                 case JassDecimalLiteralExpressionSyntax decimalLiteralExpression:
                     value = decimalLiteralExpression.Value;
                     return true;

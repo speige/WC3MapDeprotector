@@ -247,9 +247,9 @@ namespace WC3MapDeprotector
             }
         }
 
-        public static List<IStatementSyntax> ExtractStatements_IncludingEnteringFunctionCalls(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName, out HashSet<string> inlinedFunctions)
+        public static List<IStatementSyntax> ExtractStatements_IncludingEnteringFirstExecutionOfEachFunctionCall(IndexedJassCompilationUnitSyntax indexedCompilationUnit, string startingFunctionName)
         {
-            inlinedFunctions = new HashSet<string>();
+            var alreadyVisitedFunctions = new HashSet<string>();
 
             if (!indexedCompilationUnit.IndexedFunctions.TryGetValue(startingFunctionName, out var function))
             {
@@ -276,9 +276,9 @@ namespace WC3MapDeprotector
                         {
                             if (indexedCompilationUnit.IndexedFunctions.TryGetValue(functionReference.IdentifierName.Name, out var nestedFunctionCall))
                             {
-                                if (!inlinedFunctions.Contains(functionReference.IdentifierName.Name))
+                                if (!alreadyVisitedFunctions.Contains(functionReference.IdentifierName.Name))
                                 {
-                                    inlinedFunctions.Add(functionReference.IdentifierName.Name);
+                                    alreadyVisitedFunctions.Add(functionReference.IdentifierName.Name);
                                     stack.Push(nestedFunctionCall);
                                 }
                             }
@@ -287,9 +287,9 @@ namespace WC3MapDeprotector
                         {
                             if (indexedCompilationUnit.IndexedFunctions.TryGetValue(callStatement.IdentifierName.Name, out var nestedFunctionCall))
                             {
-                                if (!inlinedFunctions.Contains(callStatement.IdentifierName.Name))
+                                if (!alreadyVisitedFunctions.Contains(callStatement.IdentifierName.Name))
                                 {
-                                    inlinedFunctions.Add(callStatement.IdentifierName.Name);
+                                    alreadyVisitedFunctions.Add(callStatement.IdentifierName.Name);
                                     stack.Push(nestedFunctionCall);
                                 }
                             }
@@ -297,9 +297,9 @@ namespace WC3MapDeprotector
                             {
                                 if (indexedCompilationUnit.IndexedFunctions.TryGetValue(execFunctionName.Value, out var execNestedFunctionCall))
                                 {
-                                    if (!inlinedFunctions.Contains(execFunctionName.Value))
+                                    if (!alreadyVisitedFunctions.Contains(execFunctionName.Value))
                                     {
-                                        inlinedFunctions.Add(execFunctionName.Value);
+                                        alreadyVisitedFunctions.Add(execFunctionName.Value);
                                         stack.Push(nestedFunctionCall);
                                     }
                                 }
