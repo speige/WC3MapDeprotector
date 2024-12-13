@@ -74,14 +74,19 @@ namespace WC3MapDeprotector
             try
             {
                 stream.Position = 0;
-                var mp3 = new Mp3FileReader(stream);
-                return mp3.TotalTime.TotalSeconds >= .25;
+                using (var memoryStream = new MemoryStream())
+                {
+                    stream.CopyTo(memoryStream);
+                    stream.Position = 0;
+
+                    // NAudio sometimes crashes during garbage collection due to stream already being disposed if it uses the shared stream that the other methods are using
+                    using (var mp3 = new Mp3FileReader(memoryStream))
+                    {
+                        return mp3.TotalTime.TotalSeconds >= .25;
+                    }
+                }
             }
             catch { }
-            finally
-            {
-                stream.Position = 0;
-            }
 
             return false;
         }
@@ -114,7 +119,7 @@ namespace WC3MapDeprotector
         private static partial Regex Regex_LuaScript();
         [GeneratedRegex(@"\s*require\s+'[^']+'", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_LuaScript2();
-        
+
         [GeneratedRegex(@"\s*function\s+preloadfiles\s+takes\s+nothing\s+returns\s+nothing", RegexOptions.IgnoreCase)]
         private static partial Regex Regex_PreloadFile_Jass();
 
