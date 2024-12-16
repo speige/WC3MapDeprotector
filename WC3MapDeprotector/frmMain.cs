@@ -19,6 +19,55 @@ namespace WC3MapDeprotector
             this.Text = $"WC3MapDeprotector {Assembly.GetEntryAssembly().GetName().Version} by http://www.youtube.com/@ai-gamer";
         }
 
+        private void BulkDeprotect()
+        {
+            string logFilePath = @"c:\temp\WC3MapDeprotector_bulkDeprotectLog.txt";
+            string directory = null;
+            Debugger.Break();
+            foreach (var fileName in Directory.GetFiles(directory, "*.*", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    //todo: copy debug/output logs to file
+                    tbInputFile.Text = fileName;
+                    tbInputFile_TextChanged(this, new EventArgs());
+
+                    if (File.Exists(tbOutputFile.Text))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        File.AppendAllText(logFilePath, "\r\rMapFileName: " + fileName + "\r");
+                    }
+                    catch { }
+
+                    btnRebuildMap_Click(this, new EventArgs());
+                    var task = Task.Run(async () =>
+                    {
+                        while (_running)
+                        {
+                            Thread.Sleep((int)TimeSpan.FromMinutes(1).TotalMilliseconds);
+                        }
+                    });
+                    task.Wait();
+
+                    try
+                    {
+                        File.AppendAllText(logFilePath, tbDebugLog.Text);
+                        File.AppendAllText(logFilePath, tbWarningMessages.Text);
+                    }
+                    catch { }
+                }
+                catch (Exception e)
+                {
+                    //todo: log to file
+                    //swallow exception
+                }
+            }
+    }
+
         protected class GitHubReleaseInfo
         {
             public string name { get; set; }
@@ -104,6 +153,14 @@ namespace WC3MapDeprotector
             UserSettings.WC3ExePath = PromptUserForFileInstallPath("Warcraft III.exe", UserSettings.WC3ExePath);
             UserSettings.WorldEditExePath = PromptUserForFileInstallPath("World Editor.exe", UserSettings.WorldEditExePath);
             cbOutputFormat.SelectedItem = "Reforged";
+
+            if (DebugSettings.BulkDeprotect)
+            {
+                BeginInvoke(() =>
+                {
+                    BulkDeprotect();
+                });
+            }
         }
 
         protected void tbInputFile_TextChanged(object sender, EventArgs e)
@@ -235,14 +292,20 @@ namespace WC3MapDeprotector
 
                     ForceWindowToFront();
                     System.Media.SystemSounds.Hand.Play();
-                    MessageBox.Show(statusMessage);
+                    if (!DebugSettings.BulkDeprotect)
+                    {
+                        MessageBox.Show(statusMessage);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 ForceWindowToFront();
                 System.Media.SystemSounds.Exclamation.Play();
-                MessageBox.Show(ex.Message, "ERROR");
+                if (!DebugSettings.BulkDeprotect)
+                {
+                    MessageBox.Show(ex.Message, "ERROR");
+                }
                 tbDebugLog.AppendText(ex.Message);
                 tbWarningMessages.AppendText(ex.Message);
             }

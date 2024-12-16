@@ -719,7 +719,7 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                if (inMPQArchive.ShouldKeepScanningForUnknowns)
+                if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BulkDeprotect)
                 {
                     LiveGameScanForUnknownFiles(inMPQArchive);
                 }

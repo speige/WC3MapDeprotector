@@ -15,6 +15,7 @@ namespace WC3MapDeprotector
         }
 
         //These allow easy config changes for testing purposes. They should always default to false. Customizing your setup should always be done within the "if (IsDebugMode)" block
+        public static bool BulkDeprotect;
         public static bool BenchmarkUnknownRecovery;
         public static bool DontCleanTemp;
         public static bool BreakOnWarnings;
@@ -22,6 +23,7 @@ namespace WC3MapDeprotector
         {
             if (IsDebugMode)
             {
+                //BulkDeprotect = true;
                 //BenchmarkUnknownRecovery = true;
                 //DontCleanTemp = true;
                 //BreakOnWarnings = true;
