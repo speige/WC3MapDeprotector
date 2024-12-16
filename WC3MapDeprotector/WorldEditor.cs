@@ -53,7 +53,7 @@ namespace WC3MapDeprotector
                 return false;
             }, (int)TimeSpan.FromMinutes(1).TotalMilliseconds, "Unable to load map file in World Editor");
 
-            SleepUntilTrue(() => IsMapLoaded(mapFileName), (int)TimeSpan.FromMinutes(15).TotalMilliseconds, "Unable to load map file in World Editor");
+            SleepUntilTrue(() => IsMapLoaded(mapFileName), (int)TimeSpan.FromMinutes(30).TotalMilliseconds, "Unable to load map file in World Editor");
         }
 
         public static Process GetRunningInstanceOfEditor()
