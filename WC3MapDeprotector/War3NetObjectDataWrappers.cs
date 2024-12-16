@@ -3,7 +3,6 @@ using War3Net.Build.Object;
 using System.Collections.ObjectModel;
 using War3Net.Common.Providers;
 using War3Net.Build.Extensions;
-using NuGet.Packaging;
 
 namespace WC3MapDeprotector
 {

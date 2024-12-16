@@ -1,9 +1,4 @@
-﻿using Cake.Core.IO;
-using Microsoft.Diagnostics.Tracing.AutomatedAnalysis;
-using NuGet.Configuration;
-using System.Diagnostics;
-
-namespace WC3MapDeprotector
+﻿namespace WC3MapDeprotector
 {
     public partial class frmLiveGameScanner : Form
     {

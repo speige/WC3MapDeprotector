@@ -6,13 +6,9 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.IO.Mpq;
 using SixLabors.ImageSharp;
-using War3Net.Build.Audio;
-using War3Net.Build.Widget;
-using War3Net.Build.Extensions;
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.Build.Object;
-using War3Net.Build.Environment;
 
 namespace WC3MapDeprotector
 {
@@ -69,70 +65,11 @@ namespace WC3MapDeprotector
             }
         }
 
-        public static Map Clone_Shallow(this Map map)
-        {
-            return new Map()
-            {
-                Sounds = map.Sounds,
-                Cameras = map.Cameras,
-                Environment = map.Environment,
-                PathingMap = map.PathingMap,
-                PreviewIcons = map.PreviewIcons,
-                Regions = map.Regions,
-                ShadowMap = map.ShadowMap,
-                ImportedFiles = map.ImportedFiles,
-                Info = map.Info,
-                AbilityObjectData = map.AbilityObjectData,
-                BuffObjectData = map.BuffObjectData,
-                DestructableObjectData = map.DestructableObjectData,
-                DoodadObjectData = map.DoodadObjectData,
-                ItemObjectData = map.ItemObjectData,
-                UnitObjectData = map.UnitObjectData,
-                UpgradeObjectData = map.UpgradeObjectData,
-                AbilitySkinObjectData = map.AbilitySkinObjectData,
-                BuffSkinObjectData = map.BuffSkinObjectData,
-                DestructableSkinObjectData = map.DestructableSkinObjectData,
-                DoodadSkinObjectData = map.DoodadSkinObjectData,
-                ItemSkinObjectData = map.ItemSkinObjectData,
-                UnitSkinObjectData = map.UnitSkinObjectData,
-                UpgradeSkinObjectData = map.UpgradeSkinObjectData,
-                CustomTextTriggers = map.CustomTextTriggers,
-                Script = map.Script,
-                Triggers = map.Triggers,
-                TriggerStrings = map.TriggerStrings,
-                Doodads = map.Doodads,
-                Units = map.Units
-            };
-        }
-
-        public static string GetVariableName_BugFixPendingPR(this UnitData unitData)
-        {
-            var result = unitData.GetVariableName();
-            if (unitData.IsItem())
-            {
-                return result.Replace("gg_unit_", "gg_item_");
-            }
-
-            return result;
-        }
-
-        public static string GetVariableName(this War3Net.Build.Environment.Region region)
-        {
-            return $"gg_rct_{region.Name.Replace(' ', '_')}";
-        }
-
-        public static string GetVariableName(this Sound sound)
-        {
-            return $"gg_snd_{sound.Name.Replace(' ', '_')}";
-        }
-
-        public static string GetVariableName(this Camera camera)
-        {
-            return $"gg_cam_{camera.Name.Replace(' ', '_')}";
-        }
-
         public static string GetVariableName(this TriggerDefinition trigger)
         {
+            //Todo: War3Net version is this. Test to see which is correct.
+            //return Regex.Replace(trigger.Name, "[^A-Za-z0-9_]", match => new string('_', Encoding.UTF8.GetBytes(match.Value).Length));
+
             return $"gg_trg_{trigger.Name.Replace(' ', '_')}";
         }
 

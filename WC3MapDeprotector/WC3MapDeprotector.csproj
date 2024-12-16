@@ -35,13 +35,6 @@
     <PackageReference Include="NLua" Version="1.6.3" />
     <PackageReference Include="SixLabors.Fonts" Version="2.0.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.2" />
-    <PackageReference Include="War3Net.Build" Version="5.7.1" />
-    <PackageReference Include="War3Net.Build.Core" Version="5.7.1" />
-    <PackageReference Include="War3Net.CodeAnalysis" Version="5.6.1" />
-    <PackageReference Include="War3Net.CodeAnalysis.Jass" Version="5.6.1" />
-    <PackageReference Include="War3Net.CodeAnalysis.Transpilers" Version="5.6.1" />
-    <PackageReference Include="War3Net.IO.Mpq" Version="5.6.1" />
-    <PackageReference Include="War3Net.IO.Slk" Version="5.6.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -134,15 +127,47 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\War3Net.CodeAnalysis.Decompilers\War3Net.CodeAnalysis.Decompilers.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <Reference Include="CSharp.lua">
+      <HintPath>..\War3Net\Binaries\CSharp.lua.dll</HintPath>
+    </Reference>
+    <Reference Include="DotNetZip">
+      <HintPath>..\War3Net\Binaries\DotNetZip.dll</HintPath>
+    </Reference>
     <Reference Include="FastMDX">
       <HintPath>FastMDX.dll</HintPath>
     </Reference>
     <Reference Include="MdxLib">
       <HintPath>MdxLib.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>..\War3Net\Binaries\Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+    <Reference Include="Pidgin">
+      <HintPath>..\War3Net\Binaries\Pidgin.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.Build">
+      <HintPath>..\War3Net\Binaries\War3Net.Build.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.Build.Core">
+      <HintPath>..\War3Net\Binaries\War3Net.Build.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.CodeAnalysis.Decompilers">
+      <HintPath>..\War3Net\Binaries\War3Net.CodeAnalysis.Decompilers.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.CodeAnalysis.Jass">
+      <HintPath>..\War3Net\Binaries\War3Net.CodeAnalysis.Jass.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.CodeAnalysis.Transpilers">
+      <HintPath>..\War3Net\Binaries\War3Net.CodeAnalysis.Transpilers.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.Common">
+      <HintPath>..\War3Net\Binaries\War3Net.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.IO.Mpq">
+      <HintPath>..\War3Net\Binaries\War3Net.IO.Mpq.dll</HintPath>
+    </Reference>
+    <Reference Include="War3Net.IO.Slk">
+      <HintPath>..\War3Net\Binaries\War3Net.IO.Slk.dll</HintPath>
     </Reference>
   </ItemGroup>
 

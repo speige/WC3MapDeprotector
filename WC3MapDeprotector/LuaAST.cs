@@ -1,9 +1,5 @@
-﻿using ICSharpCode.Decompiler.TypeSystem;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
-using NuGet.Configuration;
 using System.Runtime.Serialization;
 
 namespace WC3MapDeprotector

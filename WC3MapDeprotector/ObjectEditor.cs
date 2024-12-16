@@ -6,8 +6,8 @@ using War3Net.Build.Object;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.CodeAnalysis.Jass.Extensions;
 using System.Text.RegularExpressions;
-using NuGet.Packaging;
 using ObjectData = WC3MapDeprotector.GenericObjectData<WC3MapDeprotector.FourCC>;
+using War3Net.IO.Slk;
 
 namespace WC3MapDeprotector
 {
@@ -692,22 +692,19 @@ namespace WC3MapDeprotector
                     return result;
                 }
 
-                var slkData = SLKParser.Parse(fileName);
-                var maxX = slkData.Select(x => x.Key.x).Max();
-                var maxY = slkData.Select(x => x.Key.y).Max();
-
-                var columnNames = new string[maxX + 1];
-                for (var x = 0; x <= maxX; x++)
+                var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
+                var columnNames = new string[slkTable.Width];
+                for (var x = 0; x < slkTable.Width; x++)
                 {
-                    columnNames[x] = slkData.GetValueOrDefault((x, 0))?.ToString() ?? $"{Path.GetFileName(fileName)}_{x}";
+                    columnNames[x] = slkTable[x, 0]?.ToString() ?? $"{Path.GetFileName(fileName)}_{x}";
                 }
 
                 var objectIdColumnName = columnNames[0];
-                for (var y = 1; y <= maxY; y++)
+                for (var y = 1; y < slkTable.Height; y++)
                 {
                     try
                     {
-                        var objectId = slkData.GetValueOrDefault((0, y))?.ToString();
+                        var objectId = slkTable[0, y]?.ToString();
                         if (string.IsNullOrWhiteSpace(objectId))
                         {
                             continue; // invalid row
@@ -718,11 +715,11 @@ namespace WC3MapDeprotector
                             result[objectId] = objectData;
                         }
 
-                        for (var x = 0; x <= maxX; x++)
+                        for (var x = 0; x < slkTable.Width; x++)
                         {
                             try
                             {
-                                var value = slkData.GetValueOrDefault((x, y));
+                                var value = slkTable[x, y];
                                 if (value != null)
                                 {
                                     objectData.SetValue(columnNames[x], value);
