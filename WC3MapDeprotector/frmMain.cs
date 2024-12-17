@@ -6,7 +6,7 @@ namespace WC3MapDeprotector
 {
     public partial class frmMain : Form
     {
-        protected bool _running = false;
+        protected bool _deprotectRunning = false;
         protected bool _cancel = false;
         protected bool _disclaimerApproved = false;
         private CancellationTokenSource _bruteForceCancellationToken;
@@ -46,7 +46,7 @@ namespace WC3MapDeprotector
                     btnRebuildMap_Click(this, new EventArgs());
                     var task = Task.Run(async () =>
                     {
-                        while (_running)
+                        while (_deprotectRunning)
                         {
                             Thread.Sleep((int)TimeSpan.FromMinutes(1).TotalMilliseconds);
                         }
@@ -66,7 +66,7 @@ namespace WC3MapDeprotector
                     //swallow exception
                 }
             }
-    }
+        }
 
         protected class GitHubReleaseInfo
         {
@@ -104,16 +104,16 @@ namespace WC3MapDeprotector
 
         protected void EnableControls()
         {
-            btnRebuildMap.Text = _running ? "Cancel" : "Rebuild Map";
-            btnRebuildMap.Enabled = _running || File.Exists(tbInputFile.Text) && !string.IsNullOrWhiteSpace(tbOutputFile.Text);
+            btnRebuildMap.Text = _deprotectRunning ? "Cancel" : "Rebuild Map";
+            btnRebuildMap.Enabled = _deprotectRunning || File.Exists(tbInputFile.Text) && !string.IsNullOrWhiteSpace(tbOutputFile.Text);
 
-            btnInputFileBrowse.Enabled = !_running;
-            btnOutputFileBrowse.Enabled = !_running;
-            tbInputFile.Enabled = !_running;
-            tbOutputFile.Enabled = !_running;
-            btnRebuildMap.TabStop = !_running;
+            btnInputFileBrowse.Enabled = !_deprotectRunning;
+            btnOutputFileBrowse.Enabled = !_deprotectRunning;
+            tbInputFile.Enabled = !_deprotectRunning;
+            tbOutputFile.Enabled = !_deprotectRunning;
+            btnRebuildMap.TabStop = !_deprotectRunning;
 
-            if (_running)
+            if (_deprotectRunning)
             {
                 btnDonate.Focus();
             }
@@ -209,7 +209,7 @@ namespace WC3MapDeprotector
 
         protected async void btnRebuildMap_Click(object sender, EventArgs e)
         {
-            if (_running)
+            if (_deprotectRunning)
             {
                 _cancel = true;
                 btnRebuildMap.Enabled = false;
@@ -222,6 +222,7 @@ namespace WC3MapDeprotector
 
             tbDebugLog.Clear();
             tbWarningMessages.Clear();
+            tcLog.SelectedIndex = 1;
 
             using (var form = new frmDisclaimer())
             {
@@ -237,7 +238,7 @@ namespace WC3MapDeprotector
             try
             {
                 _cancel = false;
-                _running = true;
+                _deprotectRunning = true;
                 EnableControls();
                 using (var deprotector = new Deprotector(tbInputFile.Text, tbOutputFile.Text, new DeprotectionSettings() { }, log =>
                 {
@@ -264,11 +265,17 @@ namespace WC3MapDeprotector
                     {
                         tbWarningMessages.Text = "None";
                     }
+                    tcLog.SelectedIndex = 0;
 
                     var statusMessage = "";
-                    if (deprotectionResult.CriticalWarningCount == 0)
+                    if (deprotectionResult.CriticalWarningCount == 0 && deprotectionResult.UnknownFileCount == 0)
                     {
                         statusMessage = "Success!";
+
+                        if (deprotectionResult.CountOfProtectionsFound == 0)
+                        {
+                            statusMessage += " (Original file may not have been protected)";
+                        }
                     }
                     else
                     {
@@ -278,16 +285,6 @@ namespace WC3MapDeprotector
                     if (DebugSettings.BenchmarkUnknownRecovery)
                     {
                         statusMessage = "Benchmark-only mode. No output map created.";
-                    }
-
-                    if (deprotectionResult.UnknownFileCount > 0)
-                    {
-                        statusMessage += " (" + deprotectionResult.UnknownFileCount + " unknown files could not be recovered)";
-                    }
-
-                    if (deprotectionResult.CountOfProtectionsFound == 0)
-                    {
-                        statusMessage += " (Original file may not have been protected)";
                     }
 
                     ForceWindowToFront();
@@ -311,7 +308,7 @@ namespace WC3MapDeprotector
             }
             finally
             {
-                _running = false;
+                _deprotectRunning = false;
                 EnableControls();
             }
         }
@@ -366,6 +363,14 @@ namespace WC3MapDeprotector
             using (var discord = new frmDiscord())
             {
                 discord.ShowDialog();
+            }
+        }
+
+        private void tcMain_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_deprotectRunning)
+            {
+                tcMain.SelectedIndex = 0;
             }
         }
     }
