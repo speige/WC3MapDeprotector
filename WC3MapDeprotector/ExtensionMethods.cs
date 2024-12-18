@@ -12,6 +12,14 @@ namespace WC3MapDeprotector
             }
         }
 
+        public static string CalculateMD5(this byte[] byteArray)
+        {
+            using (var md5 = MD5.Create())
+            {
+                return BitConverter.ToString(md5.ComputeHash(byteArray)).Replace("-", "");
+            }
+        }
+
         public static string TrimStart(this string text, string trim)
         {
             if (text.StartsWith(trim))

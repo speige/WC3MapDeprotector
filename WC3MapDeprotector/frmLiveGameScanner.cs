@@ -25,7 +25,6 @@
         public void UpdateLabels(StormMPQArchive archive)
         {
             tbUnknownFileCount.Text = archive.UnknownFileCount.ToString();
-            tbFakeFileCount.Text = archive.FakeFileCount.ToString();
             tbDiscoveredFileCount.Text = archive.GetDiscoveredFileNames().Count.ToString();
         }
 

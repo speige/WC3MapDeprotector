@@ -31,10 +31,8 @@
             var resources = new System.ComponentModel.ComponentResourceManager(typeof(frmLiveGameScanner));
             label1 = new Label();
             label2 = new Label();
-            label3 = new Label();
             label4 = new Label();
             btnQuit = new Button();
-            tbFakeFileCount = new TextBox();
             tbUnknownFileCount = new TextBox();
             tbDiscoveredFileCount = new TextBox();
             btnRestartGame = new Button();
@@ -58,27 +56,17 @@
             // 
             label2.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label2.AutoSize = true;
-            label2.Location = new Point(386, 482);
+            label2.Location = new Point(386, 492);
             label2.Name = "label2";
             label2.Size = new Size(186, 25);
             label2.TabIndex = 1;
             label2.Text = "Unknown File Count:";
             // 
-            // label3
-            // 
-            label3.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            label3.AutoSize = true;
-            label3.Location = new Point(429, 520);
-            label3.Name = "label3";
-            label3.Size = new Size(143, 25);
-            label3.TabIndex = 2;
-            label3.Text = "Fake File Count:";
-            // 
             // label4
             // 
             label4.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label4.AutoSize = true;
-            label4.Location = new Point(421, 558);
+            label4.Location = new Point(421, 548);
             label4.Name = "label4";
             label4.Size = new Size(151, 25);
             label4.TabIndex = 3;
@@ -95,18 +83,10 @@
             btnQuit.UseVisualStyleBackColor = true;
             btnQuit.Click += btnQuit_Click;
             // 
-            // tbFakeFileCount
-            // 
-            tbFakeFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbFakeFileCount.Location = new Point(578, 520);
-            tbFakeFileCount.Name = "tbFakeFileCount";
-            tbFakeFileCount.Size = new Size(100, 32);
-            tbFakeFileCount.TabIndex = 5;
-            // 
             // tbUnknownFileCount
             // 
             tbUnknownFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbUnknownFileCount.Location = new Point(578, 482);
+            tbUnknownFileCount.Location = new Point(578, 492);
             tbUnknownFileCount.Name = "tbUnknownFileCount";
             tbUnknownFileCount.Size = new Size(100, 32);
             tbUnknownFileCount.TabIndex = 6;
@@ -114,7 +94,7 @@
             // tbDiscoveredFileCount
             // 
             tbDiscoveredFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbDiscoveredFileCount.Location = new Point(578, 558);
+            tbDiscoveredFileCount.Location = new Point(578, 548);
             tbDiscoveredFileCount.Name = "tbDiscoveredFileCount";
             tbDiscoveredFileCount.Size = new Size(100, 32);
             tbDiscoveredFileCount.TabIndex = 7;
@@ -170,10 +150,8 @@
             Controls.Add(btnRestartGame);
             Controls.Add(tbDiscoveredFileCount);
             Controls.Add(tbUnknownFileCount);
-            Controls.Add(tbFakeFileCount);
             Controls.Add(btnQuit);
             Controls.Add(label4);
-            Controls.Add(label3);
             Controls.Add(label2);
             Controls.Add(label1);
             Font = new Font("Segoe UI", 14F);
@@ -188,10 +166,8 @@
 
         private Label label1;
         private Label label2;
-        private Label label3;
         private Label label4;
         private Button btnQuit;
-        private TextBox tbFakeFileCount;
         private TextBox tbUnknownFileCount;
         private TextBox tbDiscoveredFileCount;
         private Button btnRestartGame;

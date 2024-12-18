@@ -1,5 +1,6 @@
 ﻿using NAudio.Wave;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,33 +8,29 @@ namespace WC3MapDeprotector
 {
     public static partial class FileFormatPredictor
     {
-        private static string PredictFontFileExtension(Stream stream)
+        private static string PredictFontFileExtension(byte[] bytes)
         {
             try
             {
-                stream.Position = 0;
-                var font = SixLabors.Fonts.FontDescription.LoadDescription(stream);
-                return "ttf";
+                using (var stream = new MemoryStream(bytes))
+                {
+                    var font = SixLabors.Fonts.FontDescription.LoadDescription(stream);
+                    return "ttf";
+                }
             }
             catch { }
-            finally
-            {
-                stream.Position = 0;
-            }
 
             return null;
         }
 
-        private static string PredictImageFileExtension(Stream stream)
+        private static string PredictImageFileExtension(byte[] bytes)
         {
             try
             {
-                stream.Position = 0;
-                var imageIdentity = SixLabors.ImageSharp.Image.Identify(stream);
-                stream.Position = 0;
+                var imageIdentity = SixLabors.ImageSharp.Image.Identify(bytes);
                 if (imageIdentity != null && imageIdentity.Width > 0 && imageIdentity.Height > 0)
                 {
-                    var format = SixLabors.ImageSharp.Image.DetectFormat(stream);
+                    var format = SixLabors.ImageSharp.Image.DetectFormat(bytes);
                     if ("BMP".Equals(format?.Name, StringComparison.InvariantCultureIgnoreCase))
                     {
                         //NOTE: ImageSharp returns .bm instead of .bmp
@@ -44,46 +41,18 @@ namespace WC3MapDeprotector
                 }
             }
             catch { }
-            finally
-            {
-                stream.Position = 0;
-            }
 
             return null;
         }
 
-        private static bool IsWavAudioFile(Stream stream)
+        private static bool IsWavAudioFile(byte[] bytes)
         {
             try
             {
-                stream.Position = 0;
-                var wav = new WaveFileReader(stream);
-                return wav.TotalTime.TotalSeconds >= .25;
-            }
-            catch { }
-            finally
-            {
-                stream.Position = 0;
-            }
-
-            return false;
-        }
-
-        private static bool IsMp3AudioFile(Stream stream)
-        {
-            try
-            {
-                stream.Position = 0;
-                using (var memoryStream = new MemoryStream())
+                using (var stream = new MemoryStream(bytes))
                 {
-                    stream.CopyTo(memoryStream);
-                    stream.Position = 0;
-
-                    // NAudio sometimes crashes during garbage collection due to stream already being disposed if it uses the shared stream that the other methods are using
-                    using (var mp3 = new Mp3FileReader(memoryStream))
-                    {
-                        return mp3.TotalTime.TotalSeconds >= .25;
-                    }
+                    var wav = new WaveFileReader(stream);
+                    return wav.TotalTime.TotalSeconds >= .25;
                 }
             }
             catch { }
@@ -91,20 +60,33 @@ namespace WC3MapDeprotector
             return false;
         }
 
-        private static bool IsAiffAudioFile(Stream stream)
+        private static bool IsMp3AudioFile(byte[] bytes)
+        {
+            try
+            {
+                using (var stream = new MemoryStream(bytes))
+                using (var mp3 = new Mp3FileReader(stream))
+                {
+                    return mp3.TotalTime.TotalSeconds >= .25;
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static bool IsAiffAudioFile(byte[] bytes)
         {
             //todo: test if WC3 supports this file format, if not can delete code
             try
             {
-                stream.Position = 0;
-                var aiff = new AiffFileReader(stream);
-                return aiff.TotalTime.TotalSeconds >= .25;
+                using (var stream = new MemoryStream(bytes))
+                {
+                    var aiff = new AiffFileReader(stream);
+                    return aiff.TotalTime.TotalSeconds >= .25;
+                }
             }
             catch { }
-            finally
-            {
-                stream.Position = 0;
-            }
 
             return false;
         }
@@ -125,23 +107,47 @@ namespace WC3MapDeprotector
 
         public static string PredictUnknownFileExtension(Stream stream)
         {
+            if (stream.Length == 0)
+            {
+                return null;
+            }
+
             try
             {
-                if (stream.Length == 0)
+                try
                 {
-                    return null;
+                    stream.Position = 0;
                 }
-
-                //NOTE: When comparing binary files with String.StartsWith/etc, you need to use Ordinal if you don't want extra non-visible characters like \0 to skew the results
-                stream.Position = 0;
+                catch { }
                 byte[] bytes;
                 using (var memoryStream = new MemoryStream())
                 {
                     stream.CopyTo(memoryStream);
                     bytes = memoryStream.ToArray();
-                    stream.Position = 0;
                 }
 
+                return PredictUnknownFileExtension(bytes);
+            }
+            finally
+            {
+                try
+                {
+                    stream.Position = 0;
+                }
+                catch { }
+            }
+        }
+
+        public static string PredictUnknownFileExtension(byte[] bytes)
+        {
+            try
+            {
+                if (bytes.Length == 0)
+                {
+                    return null;
+                }
+
+                //NOTE: When comparing binary files with String.StartsWith/etc, you need to use Ordinal if you don't want extra non-visible characters like \0 to skew the results
                 var nonReadableAsciiCount = 0;
                 var stringBuilder = new StringBuilder();
                 for (var i = 0; i < bytes.Length; i++)
@@ -193,19 +199,19 @@ namespace WC3MapDeprotector
                     return ".blp";
                 }
 
-                var fontFormat = PredictFontFileExtension(stream);
+                var fontFormat = PredictFontFileExtension(bytes);
                 if (!string.IsNullOrWhiteSpace(fontFormat))
                 {
                     return $".{fontFormat}";
                 }
 
-                var imageFormat = PredictImageFileExtension(stream);
+                var imageFormat = PredictImageFileExtension(bytes);
                 if (!string.IsNullOrWhiteSpace(imageFormat))
                 {
                     return $".{imageFormat}";
                 }
 
-                if (IsWavAudioFile(stream))
+                if (IsWavAudioFile(bytes))
                 {
                     return ".wav";
                 }
@@ -271,7 +277,7 @@ namespace WC3MapDeprotector
                     return ".fdf";
                 }
 
-                if (IsMp3AudioFile(stream))
+                if (IsMp3AudioFile(bytes))
                 {
                     //NOTE: mp3 gets false positives sometimes, so this should be below any higher-priority file extensions. Replace with different library instead of NAudio?
                     //todo: move up higher to see if I fixed it by resetting stream position to 0 before reading
@@ -407,14 +413,6 @@ namespace WC3MapDeprotector
                 }
             }
             catch { }
-            finally
-            {
-                try
-                {
-                    stream.Position = 0;
-                }
-                catch { }
-            }
 
             return null;
         }

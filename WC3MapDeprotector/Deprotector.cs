@@ -468,15 +468,7 @@ namespace WC3MapDeprotector
                 {
                     _deprotectionResult.CountOfProtectionsFound++;
                 }
-                if (inMPQArchive.HasFakeFiles)
-                {
-                    _deprotectionResult.CountOfProtectionsFound++;
-                }
-                if (inMPQArchive.HasUnknownHashes)
-                {
-                    _deprotectionResult.CountOfProtectionsFound++;
-                }
-                if (inMPQArchive.HasFilesWithWrongEncryptionKey)
+                if (inMPQArchive.ShouldKeepScanningForUnknowns)
                 {
                     _deprotectionResult.CountOfProtectionsFound++;
                 }
@@ -723,15 +715,11 @@ namespace WC3MapDeprotector
                     LiveGameScanForUnknownFiles(inMPQArchive);
                 }
 
-                if (Settings.BruteForceUnknowns && inMPQArchive.HasUnknownHashes)
+                if (Settings.BruteForceUnknowns && inMPQArchive.ShouldKeepScanningForUnknowns)
                 {
                     BruteForceUnknownFileNames(inMPQArchive);
                 }
 
-                if (inMPQArchive.FakeFileCount > 0)
-                {
-                    _deprotectionResult.WarningMessages.Add($"WARNING: MPQ Archive had some fake files and/or fake filenames. See \"Unknown Files\" in Help document");
-                }
                 _deprotectionResult.UnknownFileCount = inMPQArchive.UnknownFileCount;
                 if (_deprotectionResult.UnknownFileCount > 0)
                 {
@@ -1517,7 +1505,7 @@ namespace WC3MapDeprotector
                                                 unknownFileCount = newUnknownCount;
                                                 _logEvent($"unknown files remaining: {unknownFileCount}");
 
-                                                if (!archive.HasUnknownHashes)
+                                                if (!archive.ShouldKeepScanningForUnknowns)
                                                 {
                                                     Settings.BruteForceCancellationToken.Cancel();
                                                     return;
