@@ -7,7 +7,7 @@
         public byte HashSize_Bits { get; }
         protected byte[] _hash { get; }
         protected int _moduloValue { get; }
-        protected int OriginalDataLength { get; }
+        public int OriginalDataLength { get; }
 
         protected FuzzyHash(byte bits, byte[] fileData)
         {

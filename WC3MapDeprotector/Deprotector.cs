@@ -28,6 +28,7 @@ using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
 using War3Net.IO.Slk;
+using System.Linq;
 
 namespace WC3MapDeprotector
 {
@@ -374,9 +375,8 @@ namespace WC3MapDeprotector
         }
 
         public string ReadFile_NoEncoding(string fileName)
-        {
-            //ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading script files to avoid corrupting non-ascii or international characters.
-            return File.ReadAllText(fileName, Encoding.GetEncoding("ISO-8859-1"));
+        {            
+            return File.ReadAllBytes(fileName).ToString_NoEncoding();
         }
 
         public string ConvertBytesToAscii(byte[] bytes)
@@ -623,23 +623,28 @@ namespace WC3MapDeprotector
                     var previousScannedFiles = new HashSet<string>(possibleFileNames_parsed, StringComparer.InvariantCultureIgnoreCase);
                     var previousDiscoveredFileNames = new HashSet<string>(inMPQArchive.GetDiscoveredFileNames(), StringComparer.InvariantCultureIgnoreCase);
 
-                    var allExtractedFiles = Directory.GetFiles(ExtractedFilesPath, "*", SearchOption.AllDirectories).ToList();
+                    var discoveredFilePaths = Directory.GetFiles(DiscoveredFilesPath, "*", SearchOption.AllDirectories).ToList();
+                    var unknownFilePaths = inMPQArchive.GetUnknownPseudoFileNames().Select(x => Path.Combine(UnknownFilesPath, x)).ToList();
+                    var allExtractedFiles = discoveredFilePaths.Concat(unknownFilePaths).ToList();
                     Parallel.ForEach(allExtractedFiles, fileName =>
                     {
-                        using (var stream = File.OpenRead(fileName))
+                        if (!File.Exists(fileName))
                         {
-                            var extension = Path.GetExtension(fileName);
-                            var md5 = stream.CalculateMD5();
-                            if (alreadyScannedMD5WithFileExtension.TryGetValue(md5, out var previousExtension) && extension.Equals(previousExtension, StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                return;
-                            }
-
-                            alreadyScannedMD5WithFileExtension[md5] = extension;
+                            return;
                         }
 
+                        var fileContents = File.ReadAllBytes(fileName);
+                        var extension = Path.GetExtension(fileName);
+                        var md5 = fileContents.CalculateMD5();
+                        if (alreadyScannedMD5WithFileExtension.TryGetValue(md5, out var previousExtension) && extension.Equals(previousExtension, StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            return;
+                        }
+
+                        alreadyScannedMD5WithFileExtension[md5] = extension;
+
                         _logEvent($"Searching {fileName} ...");
-                        var scannedFiles = ParseFileToDetectPossibleUnknowns(fileName, unknownFileExtensions);
+                        var scannedFiles = ParseFileToDetectPossibleUnknowns(fileContents, Path.GetExtension(fileName), unknownFileExtensions);
                         possibleFileNames_parsed.UnionWith(scannedFiles);
                         possibleFileNames_parsed.UnionWith(scannedFiles.SelectMany(x => GetAlternateUnknownRecoveryFileNames(x)));
                     });
@@ -2810,84 +2815,85 @@ namespace WC3MapDeprotector
             return CleanScannedUnknownFileNames(result);
         }
 
-        protected List<string> ParseFileToDetectPossibleUnknowns(string fileName, List<string> unknownFileExtensions)
+        protected List<string> ParseFileToDetectPossibleUnknowns(byte[] fileContents, string fileExtension, List<string> unknownFileExtensions)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
-            var extension = Path.GetExtension(fileName);
-            var bytes = File.ReadAllBytes(fileName);
             var allLines = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             foreach (var encoding in _allEncodings)
             {
                 try
                 {
-                    allLines.AddRange(encoding.GetString(bytes).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+                    allLines.AddRange(encoding.GetString(fileContents).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
                 }
                 catch { }
             }
 
             var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(bytes).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
+            stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(fileContents).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
             stringsWithFileExtensions.AddRange(allLines.SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));
             result.AddRange(stringsWithFileExtensions);
 
-            if (extension.Equals(".toc", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".imp", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".toc", StringComparison.InvariantCultureIgnoreCase) || fileExtension.Equals(".imp", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.AddRange(allLines);
             }
 
-            if (extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.AddRange(ScanINIForPossibleFileNames(fileName, unknownFileExtensions));
+                result.AddRange(ScanINIForPossibleFileNames(fileContents, unknownFileExtensions));
             }
 
-            if (extension.Equals(".mdx", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".mdx", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.AddRange(ScanMDXForPossibleFileNames(fileName));
+                result.AddRange(ScanMDXForPossibleFileNames(fileContents));
             }
 
-            if (extension.Equals(".mdl", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".mdl", StringComparison.InvariantCultureIgnoreCase))
             {
-                result.AddRange(ScanMDLForPossibleFileNames(fileName));
+                result.AddRange(ScanMDLForPossibleFileNames(fileContents));
             }
 
-            if (extension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || extension.Equals(".fdf", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".j", StringComparison.InvariantCultureIgnoreCase) || fileExtension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase) || fileExtension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase) || fileExtension.Equals(".txt", StringComparison.InvariantCultureIgnoreCase) || fileExtension.Equals(".fdf", StringComparison.InvariantCultureIgnoreCase))
             {
                 var quotedStrings = new HashSet<string>(allLines.SelectMany(x => ParseQuotedStringsFromCode(x)), StringComparer.InvariantCultureIgnoreCase);
                 result.AddRange(AddCommonModelAndTextureFileExtensions(quotedStrings));
             }
 
-            if (extension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".slk", StringComparison.InvariantCultureIgnoreCase))
             {
                 try
                 {
-                    var slkTable = new SylkParser().Parse(File.OpenRead(fileName));
-                    var columns = new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
-                    for (var x = 0; x < slkTable.Width; x++)
+                    using (var stream = new MemoryStream(fileContents))
                     {
-                        var columnName = slkTable[x, 0]?.ToString();
-                        if (!string.IsNullOrWhiteSpace(columnName))
+                        var slkTable = new SylkParser().Parse(stream);
+                        var columns = new Dictionary<string, int>(StringComparer.InvariantCultureIgnoreCase);
+                        for (var x = 0; x < slkTable.Width; x++)
                         {
-                            columns[columnName] = x;
-                        }
-                    }
-                    var files = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-                    if (columns.TryGetValue("dir", out var directoryColumn) && columns.TryGetValue("file", out var fileColumn))
-                    {
-                        for (var y = 1; y < slkTable.Height; y++)
-                        {
-                            try
+                            var columnName = slkTable[x, 0]?.ToString();
+                            if (!string.IsNullOrWhiteSpace(columnName))
                             {
-                                var directory = slkTable[directoryColumn, y]?.ToString();
-                                var file = slkTable[fileColumn, y]?.ToString();
-                                if (!string.IsNullOrWhiteSpace(directory) && !string.IsNullOrWhiteSpace(file))
-                                {
-                                    files.Add(Path.Combine(directory, file));
-                                }
+                                columns[columnName] = x;
                             }
-                            catch { }
                         }
-                        result.AddRange(AddCommonModelAndTextureFileExtensions(files));
+                        var files = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+                        if (columns.TryGetValue("dir", out var directoryColumn) && columns.TryGetValue("file", out var fileColumn))
+                        {
+                            for (var y = 1; y < slkTable.Height; y++)
+                            {
+                                try
+                                {
+                                    var directory = slkTable[directoryColumn, y]?.ToString();
+                                    var file = slkTable[fileColumn, y]?.ToString();
+                                    if (!string.IsNullOrWhiteSpace(directory) && !string.IsNullOrWhiteSpace(file))
+                                    {
+                                        files.Add(Path.Combine(directory, file));
+                                    }
+                                }
+                                catch { }
+                            }
+                            result.AddRange(AddCommonModelAndTextureFileExtensions(files));
+                        }
                     }
                 }
                 catch { }
@@ -2895,7 +2901,7 @@ namespace WC3MapDeprotector
 
             //todo: [LowPriority] add real FDF parser? (none online, would need to build my own based on included fdf.g grammar file)
 
-            if (extension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase))
+            if (fileExtension.Equals(".lua", StringComparison.InvariantCultureIgnoreCase))
             {
                 result.AddRange(allLines.SelectMany(x => ParseQuotedStringsFromCode(x, '\'', "\\'")));
                 var requiredFiles = allLines.Where(x => x.Contains("require", StringComparison.InvariantCultureIgnoreCase)).SelectMany(x =>
@@ -3083,101 +3089,102 @@ namespace WC3MapDeprotector
             return result;
         }
 
-        protected List<string> ScanMDLForPossibleFileNames(string mdlFileName)
+        protected List<string> ScanMDLForPossibleFileNames(byte[] fileContents)
         {
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            using (var stream = new StreamReader(File.OpenRead(mdlFileName)))
-            {
-                var lines = stream.ReadToEnd().Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                stream.BaseStream.Position = 0;
-                var commentLines = lines.Where(x => x.Trim().StartsWith("//")).Select(x => x.Trim().TrimStart('/')).ToList();
-                result.AddRange(commentLines.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, _modelAndTextureFileExtensions.ToList())));
-                result.AddRange(lines.Where(x => _modelAndTextureFileExtensions.Any(y => x.Contains(y, StringComparison.InvariantCultureIgnoreCase))).SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, _modelAndTextureFileExtensions.ToList())));
+            var lines = fileContents.ToString_NoEncoding().Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            var commentLines = lines.Where(x => x.Trim().StartsWith("//")).Select(x => x.Trim().TrimStart('/')).ToList();
+            result.AddRange(commentLines.SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, _modelAndTextureFileExtensions.ToList())));
+            result.AddRange(lines.Where(x => _modelAndTextureFileExtensions.Any(y => x.Contains(y, StringComparison.InvariantCultureIgnoreCase))).SelectMany(x => ScanTextForPotentialUnknownFileNames_SLOW(x, _modelAndTextureFileExtensions.ToList())));
 
-                try
+            try
+            {
+                var model = new MdxLib.Model.CModel();
+                using (var stream = new MemoryStream(fileContents))
                 {
-                    var model = new MdxLib.Model.CModel();
                     var loader = new MdxLib.ModelFormats.CMdl();
-                    loader.Load(mdlFileName, stream.BaseStream, model);
-                    if (model.Textures != null)
-                    {
-                        var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
-                        result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
-                    }
-                    if (model.Nodes != null)
-                    {
-                        var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
-                        result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
-                    }
-                    result.Add($"{model.Name}.mdl");
+                    loader.Load("EMPTY_FILE_NAME.mdl", stream, model);
                 }
-                catch { }
+                if (model.Textures != null)
+                {
+                    var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
+                    result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
+                }
+                if (model.Nodes != null)
+                {
+                    var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
+                    result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
+                }
+                result.Add($"{model.Name}.mdl");
             }
+            catch { }
 
             result.AddRange(result.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))).ToList());
             return result.ToList();
         }
 
-        protected List<string> ScanMDXForPossibleFileNames_FastMDX(string mdxFileName)
+        protected List<string> ScanMDXForPossibleFileNames_FastMDX(byte[] fileContents)
         {
             //todo: fix bug when parsing Glow.mdx from ZombieVillager (crashes rather than just returning the data it found) [low priority since we probably delete this library and only use MDXLib]
             try
             {
-                using (var stream = new StreamReader(File.OpenRead(mdxFileName)))
+                var model = new MdxLib.Model.CModel();
+                using (var stream = new MemoryStream(fileContents))
                 {
-                    var model = new MdxLib.Model.CModel();
                     var loader = new MdxLib.ModelFormats.CMdx();
-                    loader.Load(mdxFileName, stream.BaseStream, model);
-                    var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-                    if (model.Textures != null)
-                    {
-                        var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
-                        result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
-                    }
-                    if (model.Nodes != null)
-                    {
-                        var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
-                        result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
-                    }
-                    result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
-                    return result.ToList();
+                    loader.Load("EMPTY_FILE_NAME.mdx", stream, model);
                 }
+                var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+                if (model.Textures != null)
+                {
+                    var textures = new HashSet<string>(model.Textures.Select(x => x.FileName).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
+                    result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
+                }
+                if (model.Nodes != null)
+                {
+                    var nodes = new HashSet<string>(model.Nodes.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
+                    result.AddRange(AddCommonModelAndTextureFileExtensions(nodes));
+                }
+                result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{model.Name}{ext}"));
+                return result.ToList();
             }
             catch { }
 
-            _logEvent($"Error parsing file with FastMDX Library: {mdxFileName}");
+            _logEvent($"Error parsing file with FastMDX Library");
             return new List<string>();
         }
 
-        protected List<string> ScanMDXForPossibleFileNames_MDXLib(string mdxFileName)
+        protected List<string> ScanMDXForPossibleFileNames_MDXLib(byte[] fileContents)
         {
             //todo: fix bug when parsing Glow.mdx from ZombieVillager (crashes rather than just returning the data it found)
             try
             {
-                var mdx = new MDX(mdxFileName);
-                var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-                if (mdx.Textures != null)
+                using (var stream = new MemoryStream(fileContents))
                 {
-                    var textures = new HashSet<string>(mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
-                    result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
+                    var mdx = new MDX(stream);
+                    var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
+                    if (mdx.Textures != null)
+                    {
+                        var textures = new HashSet<string>(mdx.Textures.Select(x => x.Name).Where(x => !string.IsNullOrWhiteSpace(x)), StringComparer.InvariantCultureIgnoreCase);
+                        result.AddRange(AddCommonModelAndTextureFileExtensions(textures));
+                    }
+                    result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{mdx.Info.Name}{ext}"));
+                    return result.ToList();
                 }
-                result.AddRange(_modelAndTextureFileExtensions.Select(ext => $"{mdx.Info.Name}{ext}"));
-                return result.ToList();
             }
             catch
             {
             }
 
-            _logEvent($"Error parsing file with MDXLib Library: {mdxFileName}");
+            _logEvent($"Error parsing file with MDXLib Library");
             return new List<string>();
         }
 
         [GeneratedRegex(@"^MDLXVERS.*?MODLt.*?([a-z0-9 _-]+)", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScanMDX();
-        protected List<string> ScanMDXForPossibleFileNames_Regex(string mdxFileName)
+        protected List<string> ScanMDXForPossibleFileNames_Regex(byte[] fileContents)
         {
-            var line = ReadFile_NoEncoding(mdxFileName);
-            var mdxMatch = Regex_ScanMDX().Match(line);
+            var mdxMatch = Regex_ScanMDX().Match(fileContents.ToString_NoEncoding());
             if (mdxMatch.Success)
             {
                 return _modelAndTextureFileExtensions.Select(ext => $"{mdxMatch.Groups[1].Value}{ext}").ToList();
@@ -3186,39 +3193,38 @@ namespace WC3MapDeprotector
             return new List<string>();
         }
 
-        protected List<string> ScanMDXForPossibleFileNames(string mdxFileName)
+        protected List<string> ScanMDXForPossibleFileNames(byte[] fileContents)
         {
-            if (!string.Equals(Path.GetExtension(mdxFileName), ".mdx", StringComparison.InvariantCultureIgnoreCase))
-            {
-                return new List<string>();
-            }
-
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
-            result.AddRange(ScanMDXForPossibleFileNames_FastMDX(mdxFileName));
-            result.AddRange(ScanMDXForPossibleFileNames_MDXLib(mdxFileName));
-            result.AddRange(ScanMDXForPossibleFileNames_Regex(mdxFileName));
+            result.AddRange(ScanMDXForPossibleFileNames_FastMDX(fileContents));
+            result.AddRange(ScanMDXForPossibleFileNames_MDXLib(fileContents));
+            result.AddRange(ScanMDXForPossibleFileNames_Regex(fileContents));
             result.AddRange(result.SelectMany(x => _modelAndTextureFileExtensions.Select(ext => Path.ChangeExtension(x, ext))).ToList());
             return result.ToList();
         }
 
-        protected List<string> ScanINIForPossibleFileNames(string fileName, List<string> unknownFileExtensions)
+        protected List<string> ScanINIForPossibleFileNames(byte[] fileContents, List<string> unknownFileExtensions)
         {
             var result = new List<string>();
             try
             {
-                var parser = new FileIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
-                var ini = parser.ReadFile(fileName);
-                foreach (var section in ini.Sections)
+                var parser = new StreamIniDataParser(new IniParser.Parser.IniDataParser(new IniParserConfiguration() { SkipInvalidLines = true, AllowDuplicateKeys = true, AllowDuplicateSections = true, AllowKeysWithoutSection = true }));
+                using (var stream = new MemoryStream(fileContents))
+                using (var reader = new StreamReader(stream))
                 {
-                    foreach (var key in section.Keys)
+                    var ini = parser.ReadData(reader);
+                    foreach (var section in ini.Sections)
                     {
-                        if (key.KeyName.EndsWith("art", StringComparison.InvariantCultureIgnoreCase) || key.KeyName.EndsWith("name", StringComparison.InvariantCultureIgnoreCase))
+                        foreach (var key in section.Keys)
                         {
-                            result.AddRange(AddCommonModelAndTextureFileExtensions(new HashSet<string>() { key.Value }));
-                        }
+                            if (key.KeyName.EndsWith("art", StringComparison.InvariantCultureIgnoreCase) || key.KeyName.EndsWith("name", StringComparison.InvariantCultureIgnoreCase))
+                            {
+                                result.AddRange(AddCommonModelAndTextureFileExtensions(new HashSet<string>() { key.Value }));
+                            }
 
-                        result.AddRange(ScanTextForPotentialUnknownFileNames_SLOW(key.Value, unknownFileExtensions));
+                            result.AddRange(ScanTextForPotentialUnknownFileNames_SLOW(key.Value, unknownFileExtensions));
+                        }
                     }
                 }
             }

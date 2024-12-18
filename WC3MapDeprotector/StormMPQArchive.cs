@@ -17,6 +17,7 @@ namespace WC3MapDeprotector
         //NOTE: Due to fake hash entries in some corrupted MPQs we can't use the MPQFullHash as a unique key, so we're created our own by calculating the MD5 hash of the extracted file instead
         protected Dictionary<uint, uint> _fileIndexToEncryptionKey = new Dictionary<uint, uint>();
         protected Dictionary<ushort, ulong[]> _fileIndexToMPQFullHashes = new Dictionary<ushort, ulong[]>();
+        protected List<uint[]> _groupedAlmostIdenticalFileIndexes;
         protected Dictionary<uint, string> _fileIndexToMd5 = new Dictionary<uint, string>();
         protected Dictionary<uint, FuzzyHash_8> _fileIndexToFuzzyHash = new Dictionary<uint, FuzzyHash_8>();
         protected Dictionary<uint, HashSet<string>> _fileIndexToDiscoveredFileNames = new Dictionary<uint, HashSet<string>>();
@@ -94,45 +95,15 @@ namespace WC3MapDeprotector
         {
             get
             {
-                var almostIdenticalFiles = GroupAlmostIdenticalFiles_Memoized();
-                return almostIdenticalFiles.Count(x => !x.Any(y => _fileIndexToDiscoveredFileNames.ContainsKey(y)));
+                return GetUnknownPseudoFileNames().Count;
             }
         }
 
-        protected List<uint[]> _groupAlmostIdenticalFiles_CachedValue;
-        protected int _fileIndexToFuzzyHash_lastKeyCount;
-        protected List<uint[]> GroupAlmostIdenticalFiles_Memoized()
+        public List<string> GetUnknownPseudoFileNames()
         {
-            if (_groupAlmostIdenticalFiles_CachedValue != null && _fileIndexToFuzzyHash_lastKeyCount > 0 && _fileIndexToFuzzyHash_lastKeyCount == _fileIndexToFuzzyHash.Count)
-            {
-                return _groupAlmostIdenticalFiles_CachedValue;
-            }
-
-            var calculate = () =>
-            {
-                const double threshold = 99;
-                List<uint[]> result = new List<uint[]>();
-                var toSearch = _fileIndexToFuzzyHash.ToDictionary(x => x.Key, x => x.Value);
-                while (toSearch.Count > 0)
-                {
-                    var first = toSearch.First();
-                    toSearch.Remove(first.Key);
-                    var matches = toSearch.Where(x => first.Value.CalcMatchPercentage(x.Value) >= threshold).ToList();
-                    foreach (var match in matches)
-                    {
-                        toSearch.Remove(match.Key);
-                    }
-
-                    result.Add(matches.Select(x => x.Key).Concat(new[] { first.Key }).ToArray());
-                }
-
-                return result;
-            };
-
-            _fileIndexToFuzzyHash_lastKeyCount = _fileIndexToFuzzyHash.Count;
-            _groupAlmostIdenticalFiles_CachedValue = calculate();
-
-            return _groupAlmostIdenticalFiles_CachedValue;
+            var unknown = _groupedAlmostIdenticalFileIndexes.Where(x => !x.Any(y => _fileIndexToDiscoveredFileNames.ContainsKey(y)));
+            var withoutFakes = unknown.Select(x => x.OrderByDescending(y => _fileIndexToFuzzyHash[y].OriginalDataLength).First()).ToList();
+            return withoutFakes.Select(x => CalculatePseudoFileName(x)).ToList();
         }
 
         public List<string> GetDiscoveredFileNames()
@@ -186,6 +157,7 @@ namespace WC3MapDeprotector
                     md5Hash = bytes.CalculateMD5();
                     _fileIndexToMd5[fileIndex] = md5Hash;
                     _fileIndexToFuzzyHash[fileIndex] = FuzzyHash_8.Compute(bytes);
+                    _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
 
                     if (_md5ToLocalDiskFileName.TryGetValue(md5Hash, out var oldLocalDiskFileName))
                     {
@@ -432,16 +404,16 @@ namespace WC3MapDeprotector
                         var oldExtension = Path.GetExtension(pseudoFileFullPath);
                         var oldEncryptionKey = _fileIndexToEncryptionKey[fileIndex];
                         var oldMD5Hash = _fileIndexToMd5[fileIndex];
+                        var oldFuzzyHash = _fileIndexToFuzzyHash[fileIndex];
 
                         //Original encryption key detected incorrectly
                         File.Delete(pseudoFileFullPath);
-                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out var _, out var newEncryptionKey))
+                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out _, out _, out _))
                         {
                             return false;
                         }
 
-                        _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
-                        _fileIndexToMd5[fileIndex] = md5Hash;
+                        RefreshGroupedAlmostIdenticalFileIndexes();
 
                         var newPseudoFileName = Path.Combine(UNKNOWN_FOLDER, CalculatePseudoFileName(fileIndex));
                         var newPseudoFileFullPath = Path.Combine(_extractFolder, pseudoFileName);
@@ -451,8 +423,10 @@ namespace WC3MapDeprotector
                         {
                             DebugSettings.Warn("Probably found fake file name. Verify this code is correct.");
 
-                            _fileIndexToEncryptionKey[fileIndex] = encryptionKey;
-                            _fileIndexToMd5[fileIndex] = md5Hash;
+                            _fileIndexToEncryptionKey[fileIndex] = oldEncryptionKey;
+                            _fileIndexToMd5[fileIndex] = oldMD5Hash;
+                            _fileIndexToMd5[fileIndex] = oldMD5Hash;
+                            _fileIndexToFuzzyHash[fileIndex] = oldFuzzyHash;
                             File.Delete(newPseudoFileFullPath);
                             return false;
                         }
@@ -604,6 +578,25 @@ namespace WC3MapDeprotector
             return result;
         }
 
+        protected void RefreshGroupedAlmostIdenticalFileIndexes()
+        {
+            const double threshold = 99;
+            _groupedAlmostIdenticalFileIndexes = new List<uint[]>();
+            var toSearch = _fileIndexToFuzzyHash.ToDictionary(x => x.Key, x => x.Value);
+            while (toSearch.Count > 0)
+            {
+                var first = toSearch.First();
+                toSearch.Remove(first.Key);
+                var matches = toSearch.Where(x => first.Value.CalcMatchPercentage(x.Value) >= threshold).ToList();
+                foreach (var match in matches)
+                {
+                    toSearch.Remove(match.Key);
+                }
+
+                _groupedAlmostIdenticalFileIndexes.Add(matches.Select(x => x.Key).Concat(new[] { first.Key }).ToArray());
+            }
+        }
+
         public unsafe StormMPQArchive(string mpqFileName, string extractFolder, Action<string> logEvent, DeprotectionResult deprotectionResult)
         {
             _extractFolder = extractFolder;
@@ -720,6 +713,7 @@ namespace WC3MapDeprotector
                     AddMPQHash(hash);
                 }
                 _detectedFakeHashes = validHashEntries.GroupBy(x => x.dwBlockIndex).Any(x => x.Count() > 1);
+                RefreshGroupedAlmostIdenticalFileIndexes();
             }
             finally
             {
