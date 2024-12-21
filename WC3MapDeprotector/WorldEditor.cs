@@ -40,7 +40,7 @@ namespace WC3MapDeprotector
                 editorInstance = WorldEditor.GetRunningInstanceOfEditor();
             } while (editorInstance != null);
 
-            Process = Utils.ExecuteCommand(UserSettings.WorldEditExePath, $"-launch -loadfile \"{mapFileName}\" -hd 0", ProcessWindowStyle.Maximized);
+            Process = Utils.ExecuteCommand(UserSettings.WorldEditExePath, $"-launch -nowfpause -loadfile \"{mapFileName}\" -hd 0", ProcessWindowStyle.Maximized);
 
             SleepUntilTrue(() =>
             {

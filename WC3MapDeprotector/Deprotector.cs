@@ -246,7 +246,7 @@ namespace WC3MapDeprotector
 
         protected Process LaunchWC3(string mapFileName)
         {
-            return Utils.ExecuteCommand(UserSettings.WC3ExePath, $"-launch -loadfile \"{mapFileName}\"");
+            return Utils.ExecuteCommand(UserSettings.WC3ExePath, $"-launch -nowfpause -loadfile \"{mapFileName}\"");
         }
 
         protected void LiveGameScanForUnknownFiles(StormMPQArchive archive)
