@@ -395,6 +395,16 @@ namespace WC3MapDeprotector
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
             {
                 MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
+
+                var process = WorldEditor.GetRunningInstanceOfEditor();
+                if (process != null)
+                {
+                    DialogResult dialogResult = MessageBox.Show($"Running Editor still detected. Force close? You will lose any unsaved work. The Exe that will be closed is: {UserSettings.WorldEditExePath}", "Force Close Editor?", MessageBoxButtons.YesNo);
+                    if (dialogResult == DialogResult.Yes)
+                    {
+                        process.Kill();
+                    }
+                }
             }
 
             _logEvent($"Processing map: {MapBaseName}");
