@@ -32,7 +32,7 @@
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x86" Version="7.4.4" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.7" />
     <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="NLua" Version="1.6.3" />
+	<PackageReference Include="NLua" Version="[1.4.32]" />
     <PackageReference Include="SixLabors.Fonts" Version="2.0.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.2" />
   </ItemGroup>
@@ -135,6 +135,9 @@
     </Reference>
     <Reference Include="FastMDX">
       <HintPath>FastMDX.dll</HintPath>
+    </Reference>
+    <Reference Include="Jass2Lua">
+      <HintPath>..\Jass2Lua\Jass2Lua.dll</HintPath>
     </Reference>
     <Reference Include="MdxLib">
       <HintPath>MdxLib.dll</HintPath>

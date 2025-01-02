@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using NLua;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -17,6 +18,11 @@ namespace WC3MapDeprotector
             InitializeComponent();
             WindowUITracker.Tracker.Track(this);
             this.Text = $"WC3MapDeprotector {Assembly.GetEntryAssembly().GetName().Version} by http://www.youtube.com/@ai-gamer";
+
+            if (!typeof(Lua).Assembly.FullName.Contains("Version=1.4.32.0"))
+            {
+                throw new Exception("Missing or wrong version of NLua dll. WC3 requires Lua 5.3 which matches NLua dll 1.4.32.0");
+            }
         }
 
         private void BulkDeprotect()
@@ -371,6 +377,39 @@ namespace WC3MapDeprotector
             if (_deprotectRunning)
             {
                 tcMain.SelectedIndex = 0;
+            }
+        }
+
+        private void btnJassToLua_Click(object sender, EventArgs e)
+        {
+            using (var fd = new OpenFileDialog())
+            {
+                fd.Filter = "\"Warcraft 3 Maps\"|*.w3m; *.w3x";
+                if (fd.ShowDialog() == DialogResult.OK)
+                {
+                    var path = Path.GetDirectoryName(fd.FileName);
+                    var extension = Path.GetExtension(fd.FileName);
+                    var newFilePrefix = Path.GetFileNameWithoutExtension(fd.FileName) + "_lua";
+                    var index = 1;
+
+                    var newFileName = Path.Combine(path, newFilePrefix + extension);
+                    while(File.Exists(newFileName))
+                    {
+                        newFileName = Path.Combine(path, newFilePrefix + "_" + index + extension);
+                        index++;
+                    }
+
+                    try
+                    {
+                        MapUtils.ConvertJassToLua(fd.FileName, newFileName);
+                        MessageBox.Show("Done. Converted file at: " + newFileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Media.SystemSounds.Exclamation.Play();
+                        MessageBox.Show(ex.Message, "ERROR");
+                    }
+                }
             }
         }
     }

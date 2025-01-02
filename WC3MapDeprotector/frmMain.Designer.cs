@@ -48,6 +48,7 @@
             tbOutputFile = new TextBox();
             tbInputFile = new TextBox();
             tpUtilities = new TabPage();
+            btnJassToLua = new Button();
             btnDiscord = new Button();
             btnYoutube = new Button();
             btnHelp = new Button();
@@ -58,6 +59,7 @@
             tcLog.SuspendLayout();
             tpWarnings.SuspendLayout();
             tpDebugLog.SuspendLayout();
+            tpUtilities.SuspendLayout();
             SuspendLayout();
             // 
             // fdInputFile
@@ -132,7 +134,7 @@
             tbWarningMessages.Name = "tbWarningMessages";
             tbWarningMessages.ReadOnly = true;
             tbWarningMessages.ScrollBars = ScrollBars.Both;
-            tbWarningMessages.Size = new Size(738, 263);
+            tbWarningMessages.Size = new Size(738, 283);
             tbWarningMessages.TabIndex = 26;
             // 
             // tpDebugLog
@@ -259,13 +261,24 @@
             // 
             // tpUtilities
             // 
-            tpUtilities.Location = new Point(4, 24);
+            tpUtilities.Controls.Add(btnJassToLua);
+            tpUtilities.Location = new Point(4, 34);
             tpUtilities.Name = "tpUtilities";
             tpUtilities.Padding = new Padding(3);
-            tpUtilities.Size = new Size(777, 528);
+            tpUtilities.Size = new Size(777, 518);
             tpUtilities.TabIndex = 1;
             tpUtilities.Text = "Random Utilities";
             tpUtilities.UseVisualStyleBackColor = true;
+            // 
+            // btnJassToLua
+            // 
+            btnJassToLua.Location = new Point(8, 6);
+            btnJassToLua.Name = "btnJassToLua";
+            btnJassToLua.Size = new Size(238, 45);
+            btnJassToLua.TabIndex = 0;
+            btnJassToLua.Text = "Jass to Lua (Experimental)";
+            btnJassToLua.UseVisualStyleBackColor = true;
+            btnJassToLua.Click += btnJassToLua_Click;
             // 
             // btnDiscord
             // 
@@ -362,6 +375,7 @@
             tpWarnings.PerformLayout();
             tpDebugLog.ResumeLayout(false);
             tpDebugLog.PerformLayout();
+            tpUtilities.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -390,5 +404,6 @@
         private Button btnHelp;
         private Button btnBugReport;
         private Button btnDonate;
+        private Button btnJassToLua;
     }
 }

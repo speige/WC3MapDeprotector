@@ -18,7 +18,6 @@ using War3Net.Build.Widget;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
-using War3Net.CodeAnalysis.Transpilers;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
 using System.Numerics;
@@ -28,7 +27,6 @@ using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
 using War3Net.IO.Slk;
-using System.Linq;
 
 namespace WC3MapDeprotector
 {
@@ -129,19 +127,11 @@ namespace WC3MapDeprotector
             _logEvent = logEvent;
         }
 
-        protected static string ExeFolderPath
-        {
-            get
-            {
-                return Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
-            }
-        }
-
         protected static string BlankMapFilesPath
         {
             get
             {
-                return Path.Combine(ExeFolderPath, "BlankMapFiles");
+                return Path.Combine(Utils.ExeFolderPath, "BlankMapFiles");
             }
         }
 
@@ -149,7 +139,7 @@ namespace WC3MapDeprotector
         {
             get
             {
-                return Path.Combine(ExeFolderPath, "GameDataFiles");
+                return Path.Combine(Utils.ExeFolderPath, "GameDataFiles");
             }
         }
 
@@ -158,7 +148,7 @@ namespace WC3MapDeprotector
             get
             {
 
-                return Path.Combine(ExeFolderPath, "listfile.zip");
+                return Path.Combine(Utils.ExeFolderPath, "listfile.zip");
             }
         }
 
@@ -374,12 +364,7 @@ namespace WC3MapDeprotector
             }
         }
 
-        public string ReadFile_NoEncoding(string fileName)
-        {            
-            return File.ReadAllBytes(fileName).ToString_NoEncoding();
-        }
-
-        public string ConvertBytesToAscii(byte[] bytes)
+       public string ConvertBytesToAscii(byte[] bytes)
         {
             //File.ReadAllText with Encoding.Ascii seems to corrupt non-readable characters sometimes
             var result = new StringBuilder();
@@ -426,13 +411,13 @@ namespace WC3MapDeprotector
             _deprotectionResult = new DeprotectionResult();
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. You will need to make fixes manually. Click the \"Help\" button for instructions. You can also get help from my YouTube channel or report defects by clicking the \"Bug Report\" button.");
 
-            var blankMapFilesZip = Path.Combine(ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip");
+            var blankMapFilesZip = Path.Combine(Utils.ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip");
             if (!Directory.Exists(BlankMapFilesPath) && File.Exists(blankMapFilesZip))
             {
                 ZipFile.ExtractToDirectory(blankMapFilesZip, BlankMapFilesPath, true);
             }
 
-            var gameDataFilesZip = Path.Combine(ExeFolderPath, "GameDataFiles_2.0.0.22389.zip");
+            var gameDataFilesZip = Path.Combine(Utils.ExeFolderPath, "GameDataFiles_2.0.0.22389.zip");
             if (!Directory.Exists(GameDataFilesPath) && File.Exists(gameDataFilesZip))
             {
                 ZipFile.ExtractToDirectory(gameDataFilesZip, GameDataFilesPath, true);
@@ -533,7 +518,7 @@ namespace WC3MapDeprotector
                     var fileName = Path.Combine(DiscoveredFilesPath, file.FileName);
                     MoveExtractedFileToDeletedFolder(fileName);
 
-                    using (var stream = File.OpenWrite(fileName))
+                    using (var stream = File.Create(fileName))
                     {
                         file.MpqStream.CopyTo(stream);
                     }
@@ -796,7 +781,7 @@ namespace WC3MapDeprotector
                 var basePathScriptFileName = Path.Combine(DiscoveredFilesPath, Path.GetFileName(scriptFile));
                 if (File.Exists(basePathScriptFileName) && !string.Equals(scriptFile, basePathScriptFileName, StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (ReadFile_NoEncoding(scriptFile) != ReadFile_NoEncoding(basePathScriptFileName))
+                    if (Utils.ReadFile_NoEncoding(scriptFile) != Utils.ReadFile_NoEncoding(basePathScriptFileName))
                     {
                         _deprotectionResult.CriticalWarningCount++;
                         _deprotectionResult.WarningMessages.Add("WARNING: Multiple possible script files found. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor.");
@@ -814,7 +799,7 @@ namespace WC3MapDeprotector
             ScriptMetaData scriptMetaData = null;
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                jassScript = $"// {ATTRIB}{ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
+                jassScript = $"// {ATTRIB}{Utils.ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"))}";
                 try
                 {
                     jassScript = DeObfuscateJassScript(map_ObjectDataCollectionOnly, jassScript);
@@ -826,7 +811,7 @@ namespace WC3MapDeprotector
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
                 _deprotectionResult.WarningMessages.Add("WARNING: This map was built using Lua instead of Jass. Deprotection of Lua maps is not fully supported yet. See \"Object Manager\" in Help document");
-                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
+                luaScript = DeObfuscateLuaScript($"-- {ATTRIB}{Utils.ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.lua"))}");
                 var temporaryScriptMetaData = DecompileLuaScriptMetaData(luaScript);
                 if (scriptMetaData == null)
                 {
@@ -970,7 +955,7 @@ namespace WC3MapDeprotector
         {
             if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.j")))
             {
-                var script = ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"));
+                var script = Utils.ReadFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"));
                 var blz = Regex_JassScriptInitBlizzard().Match(script);
                 if (blz.Success)
                 {
@@ -998,41 +983,6 @@ namespace WC3MapDeprotector
             var main = ast.Body.Where(x => x.Type == LuaASTType.FunctionDeclaration && x.Name == "main").FirstOrDefault();
 
             return luaScript;
-        }
-
-        protected string ConvertJassToLua(string jassScript)
-        {
-            try
-            {
-                var transpiler = new JassToLuaTranspiler();
-                transpiler.IgnoreComments = true;
-                transpiler.IgnoreEmptyDeclarations = true;
-                transpiler.IgnoreEmptyStatements = true;
-                transpiler.KeepFunctionsSeparated = true;
-
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "common.j"))));
-                transpiler.RegisterJassFile(JassSyntaxFactory.ParseCompilationUnit(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "blizzard.j"))));
-                var jassParsed = JassSyntaxFactory.ParseCompilationUnit(jassScript);
-
-                var luaCompilationUnit = transpiler.Transpile(jassParsed);
-                var result = new StringBuilder();
-                using (var writer = new StringWriter(result))
-                {
-                    var luaRendererOptions = new LuaSyntaxGenerator.SettingInfo
-                    {
-                        Indent = 2
-                    };
-
-                    var luaRenderer = new LuaRenderer(luaRendererOptions, writer);
-                    luaRenderer.RenderCompilationUnit(luaCompilationUnit);
-                }
-
-                return result.ToString();
-            }
-            catch
-            {
-                return null;
-            }
         }
 
         protected void CopyDirectory(string sourcePath, string destinationPath)
@@ -1332,7 +1282,7 @@ namespace WC3MapDeprotector
 
             _logEvent("Copying HM3W header");
             var tempFileName = Path.Combine(WorkingFolderPath, "mpqheader.w3x");
-            using (var writeStream = File.OpenWrite(tempFileName))
+            using (var writeStream = File.Create(tempFileName))
             {
                 var copyToHeader = new byte[512];
                 using (var readStream = File.OpenRead(copyToMPQFileName))
@@ -2478,7 +2428,7 @@ namespace WC3MapDeprotector
         {
             using (var v8 = new V8ScriptEngine())
             {
-                v8.Execute(ReadFile_NoEncoding(Path.Combine(ExeFolderPath, "luaparse.js")));
+                v8.Execute(Utils.ReadFile_NoEncoding(Path.Combine(Utils.ExeFolderPath, "luaparse.js")));
                 v8.Script.luaScript = luaScript;
                 v8.Execute("ast = JSON.stringify(luaparse.parse(luaScript, { luaVersion: '5.3' }));");
                 return JsonConvert.DeserializeObject<LuaAST>((string)v8.Script.ast, new JsonSerializerSettings() { MissingMemberHandling = MissingMemberHandling.Ignore, MaxDepth = Int32.MaxValue });

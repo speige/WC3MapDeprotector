@@ -1,9 +1,40 @@
 ﻿using System.Diagnostics;
+using System.Reflection;
 
 namespace WC3MapDeprotector
 {
     public static class Utils
     {
+        public static void SafeDeleteFile(string fileName)
+        {
+            if (!File.Exists(fileName))
+            {
+                return;
+            }
+
+            try
+            {
+                File.Delete(fileName);
+            }
+            catch
+            {
+                // swallow errors
+            }
+        }
+
+        public static string ExeFolderPath
+        {
+            get
+            {
+                return Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+            }
+        }
+
+        public static string ReadFile_NoEncoding(string fileName)
+        {
+            return File.ReadAllBytes(fileName).ToString_NoEncoding();
+        }
+
         public static Process ExecuteCommand(string exePath, string arguments, ProcessWindowStyle windowStyle = ProcessWindowStyle.Normal)
         {
             var process = new Process();
