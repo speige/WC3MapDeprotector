@@ -50,8 +50,8 @@ namespace WC3MapDeprotector
             try
             {
                 using (var stream = new MemoryStream(bytes))
+                using (var wav = new WaveFileReader(stream))
                 {
-                    var wav = new WaveFileReader(stream);
                     return wav.TotalTime.TotalSeconds >= .25;
                 }
             }
@@ -81,8 +81,8 @@ namespace WC3MapDeprotector
             try
             {
                 using (var stream = new MemoryStream(bytes))
+                using (var aiff = new AiffFileReader(stream))
                 {
-                    var aiff = new AiffFileReader(stream);
                     return aiff.TotalTime.TotalSeconds >= .25;
                 }
             }

@@ -31,7 +31,6 @@
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x64" Version="7.4.4" />
     <PackageReference Include="Microsoft.ClearScript.V8.Native.win-x86" Version="7.4.4" />
     <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.7" />
-    <PackageReference Include="NAudio" Version="2.2.1" />
 	<PackageReference Include="NLua" Version="[1.4.32]" />
     <PackageReference Include="SixLabors.Fonts" Version="2.0.1" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.2" />
@@ -144,6 +143,27 @@
     </Reference>
     <Reference Include="Microsoft.CodeAnalysis">
       <HintPath>..\War3Net\Binaries\Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio">
+      <HintPath>..\NAudio\NAudio.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.Asio">
+      <HintPath>..\NAudio\NAudio.Asio.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.Core">
+      <HintPath>..\NAudio\NAudio.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.Midi">
+      <HintPath>..\NAudio\NAudio.Midi.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.Wasapi">
+      <HintPath>..\NAudio\NAudio.Wasapi.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.WinForms">
+      <HintPath>..\NAudio\NAudio.WinForms.dll</HintPath>
+    </Reference>
+    <Reference Include="NAudio.WinMM">
+      <HintPath>..\NAudio\NAudio.WinMM.dll</HintPath>
     </Reference>
     <Reference Include="Pidgin">
       <HintPath>..\War3Net\Binaries\Pidgin.dll</HintPath>
