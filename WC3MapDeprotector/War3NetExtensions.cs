@@ -9,11 +9,32 @@ using SixLabors.ImageSharp;
 using War3Net.Build.Script;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.Build.Object;
+using System.Text;
 
 namespace WC3MapDeprotector
 {
     public static class War3NetExtensions
     {
+        public static Map OpenMap_WithoutCorruptingInternationalCharactersInScript(string path)
+        {
+            var result = Map.Open(path);
+            using (var mapArchive = MpqArchive.Open(path))
+            {
+                var scriptFileName = (new[] { JassMapScript.FileName, JassMapScript.FullName, LuaMapScript.FileName, LuaMapScript.FullName }).Where(x => MpqFile.Exists(mapArchive, x)).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(scriptFileName))
+                {
+                    using (var fileStream = MpqFile.OpenRead(mapArchive, scriptFileName))
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        fileStream.CopyTo(memoryStream);
+                        result.Script = memoryStream.ToArray().ToString_NoEncoding();
+                    }
+                }
+            }
+
+            return result;
+        }
+
         public static Dictionary<ObjectDataType, War3NetSkinnableObjectDataWrapper> GetObjectDataCollection_War3Net(this Map map)
         {
             return Enum.GetValues(typeof(ObjectDataType)).Cast<ObjectDataType>().Select(x => new KeyValuePair<ObjectDataType, War3NetSkinnableObjectDataWrapper>(x, GetObjectDataCollectionByType(map, x))).Where(x => x.Value != null).ToDictionary(x => x.Key, x => x.Value);
@@ -152,7 +173,13 @@ namespace WC3MapDeprotector
                 {
                     try
                     {
-                        return x.Invoke(null, new object[] { map, null }) as MpqFile;
+                        object param2 = null;
+                        if (string.Equals(x.Name, "GetScriptFile", StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            param2 = Encoding.GetEncoding("ISO-8859-1");
+                        }
+
+                        return x.Invoke(null, new object[] { map, param2 }) as MpqFile;
                     }
                     catch
                     {

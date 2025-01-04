@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 
 namespace WC3MapDeprotector
 {
@@ -30,9 +31,20 @@ namespace WC3MapDeprotector
             }
         }
 
+        public static string ToString_NoEncoding(this byte[] byteArray)
+        {
+            //ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading script files to avoid corrupting non-ascii or international characters.
+            return Encoding.GetEncoding("ISO-8859-1").GetString(byteArray);
+        }
+
         public static string ReadFile_NoEncoding(string fileName)
         {
             return File.ReadAllBytes(fileName).ToString_NoEncoding();
+        }
+
+        public static void WriteFile_NoEncoding(string fileName, string text)
+        {
+            File.WriteAllText(fileName, text, Encoding.GetEncoding("ISO-8859-1"));
         }
 
         public static Process ExecuteCommand(string exePath, string arguments, ProcessWindowStyle windowStyle = ProcessWindowStyle.Normal)

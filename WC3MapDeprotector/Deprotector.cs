@@ -259,6 +259,19 @@ namespace WC3MapDeprotector
                 }
 
                 File.Copy(_inMapFile, tempMapLocation);
+
+                var war3mapj = (new[] { JassMapScript.FileName, JassMapScript.FullName }).Select(x => Path.Combine(DiscoveredFilesPath, x)).Where(x => File.Exists(x)).FirstOrDefault();
+                if (File.Exists(war3mapj))
+                {
+                    var deobfuscated = DeObfuscateFourCCJass(Utils.ReadFile_NoEncoding(war3mapj)); // necessary because some international FourCC codes will crash game if not converted to ints
+                    var tempScriptFileName = Path.GetTempFileName();
+                    Utils.WriteFile_NoEncoding(tempScriptFileName, deobfuscated);
+                    MapUtils.RemoveFile(tempMapLocation, Path.Combine(DiscoveredFilesPath, JassMapScript.FileName));
+                    MapUtils.RemoveFile(tempMapLocation, Path.Combine(DiscoveredFilesPath, JassMapScript.FullName));
+                    MapUtils.AddFile(tempMapLocation, tempScriptFileName, Path.Combine(DiscoveredFilesPath, JassMapScript.FileName));
+                    Utils.SafeDeleteFile(tempScriptFileName);
+                }
+
                 using (var scanner = new ProcessFileAccessScanner())
                 using (var form = new frmLiveGameScanner())
                 {
@@ -966,7 +979,7 @@ namespace WC3MapDeprotector
                     }
                 }
 
-                File.WriteAllText(Path.Combine(DiscoveredFilesPath, "war3map.j"), script);
+                Utils.WriteFile_NoEncoding(Path.Combine(DiscoveredFilesPath, "war3map.j"), script);
             }
             else if (File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.lua")))
             {
@@ -1015,7 +1028,7 @@ namespace WC3MapDeprotector
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var tempMapFileName = Path.Combine(WorkingFolderPath, "fileFormats.w3x");
             BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
-            var map = Map.Open(tempMapFileName);
+            var map = War3NetExtensions.OpenMap_WithoutCorruptingInternationalCharactersInScript(tempMapFileName);
 
             if (map.Cameras != null)
             {
@@ -1160,7 +1173,7 @@ namespace WC3MapDeprotector
                 editor.SaveMap();
             }
 
-            var map = Map.Open(tempMapFileName);
+            var map = War3NetExtensions.OpenMap_WithoutCorruptingInternationalCharactersInScript(tempMapFileName);
             var mapFiles = map.GetAllFiles();
             foreach (var file in mapFiles)
             {
@@ -1182,7 +1195,7 @@ namespace WC3MapDeprotector
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var tempMapFileName = Path.Combine(WorkingFolderPath, "unitPositionZ.w3x");
             BuildW3X(tempMapFileName, DiscoveredFilesPath, nativeFileNames.Select(x => @$"{DiscoveredFilesPath}\{x}").ToList());
-            var map = Map.Open(tempMapFileName);
+            var map = War3NetExtensions.OpenMap_WithoutCorruptingInternationalCharactersInScript(tempMapFileName);
 
             var tileColumns = map.Environment.Width + 1;
             var tileRows = map.Environment.Height + 1;
@@ -1662,6 +1675,8 @@ namespace WC3MapDeprotector
         protected static partial Regex Regex_ScriptHexObfuscatedFourCC();
         [GeneratedRegex(@"'([^']{4})'\s*\+\s*'([^']{4})'", RegexOptions.IgnoreCase)]
         protected static partial Regex Regex_ScriptMathObfuscatedFourCC();
+        [GeneratedRegex(@"'([^']*)'", RegexOptions.Multiline)]
+        protected static partial Regex Regex_ScriptPossibleFourCC();
 
         protected string DeObfuscateFourCC(string script, string prefix, string suffix)
         {
@@ -1688,6 +1703,18 @@ namespace WC3MapDeprotector
                     return intValue.ToString();
                 }
                 return $"{prefix}{rawCode}{suffix}";
+            });
+
+            result = Regex_ScriptPossibleFourCC().Replace(result, x =>
+            {
+                var code = x.Groups[1].Value;
+                if (code.Length == 4 && code.Any(x => x < ' ' || x > '~'))
+                {
+                    var intValue = code.FromFourCCToInt();
+                    return intValue.ToString();
+                }
+
+                return "'" + code + "'";
             });
 
             if (script != result)

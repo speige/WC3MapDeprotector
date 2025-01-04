@@ -145,7 +145,7 @@ namespace WC3MapDeprotector
 
             RemoveFile(mapFileName_Lua, JassMapScript.FileName);
             RemoveFile(mapFileName_Lua, JassMapScript.FullName);
-            using (var mpqStream = map.GetScriptFile())
+            using (var mpqStream = map.GetScriptFile(Encoding.GetEncoding("ISO-8859-1")))
             using (var fileStream = File.Create(tempScriptFileName))
             {
                 mpqStream.MpqStream.CopyTo(fileStream);

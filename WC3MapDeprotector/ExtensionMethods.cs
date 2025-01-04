@@ -21,12 +21,6 @@ namespace WC3MapDeprotector
             }
         }
 
-        public static string ToString_NoEncoding(this byte[] byteArray)
-        {
-            //ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading script files to avoid corrupting non-ascii or international characters.
-            return Encoding.GetEncoding("ISO-8859-1").GetString(byteArray);
-        }
-
         public static string TrimStart(this string text, string trim)
         {
             if (text.StartsWith(trim))
