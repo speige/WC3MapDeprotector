@@ -408,7 +408,7 @@ namespace WC3MapDeprotector
 
                         //Original encryption key detected incorrectly
                         File.Delete(pseudoFileFullPath);
-                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out _, out _, out _))
+                        if (!TryExtractFile(archiveFileName, pseudoFileFullPath, out md5Hash, out _, out _))
                         {
                             return false;
                         }
@@ -489,7 +489,7 @@ namespace WC3MapDeprotector
                                     File.Copy(currentFileLocation, pseudoFileFullPath);
                                 }
 
-                                _md5ToLocalDiskFileName[md5Hash] = pseudoFileName;
+                                _md5ToLocalDiskFileName[md5Hash] = pseudoFileFullPath;
                             }
 
                             foreach (var fakeFileName in filesNotMatchingPredictedExtension)
