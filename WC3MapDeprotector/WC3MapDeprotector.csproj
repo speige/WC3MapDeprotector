@@ -122,6 +122,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Templates\pcall_wrapper.lua" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\pcall_wrapper.lua" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="D:\git\WC3MapDeprotector\.editorconfig" />
   </ItemGroup>
 

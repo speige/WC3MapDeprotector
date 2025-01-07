@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
 using System.Text;
-using War3Net.Common.Providers;
 
 namespace WC3MapDeprotector
 {
