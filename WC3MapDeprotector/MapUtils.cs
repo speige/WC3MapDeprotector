@@ -1,10 +1,14 @@
-﻿using CSharpLua;
-using System.Text;
+﻿using System.Text;
 using War3Net.Build;
+using War3Net.Build.Audio;
+using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
+using War3Net.Build.Import;
 using War3Net.Build.Info;
+using War3Net.Build.Object;
 using War3Net.Build.Script;
-using War3Net.CodeAnalysis.Jass;
+using War3Net.Build.Widget;
+using War3Net.IO.Mpq;
 
 namespace WC3MapDeprotector
 {
@@ -77,7 +81,10 @@ namespace WC3MapDeprotector
             var map = new Map();
             try
             {
-                map.SetInfoFile(File.OpenRead(tempInfoFileName));
+                if (!map.SetNativeFile(tempInfoFileName, MapInfo.FileName))
+                {
+                    throw new Exception("Could not parse map info .w3i file");
+                }
             }
             catch (Exception e)
             {
@@ -99,44 +106,72 @@ namespace WC3MapDeprotector
                 }
             }
 
-            var tempCustomTextTriggersFileName = Path.GetTempFileName();            
+            var tempCustomTextTriggersFileName = Path.GetTempFileName();
             if (ExtractFile(mapFileName_Jass, MapCustomTextTriggers.FileName, tempCustomTextTriggersFileName))
             {
                 try
                 {
-                    map.SetCustomTextTriggersFile(File.OpenRead(tempCustomTextTriggersFileName));
-                    map.CustomTextTriggers.GlobalCustomScriptCode.Code = ConvertJassToLua(map.CustomTextTriggers.GlobalCustomScriptCode.Code.Replace("%%", "%")).Replace("%", "%%");
-                    foreach (var textTrigger in map.CustomTextTriggers.CustomTextTriggers)
+                    map.SetNativeFile(tempCustomTextTriggersFileName, MapCustomTextTriggers.FileName);
+                    if (map.CustomTextTriggers?.CustomTextTriggers != null)
                     {
-                        textTrigger.Code = ConvertJassToLua(textTrigger.Code);
+                        if (!string.IsNullOrWhiteSpace(map.CustomTextTriggers?.GlobalCustomScriptCode?.Code))
+                        {
+                            map.CustomTextTriggers.GlobalCustomScriptCode.Code = ConvertJassToLua(map.CustomTextTriggers.GlobalCustomScriptCode.Code.Replace("%%", "%")).Replace("%", "%%");
+                        }
+
+                        foreach (var textTrigger in map.CustomTextTriggers.CustomTextTriggers)
+                        {
+                            textTrigger.Code = ConvertJassToLua(textTrigger.Code);
+                        }
                     }
                 }
                 catch
                 {
-                    // swallow exceptions (probably a blank file)
+                    // swallow exceptions (probably a blank/corrupt file)
                 }
             }
 
-            var tempTriggersFileName = Path.GetTempFileName();            
+            var tempTriggersFileName = Path.GetTempFileName();
             if (ExtractFile(mapFileName_Jass, MapTriggers.FileName, tempTriggersFileName))
             {
-                map.SetTriggersFile(File.OpenRead(tempTriggersFileName));
-                foreach (var trigger in map.Triggers.TriggerItems.OfType<TriggerDefinition>())
+                try
                 {
-                    foreach (var function in trigger.Functions.Where(x => string.Equals(x.Name, "CustomScriptCode")))
+                    map.SetNativeFile(tempTriggersFileName, MapTriggers.FileName);
+                    if (map.Triggers?.TriggerItems != null)
                     {
-                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, AddStringPlusOperatorOverload = false, PrependTranspilerWarnings = false });
+                        foreach (var trigger in map.Triggers.TriggerItems.OfType<TriggerDefinition>())
+                        {
+                            if (trigger.Functions != null)
+                            {
+                                foreach (var function in trigger.Functions.Where(x => string.Equals(x.Name, "CustomScriptCode")))
+                                {
+                                    if (!string.IsNullOrWhiteSpace(function.Parameters?[0]?.Value))
+                                    {
+                                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, AddStringPlusOperatorOverload = false, PrependTranspilerWarnings = false });
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
+                catch
+                {
+                    // swallow exceptions (probably a blank/corrupt file)
                 }
             }
 
             map.Info.ScriptLanguage = ScriptLanguage.Lua;
-            map.Script = ConvertJassToLua(File.ReadAllText(tempScriptFileName));
+            map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+            map.Info.GameDataVersion = GameDataVersion.TFT;
+            map.Info.GameVersion ??= new Version(2, 0, 0, 22370);
+            map.Info.SupportedModes = SupportedModes.SD | SupportedModes.HD;
+            map.Script = ConvertJassToLua(Utils.ReadFile_NoEncoding(tempScriptFileName));
 
+            Directory.CreateDirectory(Path.GetDirectoryName(mapFileName_Lua));
             File.Copy(mapFileName_Jass, mapFileName_Lua);
 
             RemoveFile(mapFileName_Lua, MapInfo.FileName);
-            using (var mpqStream = map.GetInfoFile())
+            using (var mpqStream = map.GetNativeFile(MapInfo.FileName))
             using (var fileStream = File.Create(tempInfoFileName))
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
@@ -145,7 +180,7 @@ namespace WC3MapDeprotector
 
             RemoveFile(mapFileName_Lua, JassMapScript.FileName);
             RemoveFile(mapFileName_Lua, JassMapScript.FullName);
-            using (var mpqStream = map.GetScriptFile(Encoding.GetEncoding("ISO-8859-1")))
+            using (var mpqStream = map.GetNativeFile(LuaMapScript.FileName))
             using (var fileStream = File.Create(tempScriptFileName))
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
@@ -155,7 +190,7 @@ namespace WC3MapDeprotector
             RemoveFile(mapFileName_Lua, MapCustomTextTriggers.FileName);
             if (map.CustomTextTriggers != null)
             {
-                using (var mpqStream = map.GetCustomTextTriggersFile())
+                using (var mpqStream = map.GetNativeFile(MapCustomTextTriggers.FileName))
                 using (var fileStream = File.Create(tempCustomTextTriggersFileName))
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
@@ -166,7 +201,7 @@ namespace WC3MapDeprotector
             RemoveFile(mapFileName_Lua, MapTriggers.FileName);
             if (map.Triggers != null)
             {
-                using (var mpqStream = map.GetTriggersFile())
+                using (var mpqStream = map.GetNativeFile(MapTriggers.FileName))
                 using (var fileStream = File.Create(tempTriggersFileName))
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
@@ -184,6 +219,186 @@ namespace WC3MapDeprotector
         {
             var transpiler = new Jass2LuaTranspiler(options);
             return transpiler.Transpile(jassScript, out var warnings);
+        }
+
+        public static byte[] ToByteArray(this MpqFile file)
+        {
+            using (var stream = new MemoryStream())
+            {
+                file.MpqStream.Position = 0;
+                file.MpqStream.CopyTo(stream);
+                file.MpqStream.Position = 0;
+                return stream.ToArray();
+            }
+        }
+
+        public static Encoding GetCorrectFileEncoding(string mpqFileName)
+        {
+            mpqFileName = Path.GetFileName((mpqFileName ?? "").Trim().ToLower());
+            if (JassMapScript.FileName == mpqFileName || LuaMapScript.FileName == mpqFileName)
+            {
+                return Utils.NO_ENCODING;
+            }
+
+            return Encoding.UTF8;
+        }
+
+        private static string[] _allNativeMapFileNames = new[] { MapSounds.FileName, MapCameras.FileName, MapEnvironment.FileName, MapPathingMap.FileName, MapPreviewIcons.FileName, MapRegions.FileName, MapShadowMap.FileName, ImportedFiles.MapFileName, MapInfo.FileName, AbilityObjectData.MapFileName, BuffObjectData.MapFileName, DestructableObjectData.MapFileName, DoodadObjectData.MapFileName, ItemObjectData.MapFileName, UnitObjectData.MapFileName, UpgradeObjectData.MapFileName, AbilityObjectData.MapSkinFileName, BuffObjectData.MapSkinFileName, DestructableObjectData.MapSkinFileName, DoodadObjectData.MapSkinFileName, ItemObjectData.MapSkinFileName, UnitObjectData.MapSkinFileName, UpgradeObjectData.MapSkinFileName, MapCustomTextTriggers.FileName, MapTriggers.FileName, TriggerStrings.MapFileName, MapDoodads.FileName, MapUnits.FileName, JassMapScript.FileName, JassMapScript.FullName, LuaMapScript.FileName, LuaMapScript.FullName };
+        public static List<MpqKnownFile> GetAllNativeFiles(this Map map, bool ignoreExceptions = false)
+        {
+            //NOTE: w3i & war3mapunits.doo versions have to correlate or the editor crashes.
+            //having mismatch can cause world editor to be very slow & take tons of memory, if it doesn't crash
+            //not sure how to know compatability, but current guess is Units.UseNewFormat can't be used for MapInfoFormatVersion < v28
+
+            if (map.Info == null)
+            {
+                map.Info = new MapInfo(default);
+                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
+                map.Info.GameVersion = new Version(1, 36, 1, 20719);
+            }
+
+            if (map.Units != null && map.Info.FormatVersion >= MapInfoFormatVersion.v28)
+            {
+                map.Units.UseNewFormat = true;
+            }
+
+            if (map.Units != null && map.Units.UseNewFormat)
+            {
+                foreach (var unit in map.Units.Units)
+                {
+                    unit.SkinId = unit.TypeId;
+                }
+            }
+
+            return _allNativeMapFileNames.Select(x => map.GetNativeFile(x)).OfType<MpqKnownFile>().Where(x => x != null).ToList();
+        }
+
+        public static MpqFile GetNativeFile(this Map map, string fileName)
+        {
+            try
+            {
+                Encoding encoding = GetCorrectFileEncoding(fileName);
+
+                switch ((fileName ?? "").Trim().ToLower())
+                {
+                    case MapSounds.FileName:
+                        return map.GetSoundsFile(encoding);
+                    case MapCameras.FileName:
+                        return map.GetCamerasFile(encoding);
+                    case MapEnvironment.FileName:
+                        return map.GetEnvironmentFile(encoding);
+                    case MapPathingMap.FileName:
+                        return map.GetPathingMapFile(encoding);
+                    case MapPreviewIcons.FileName:
+                        return map.GetPreviewIconsFile(encoding);
+                    case MapRegions.FileName:
+                        return map.GetRegionsFile(encoding);
+                    case MapShadowMap.FileName:
+                        return map.GetShadowMapFile(encoding);
+                    case ImportedFiles.MapFileName:
+                        return map.GetImportedFilesFile(encoding);
+                    case MapInfo.FileName:
+                        return map.GetInfoFile(encoding);
+                    case AbilityObjectData.MapFileName:
+                        return map.GetAbilityObjectDataFile(encoding);
+                    case BuffObjectData.MapFileName:
+                        return map.GetBuffObjectDataFile(encoding);
+                    case DestructableObjectData.MapFileName:
+                        return map.GetDestructableObjectDataFile(encoding);
+                    case DoodadObjectData.MapFileName:
+                        return map.GetDoodadObjectDataFile(encoding);
+                    case ItemObjectData.MapFileName:
+                        return map.GetItemObjectDataFile(encoding);
+                    case UnitObjectData.MapFileName:
+                        return map.GetUnitObjectDataFile(encoding);
+                    case UpgradeObjectData.MapFileName:
+                        return map.GetUpgradeObjectDataFile(encoding);
+                    case AbilityObjectData.MapSkinFileName:
+                        return map.GetAbilitySkinObjectDataFile(encoding);
+                    case BuffObjectData.MapSkinFileName:
+                        return map.GetBuffSkinObjectDataFile(encoding);
+                    case DestructableObjectData.MapSkinFileName:
+                        return map.GetDestructableSkinObjectDataFile(encoding);
+                    case DoodadObjectData.MapSkinFileName:
+                        return map.GetDoodadSkinObjectDataFile(encoding);
+                    case ItemObjectData.MapSkinFileName:
+                        return map.GetItemSkinObjectDataFile(encoding);
+                    case UnitObjectData.MapSkinFileName:
+                        return map.GetUnitSkinObjectDataFile(encoding);
+                    case UpgradeObjectData.MapSkinFileName:
+                        return map.GetUpgradeSkinObjectDataFile(encoding);
+                    case MapCustomTextTriggers.FileName:
+                        return map.GetCustomTextTriggersFile(encoding);
+                    case MapTriggers.FileName:
+                        return map.GetTriggersFile(encoding);
+                    case TriggerStrings.MapFileName:
+                        return map.GetTriggerStringsFile(encoding);
+                    case MapDoodads.FileName:
+                        return map.GetDoodadsFile(encoding);
+                    case MapUnits.FileName:
+                        return map.GetUnitsFile(encoding);
+
+                    case JassMapScript.FileName:
+                    case JassMapScript.FullName:
+                        if (map?.Info?.ScriptLanguage != ScriptLanguage.Jass)
+                        {
+                            return null;
+                        }
+
+                        return map.GetScriptFile(encoding);
+                    case LuaMapScript.FileName:
+                    case LuaMapScript.FullName:
+                        if (map?.Info?.ScriptLanguage != ScriptLanguage.Lua)
+                        {
+                            return null;
+                        }
+
+                        return map.GetScriptFile(encoding);
+                }
+            }
+            catch (Exception e)
+            {
+                DebugSettings.Warn(e.Message);
+            }
+
+            return null;
+        }
+
+        public static bool SetNativeFile(this Map map, string localDiskFileName, string mpqFileName, bool overwrite = false)
+        {
+            if (!overwrite)
+            {
+                using (var oldMapFile = map.GetNativeFile(mpqFileName))
+                {
+                    if (oldMapFile != null)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            var bytes = File.ReadAllBytes(localDiskFileName);
+            if (bytes.Length == 0)
+            {
+                return false;
+            }
+
+            var encoding = GetCorrectFileEncoding(mpqFileName);
+
+            try
+            {
+                using (var stream = new MemoryStream(bytes))
+                {
+                    return map.SetFile(mpqFileName, true, stream, encoding, true);
+                }
+            }
+            catch (Exception e)
+            {
+                DebugSettings.Warn("Unable to set map file");
+            }
+
+            return false;
         }
     }
 }

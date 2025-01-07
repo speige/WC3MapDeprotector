@@ -139,61 +139,6 @@ namespace WC3MapDeprotector
             }).Where(x => x != null).ToList();
         }
 
-        public static List<MpqKnownFile> GetAllFiles(this Map map, bool ignoreExceptions = false)
-        {
-            //NOTE: w3i & war3mapunits.doo versions have to correlate or the editor crashes.
-            //having mismatch can cause world editor to be very slow & take tons of memory, if it doesn't crash
-            //not sure how to know compatability, but current guess is Units.UseNewFormat can't be used for MapInfoFormatVersion < v28
-
-            if (map.Info == null)
-            {
-                map.Info = new MapInfo(default);
-                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
-                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
-                map.Info.GameVersion = new Version(1, 36, 1, 20719);
-            }
-
-            if (map.Units != null && map.Info.FormatVersion >= MapInfoFormatVersion.v28)
-            {
-                map.Units.UseNewFormat = true;
-            }
-
-            if (map.Units != null && map.Units.UseNewFormat)
-            {
-                foreach (var unit in map.Units.Units)
-                {
-                    unit.SkinId = unit.TypeId;
-                }
-            }
-
-            return AppDomain.CurrentDomain.GetAssemblies().Where(x => x.FullName?.Contains("War3Net") ?? false).SelectMany(x => x.GetTypes()).Where(x => x.Name == "MapExtensions").SelectMany(x =>
-            {
-                var methods = x.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(x => x.Name.StartsWith("get", StringComparison.InvariantCultureIgnoreCase) && x.Name.EndsWith("file", StringComparison.InvariantCultureIgnoreCase));
-                return methods.Select(x =>
-                {
-                    try
-                    {
-                        object param2 = null;
-                        if (string.Equals(x.Name, "GetScriptFile", StringComparison.InvariantCultureIgnoreCase))
-                        {
-                            param2 = Encoding.GetEncoding("ISO-8859-1");
-                        }
-
-                        return x.Invoke(null, new object[] { map, param2 }) as MpqFile;
-                    }
-                    catch
-                    {
-                        if (ignoreExceptions)
-                        {
-                            return null;
-                        }
-
-                        throw;
-                    }
-                }).OfType<MpqKnownFile>().ToList();
-            }).Where(x => x != null).ToList();
-        }
-
         public static List<FunctionDeclarationContext> ParseScriptForNestedFunctionCalls(this IDictionary<string, FunctionDeclarationContext> contextFunctionDeclarations, string customText)
         {
             var keywords = customText.Split(new char[] { ',', '(', ')', ' ', '\t' }).Select(x => x.Trim()).Distinct().ToList();

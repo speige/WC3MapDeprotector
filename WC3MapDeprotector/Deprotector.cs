@@ -40,21 +40,7 @@ namespace WC3MapDeprotector
     // https://world-editor-tutorials.thehelper.net/cat_usersubmit.php?view=42787
 
     public partial class Deprotector : IDisposable
-    {
-        protected static readonly List<Encoding> _allEncodings;
-        static Deprotector()
-        {
-            _allEncodings = Encoding.GetEncodings().Select(x =>
-            {
-                try
-                {
-                    return x.GetEncoding();
-                }
-                catch { }
-                return null;
-            }).Where(x => x != null).OrderBy(x => x == Encoding.ASCII ? 0 : 1).ThenBy(x => x == Encoding.UTF8 ? 0 : 1).ToList();
-        }
-
+    {        
         protected const string ATTRIB = "Map deprotected by WC3MapDeprotector https://github.com/speige/WC3MapDeprotector\r\n\r\n";
         protected readonly HashSet<string> _commonFileExtensions = new HashSet<string>((new[] { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "otf", "woff", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3f", "w3v", "w3z", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts", "mgv", "mg", "sav" }).Select(x => $".{x.Trim('.')}"), StringComparer.InvariantCultureIgnoreCase);
 
@@ -591,7 +577,7 @@ namespace WC3MapDeprotector
                 if (inMPQArchive.ShouldKeepScanningForUnknowns)
                 {
                     _logEvent("Scanning for unknown filenames...");
-                    var map = SetMapFiles(DiscoveredFilesPath);
+                    var map = SetNativeFiles(DiscoveredFilesPath);
                     var previousScannedFiles = new HashSet<string>(possibleFileNames_parsed, StringComparer.InvariantCultureIgnoreCase);
                     var scannedFiles = ParseMapForUnknowns(map, unknownFileExtensions);
                     possibleFileNames_parsed.UnionWith(scannedFiles);
@@ -843,15 +829,17 @@ namespace WC3MapDeprotector
 
             if (scriptMetaData != null)
             {
-                var decompiledFiles = scriptMetaData.ConvertToFiles().ToList();
-                foreach (var file in decompiledFiles)
+                using (var decompiledFiles = new DisposableCollection<MpqKnownFile>(scriptMetaData.ConvertToFiles().ToList().AsReadOnly()))
                 {
-                    if (!File.Exists(Path.Combine(DiscoveredFilesPath, file.FileName)))
+                    foreach (var file in decompiledFiles.Collection)
                     {
-                        _deprotectionResult.CountOfProtectionsFound++;
-                    }
+                        if (!File.Exists(Path.Combine(DiscoveredFilesPath, file.FileName)))
+                        {
+                            _deprotectionResult.CountOfProtectionsFound++;
+                        }
 
-                    SaveDecompiledArchiveFile(file);
+                        SaveDecompiledArchiveFile(file);
+                    }
                 }
             }
 
@@ -1119,10 +1107,15 @@ namespace WC3MapDeprotector
                 }
             }
 
-            var mapFiles = map.GetAllFiles();
-            foreach (var file in mapFiles)
+            using (var mapFiles = new DisposableCollection<MpqKnownFile>(map.GetAllNativeFiles().AsReadOnly()))
             {
-                SaveDecompiledArchiveFile(file);
+                foreach (var file in mapFiles.Collection)
+                {
+                    using (file)
+                    {
+                        SaveDecompiledArchiveFile(file);
+                    }
+                }
             }
 
             try
@@ -1174,12 +1167,17 @@ namespace WC3MapDeprotector
             }
 
             var map = War3NetExtensions.OpenMap_WithoutCorruptingInternationalCharactersInScript(tempMapFileName);
-            var mapFiles = map.GetAllFiles();
-            foreach (var file in mapFiles)
+            using (var mapFiles = new DisposableCollection<MpqKnownFile>(map.GetAllNativeFiles().AsReadOnly()))
             {
-                if (!notRepairableFiles.Contains(file.FileName))
+                foreach (var file in mapFiles.Collection)
                 {
-                    SaveDecompiledArchiveFile(file);
+                    using (file)
+                    {
+                        if (!notRepairableFiles.Contains(file.FileName))
+                        {
+                            SaveDecompiledArchiveFile(file);
+                        }
+                    }
                 }
             }
 
@@ -1212,10 +1210,15 @@ namespace WC3MapDeprotector
                 unit.Position = unitPosition;
             }
 
-            var mapFiles = map.GetAllFiles();
-            foreach (var file in mapFiles)
+            using (var mapFiles = new DisposableCollection<MpqKnownFile>(map.GetAllNativeFiles().AsReadOnly()))
             {
-                SaveDecompiledArchiveFile(file);
+                foreach (var file in mapFiles.Collection)
+                {
+                    using (file)
+                    {
+                        SaveDecompiledArchiveFile(file);
+                    }
+                }
             }
 
             try
@@ -1805,7 +1808,7 @@ namespace WC3MapDeprotector
         {
             var result = new ScriptMetaData();
 
-            var map = SetMapFiles(DiscoveredFilesPath);
+            var map = SetNativeFiles(DiscoveredFilesPath);
             result.Info = map?.Info;
             result.TriggerStrings = map?.TriggerStrings;
             result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global script. Please ensure JassHelper:EnableJassHelper and JassHelper:EnableVJass settings are turned on. Auto-generated code has been renamed with a suffix of _old and/or commented out. There may be compiler errors or bugs that need to be resolved manually." };
@@ -2162,29 +2165,7 @@ namespace WC3MapDeprotector
             return new ScriptMetaData();
         }
 
-        protected void SetMapFile(Map map, string fileName, bool overwrite = false)
-        {
-            var bytes = File.ReadAllBytes(fileName);
-            if (bytes.Length == 0)
-            {
-                return;
-            }
-
-            foreach (var encoding in _allEncodings)
-            {
-                try
-                {
-                    using (var stream = new MemoryStream(bytes))
-                    {
-                        map.SetFile(Path.GetFileName(fileName), overwrite, stream, encoding, true);
-                        break;
-                    }
-                }
-                catch { }
-            }
-        }
-
-        protected Map SetMapFiles(string folder, Action<Map> forcedValueOverrides = null)
+        protected Map SetNativeFiles(string folder, Action<Map> forcedValueOverrides = null)
         {
             //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file 2x
             _logEvent("Analyzing map files");
@@ -2201,7 +2182,7 @@ namespace WC3MapDeprotector
                 foreach (var fileName in mapFiles)
                 {
                     _logEvent($"Analyzing {fileName} ...");
-                    SetMapFile(map, fileName);
+                    map.SetNativeFile(fileName, Path.GetFileName(fileName));
                 }
             }
 
@@ -2807,14 +2788,12 @@ namespace WC3MapDeprotector
             var result = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
 
             var allLines = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
-            foreach (var encoding in _allEncodings)
+            try
             {
-                try
-                {
-                    allLines.AddRange(encoding.GetString(fileContents).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
-                }
-                catch { }
+                //todo: test with no global list file & use Encoding.UTF8 in addition to see if it captures any additional unknowns that weren't found otherwise
+                allLines.AddRange(Utils.NO_ENCODING.GetString(fileContents).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
             }
+            catch { }
 
             var stringsWithFileExtensions = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase);
             stringsWithFileExtensions.AddRange(ScanBytesForReadableAsciiStrings(fileContents).SelectMany(x => SplitTextByFileExtensionLocations(x, unknownFileExtensions)));

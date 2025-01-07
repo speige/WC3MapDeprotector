@@ -1,11 +1,15 @@
 ﻿using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+using War3Net.Common.Providers;
 
 namespace WC3MapDeprotector
 {
     public static class Utils
     {
+        //NOTE: ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading/writing script files to avoid corrupting non-ascii or international characters.
+        public static readonly Encoding NO_ENCODING = Encoding.GetEncoding("ISO-8859-1");
+        
         public static void SafeDeleteFile(string fileName)
         {
             if (!File.Exists(fileName))
@@ -32,9 +36,8 @@ namespace WC3MapDeprotector
         }
 
         public static string ToString_NoEncoding(this byte[] byteArray)
-        {
-            //ISO-8859-1 is a 1-to-1 match of byte to char. Important for reading script files to avoid corrupting non-ascii or international characters.
-            return Encoding.GetEncoding("ISO-8859-1").GetString(byteArray);
+        {            
+            return NO_ENCODING.GetString(byteArray);
         }
 
         public static string ReadFile_NoEncoding(string fileName)
@@ -44,7 +47,7 @@ namespace WC3MapDeprotector
 
         public static void WriteFile_NoEncoding(string fileName, string text)
         {
-            File.WriteAllText(fileName, text, Encoding.GetEncoding("ISO-8859-1"));
+            File.WriteAllText(fileName, text, NO_ENCODING);
         }
 
         public static Process ExecuteCommand(string exePath, string arguments, ProcessWindowStyle windowStyle = ProcessWindowStyle.Normal)

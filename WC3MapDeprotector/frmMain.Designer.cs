@@ -134,7 +134,7 @@
             tbWarningMessages.Name = "tbWarningMessages";
             tbWarningMessages.ReadOnly = true;
             tbWarningMessages.ScrollBars = ScrollBars.Both;
-            tbWarningMessages.Size = new Size(738, 283);
+            tbWarningMessages.Size = new Size(738, 293);
             tbWarningMessages.TabIndex = 26;
             // 
             // tpDebugLog
@@ -274,9 +274,9 @@
             // 
             btnJassToLua.Location = new Point(8, 6);
             btnJassToLua.Name = "btnJassToLua";
-            btnJassToLua.Size = new Size(238, 45);
+            btnJassToLua.Size = new Size(161, 45);
             btnJassToLua.TabIndex = 0;
-            btnJassToLua.Text = "Jass to Lua (Experimental)";
+            btnJassToLua.Text = "Jass to Lua";
             btnJassToLua.UseVisualStyleBackColor = true;
             btnJassToLua.Click += btnJassToLua_Click;
             // 

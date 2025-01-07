@@ -46,7 +46,7 @@ namespace WC3MapDeprotector
             var map = new Map() { Info = Info, Units = Units, Sounds = Sounds, Cameras = Cameras, Regions = Regions, Triggers = Triggers, TriggerStrings = TriggerStrings, CustomTextTriggers = CustomTextTriggers };
             try
             {
-                return map.GetAllFiles();
+                return map.GetAllNativeFiles();
             }
             catch
             {
