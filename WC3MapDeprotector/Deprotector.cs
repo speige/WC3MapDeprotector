@@ -45,7 +45,7 @@ namespace WC3MapDeprotector
         protected readonly HashSet<string> _commonFileExtensions = new HashSet<string>((new[] { "pcx", "gif", "cel", "dc6", "cl2", "ogg", "smk", "bik", "avi", "lua", "ai", "asi", "ax", "blp", "ccd", "clh", "css", "dds", "dll", "dls", "doo", "exe", "exp", "fdf", "flt", "gid", "html", "ifl", "imp", "ini", "j", "jpg", "js", "log", "m3d", "mdl", "mdx", "mid", "mmp", "mp3", "mpq", "mrf", "pld", "png", "shd", "slk", "tga", "toc", "ttf", "otf", "woff", "txt", "url", "w3a", "w3b", "w3c", "w3d", "w3e", "w3g", "w3h", "w3i", "w3m", "w3n", "w3f", "w3v", "w3z", "w3q", "w3r", "w3s", "w3t", "w3u", "w3x", "wai", "wav", "wct", "wpm", "wpp", "wtg", "wts", "mgv", "mg", "sav" }).Select(x => $".{x.Trim('.')}"), StringComparer.InvariantCultureIgnoreCase);
 
         protected string _inMapFile;
-        protected readonly string _outMapFile;
+        protected string _outMapFile;
         public DeprotectionSettings Settings { get; private set; }
         protected readonly Action<string> _logEvent;
         protected DeprotectionResult _deprotectionResult;
@@ -95,8 +95,8 @@ namespace WC3MapDeprotector
 
                 Directory.CreateDirectory(Path.GetDirectoryName(WorkingListFileName));
                 File.WriteAllLines(WorkingListFileName, result);
-                File.Delete(InstallerListFileName);
-                File.Delete(Path.Combine(extractedListFileFolder, "listfile.txt"));
+                Utils.SafeDeleteFile(InstallerListFileName);
+                Utils.SafeDeleteFile(Path.Combine(extractedListFileFolder, "listfile.txt"));
             }
 
             if (File.Exists(WorkingListFileName))
@@ -239,12 +239,7 @@ namespace WC3MapDeprotector
             var tempMapLocation = Path.ChangeExtension(Path.GetTempPath(), "WC3MapDeprotector_LiveGameScan" + Path.GetExtension(_inMapFile));
             try
             {
-                if (File.Exists(tempMapLocation))
-                {
-                    File.Delete(tempMapLocation);
-                }
-
-                File.Copy(_inMapFile, tempMapLocation);
+                File.Copy(_inMapFile, tempMapLocation, true);
 
                 var war3mapj = (new[] { JassMapScript.FileName, JassMapScript.FullName }).Select(x => Path.Combine(DiscoveredFilesPath, x)).Where(x => File.Exists(x)).FirstOrDefault();
                 if (File.Exists(war3mapj))
@@ -330,13 +325,9 @@ namespace WC3MapDeprotector
 
                 new Thread(() =>
                 {
-                    try
-                    {
-                        //wait for process to end so file can unlock
-                        Thread.Sleep(15 * 1000);
-                        File.Delete(tempMapLocation);
-                    }
-                    catch { }
+                    //wait for process to end so file can unlock
+                    Thread.Sleep(15 * 1000);
+                    Utils.SafeDeleteFile(tempMapLocation);
                 }).Start();
             }
         }
@@ -374,8 +365,29 @@ namespace WC3MapDeprotector
             return result.ToString();
         }
 
+        protected string RemoveNonVisibleAsciiChars(string text)
+        {
+            return new string(text.Where(x => x >= ' ' && x <= '~').ToArray());
+        }
+
         public async Task<DeprotectionResult> Deprotect()
         {
+            _deprotectionResult = new DeprotectionResult();
+            var oldInMapFile = _inMapFile;
+            _inMapFile = RemoveNonVisibleAsciiChars(_inMapFile);
+            if (_inMapFile != oldInMapFile)
+            {
+                _inMapFile = Path.ChangeExtension(Path.GetTempFileName(), Path.GetExtension(_inMapFile));
+                File.Copy(oldInMapFile, _inMapFile);
+            }
+
+            var oldOutMapFile = _outMapFile;
+            _outMapFile = RemoveNonVisibleAsciiChars(_outMapFile);
+            if (oldOutMapFile != _outMapFile)
+            {
+                _deprotectionResult.WarningMessages.Add("non-ascii character in output file name. changed to: " + _outMapFile);
+            }
+
             while (WorldEditor.GetRunningInstanceOfEditor() != null)
             {
                 MessageBox.Show("A running \"World Editor.exe\" process has been detected. Please close it while performing deprotection");
@@ -407,7 +419,6 @@ namespace WC3MapDeprotector
 
             Directory.CreateDirectory(Path.GetDirectoryName(_outMapFile));
 
-            _deprotectionResult = new DeprotectionResult();
             _deprotectionResult.WarningMessages.Add($"NOTE: This tool is a work in progress. Deprotection does not work perfectly on every map. You will need to make fixes manually. Click the \"Help\" button for instructions. You can also get help from my YouTube channel or report defects by clicking the \"Bug Report\" button.");
 
             var blankMapFilesZip = Path.Combine(Utils.ExeFolderPath, "BlankMapFiles_2.0.0.22389.zip");
@@ -1118,11 +1129,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            try
-            {
-                File.Delete(tempMapFileName);
-            }
-            catch { }
+            Utils.SafeDeleteFile(tempMapFileName);
         }
 
         protected void RepairW3XNativeFilesInEditor()
@@ -1181,11 +1188,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            try
-            {
-                File.Delete(tempMapFileName);
-            }
-            catch { }
+            Utils.SafeDeleteFile(tempMapFileName);
         }
 
         protected void CorrectUnitPositionZOffsets()
@@ -1221,11 +1224,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            try
-            {
-                File.Delete(tempMapFileName);
-            }
-            catch { }
+            Utils.SafeDeleteFile(tempMapFileName);
         }
 
         [GeneratedRegex(@"\s+call\s+InitBlizzard\s*\(\s*\)\s*", RegexOptions.IgnoreCase)]
@@ -1234,12 +1233,6 @@ namespace WC3MapDeprotector
         protected void BuildW3X(string fileName, string baseFolder, List<string> filesToInclude)
         {
             _logEvent("Building map archive...");
-            var tempmpqfile = Path.Combine(WorkingFolderPath, "out.mpq");
-            if (File.Exists(tempmpqfile))
-            {
-                File.Delete(tempmpqfile);
-            }
-
             if (File.Exists(fileName))
             {
                 File.Delete(fileName);
