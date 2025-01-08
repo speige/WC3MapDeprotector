@@ -14,5 +14,5 @@ if "%dotnetFound%" == "false" (
     pause
 )
 
-cd v1.3.0.0
+cd v1.3.0.1
 start WC3MapDeprotector.exe
