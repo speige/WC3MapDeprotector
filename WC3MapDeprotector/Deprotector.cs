@@ -1,8 +1,6 @@
 ﻿using CSharpLua;
 using IniParser;
 using IniParser.Model.Configuration;
-using Microsoft.ClearScript.V8;
-using Newtonsoft.Json;
 using System.Collections.Immutable;
 using System.IO.Compression;
 using System.Reflection;
@@ -27,6 +25,7 @@ using Microsoft.Win32;
 using System.Diagnostics;
 using War3Net.Build.Import;
 using War3Net.IO.Slk;
+using Jass2Lua;
 
 namespace WC3MapDeprotector
 {
@@ -991,8 +990,8 @@ namespace WC3MapDeprotector
             //todo: code this!
 
             var ast = ParseLuaScript(luaScript);
-            var config = ast.Body.Where(x => x.Type == LuaASTType.FunctionDeclaration && x.Name == "config").FirstOrDefault();
-            var main = ast.Body.Where(x => x.Type == LuaASTType.FunctionDeclaration && x.Name == "main").FirstOrDefault();
+            var config = ast.body.Where(x => x.type == LuaASTType.FunctionDeclaration && x.name == "config").FirstOrDefault();
+            var main = ast.body.Where(x => x.type == LuaASTType.FunctionDeclaration && x.name == "main").FirstOrDefault();
 
             return luaScript;
         }
@@ -2184,256 +2183,14 @@ namespace WC3MapDeprotector
             return map;
         }
 
-        protected string RenderJassAST(IJassSyntaxToken jassAST)
-        {
-            using (var writer = new StringWriter())
-            {
-                var renderer = new JassRenderer(writer);
-                renderer.Render(jassAST);
-                return writer.GetStringBuilder().ToString();
-            }
-        }
-
         protected string RenderLuaAST(LuaAST luaAST)
         {
-            return RenderLuaASTNodes(luaAST.Body, "\r", 0).ToString();
-        }
-
-        protected string RenderLuaASTNodes(IEnumerable<LuaASTNode> nodes, string separator, int indentationLevel)
-        {
-            var result = new StringBuilder();
-            if (nodes == null || !nodes.Any())
-            {
-                return result.ToString();
-            }
-
-            foreach (var field in nodes)
-            {
-                var node = RenderLuaASTNode(field, indentationLevel);
-                if (!string.IsNullOrWhiteSpace(node))
-                {
-                    result.Append(node);
-                    result.Append(separator);
-                }
-            }
-
-            result.Remove(result.Length - separator.Length, separator.Length);
-            return result.ToString();
-        }
-
-        protected string RenderLuaASTNode(LuaASTNode luaAST, int indentationLevel)
-        {
-            if (luaAST == null)
-            {
-                return "";
-            }
-
-            var indentation = new string(' ', indentationLevel * 2);
-            switch (luaAST.Type)
-            {
-                case LuaASTType.AssignmentStatement:
-                    return $"{indentation}{RenderLuaASTNodes(luaAST.Variables, ", ", indentationLevel)} = {RenderLuaASTNodes(luaAST.Init, ", ", indentationLevel)}";
-
-                case LuaASTType.BinaryExpression:
-                    return $"({RenderLuaASTNode(luaAST.Left, indentationLevel)} {luaAST.Operator} {RenderLuaASTNode(luaAST.Right, indentationLevel)})";
-
-                case LuaASTType.BooleanLiteral:
-                    return luaAST.Raw;
-
-                case LuaASTType.BreakStatement:
-                    return $"{indentation}break";
-
-                case LuaASTType.CallExpression:
-                    return $"{RenderLuaASTNode(luaAST.Base, indentationLevel)}({RenderLuaASTNodes(luaAST.Arguments, ", ", indentationLevel)})";
-
-                case LuaASTType.CallStatement:
-                    return $"{indentation}{RenderLuaASTNode(luaAST.Expression, indentationLevel)}";
-
-                case LuaASTType.Comment:
-                    return $"{indentation}{luaAST.Raw}";
-
-                case LuaASTType.DoStatement:
-                    return $"{indentation}do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
-
-                case LuaASTType.ElseClause:
-                    return $"else\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}";
-
-                case LuaASTType.ElseifClause:
-                    return $"elseif {RenderLuaASTNode(luaAST.Condition, indentationLevel)} then\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}";
-
-                case LuaASTType.ForGenericStatement:
-                    return $"{indentation}for {RenderLuaASTNodes(luaAST.Variables, ", ", indentationLevel)} in {RenderLuaASTNodes(luaAST.Iterators, ", ", indentationLevel)} do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
-
-                case LuaASTType.ForNumericStatement:
-                    return $"{indentation}for {RenderLuaASTNode(luaAST.Variable, indentationLevel)} = {RenderLuaASTNode(luaAST.Start, indentationLevel)},{RenderLuaASTNode(luaAST.End, indentationLevel)},{RenderLuaASTNode(luaAST.Step, indentationLevel)} do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
-
-                case LuaASTType.FunctionDeclaration:
-                    return $"{indentation}{(luaAST.IsLocal ? "local " : "")}function {luaAST.Identifier?.Name ?? ""}({RenderLuaASTNodes(luaAST.Parameters, ", ", indentationLevel)})\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
-
-                case LuaASTType.GotoStatement:
-                    return $"{indentation}goto {RenderLuaASTNode(luaAST.Label, indentationLevel)}";
-
-                case LuaASTType.Identifier:
-                    return luaAST.Name;
-
-                case LuaASTType.IfClause:
-                    return $"if {RenderLuaASTNode(luaAST.Condition, indentationLevel)} then\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}";
-
-                case LuaASTType.IfStatement:
-                    return $"{indentation}{RenderLuaASTNodes(luaAST.Clauses, "\r", indentationLevel)}\r{indentation}end";
-
-                case LuaASTType.IndexExpression:
-                    return $"{RenderLuaASTNode(luaAST.Base, indentationLevel)}[{RenderLuaASTNode(luaAST.Index, indentationLevel)}]";
-
-                case LuaASTType.LabelStatement:
-                    return $"{indentation}::{RenderLuaASTNode(luaAST.Label, indentationLevel)}::";
-
-                case LuaASTType.LocalStatement:
-                    return $"{indentation}local {RenderLuaASTNodes(luaAST.Variables, ", ", indentationLevel)} = {RenderLuaASTNodes(luaAST.Init, ", ", indentationLevel)}";
-
-                case LuaASTType.LogicalExpression:
-                    return $"{RenderLuaASTNode(luaAST.Left, indentationLevel)} {luaAST.Operator} {RenderLuaASTNode(luaAST.Right, indentationLevel)}";
-
-                case LuaASTType.MemberExpression:
-                    return $"{RenderLuaASTNode(luaAST.Base, indentationLevel)}{luaAST.Indexer}{RenderLuaASTNode(luaAST.Identifier, indentationLevel)}";
-
-                case LuaASTType.NilLiteral:
-                    return luaAST.Raw;
-
-                case LuaASTType.NumericLiteral:
-                    return luaAST.Raw;
-
-                case LuaASTType.RepeatStatement:
-                    return $"{indentation}repeat\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}until {RenderLuaASTNode(luaAST.Condition, indentationLevel)}";
-
-                case LuaASTType.ReturnStatement:
-                    return $"{indentation}return {RenderLuaASTNodes(luaAST.Arguments, ", ", indentationLevel)}";
-
-                case LuaASTType.StringCallExpression:
-                    return $"{RenderLuaASTNode(luaAST.Base, indentationLevel)}{RenderLuaASTNode(luaAST.Argument, indentationLevel)}";
-
-                case LuaASTType.StringLiteral:
-                    return luaAST.Raw;
-
-                case LuaASTType.TableCallExpression:
-                    return $"{RenderLuaASTNode(luaAST.Base, indentationLevel)}{RenderLuaASTNode(luaAST.Argument, indentationLevel)}";
-
-                case LuaASTType.TableConstructorExpression:
-                    return $"{{ {RenderLuaASTNodes(luaAST.Fields, ", ", indentationLevel)} }}";
-
-                case LuaASTType.TableKey:
-                    return $"[{RenderLuaASTNode(luaAST.Key, indentationLevel)}] = {RenderLuaASTNode(luaAST.TableValue, indentationLevel)}";
-
-                case LuaASTType.TableKeyString:
-                    return $"{RenderLuaASTNode(luaAST.Key, indentationLevel)} = {RenderLuaASTNode(luaAST.TableValue, indentationLevel)}";
-
-                case LuaASTType.TableValue:
-                    return RenderLuaASTNode(luaAST.TableValue, indentationLevel);
-
-                case LuaASTType.UnaryExpression:
-                    return $"{luaAST.Operator}({RenderLuaASTNode(luaAST.Argument, indentationLevel)})";
-
-                case LuaASTType.VarargLiteral:
-                    return luaAST.Raw;
-
-                case LuaASTType.WhileStatement:
-                    return $"{indentation}while {RenderLuaASTNode(luaAST.Condition, indentationLevel)} do\r{RenderLuaASTNodes(luaAST.Body, "\r", indentationLevel + 1)}\r{indentation}end";
-            }
-
-            throw new NotImplementedException();
-        }
-
-        protected string InlineLuaFunctions(string luaScript)
-        {
-            _logEvent("Inlining functions...");
-            var inlineCount = 0;
-            var oldInlineCount = inlineCount;
-            var result = luaScript;
-
-            var parsed = ParseLuaScript(luaScript);
-            var functions = parsed.Body.Where(x => x.Type == LuaASTType.FunctionDeclaration).ToDictionary(x => x.Identifier.Name, x => x); //Note: only top-level functions, not functions defined inside another function
-            var flattened = parsed.Body.DFS_Flatten_Lazy(x => x.AllNodes).ToList();
-            var functionCallExpressionLargestArgumentCount = flattened.Where(x => x.Type == LuaASTType.CallExpression && x.Base.Name != null).GroupBy(x => x.Base.Name).ToDictionary(x => x.Key, x => x.Max(y => y.Arguments.Length));
-            var noParameterOrLocalVariableFunctions = functions.Where(x => functionCallExpressionLargestArgumentCount.TryGetValue(x.Key, out var parameterCount) && parameterCount == 0 && x.Value.Body.DFS_Flatten_Lazy(x => x.AllNodes).Where(x => x.Type == LuaASTType.LocalStatement).Count() == 0).Select(x => x.Key).ToList();
-            //todo: still allow inline if local variable is not used or parameters are not used or global function defined inside another function
-            var newGlobalBody = parsed.Body.ToList();
-            do
-            {
-                oldInlineCount = inlineCount;
-                foreach (var functionName in noParameterOrLocalVariableFunctions)
-                {
-                    if (!functions.TryGetValue(functionName, out var function))
-                    {
-                        continue;
-                    }
-
-                    var body = function.Body;
-                    var singleExecution = true;
-                    LuaASTNode executionParent = null;
-                    foreach (var executionCheck in functions.Where(x => x.Key != functionName))
-                    {
-                        var executionCount = executionCheck.Value.DFS_Flatten_Lazy(x => x.AllNodes).Count(x => x.Type == LuaASTType.CallExpression && x.Base.Name == functionName);
-                        if (executionCount >= 1)
-                        {
-                            if (executionParent != null || executionCount > 1)
-                            {
-                                singleExecution = false;
-                                executionParent = null;
-                                break;
-                            }
-                            executionParent = executionCheck.Value;
-                        }
-                    }
-
-                    if (singleExecution && executionParent != null)
-                    {
-                        var newBody = new List<LuaASTNode>();
-
-                        var inlined = false;
-                        for (var i = 0; i < executionParent.Body.Length; i++)
-                        {
-                            var callStatement = executionParent.Body[i];
-                            if (callStatement.Type == LuaASTType.CallStatement && callStatement.Expression.Base.Name == functionName)
-                            {
-                                newBody.AddRange(body);
-                                inlined = true;
-                            }
-                            else
-                            {
-                                newBody.Add(callStatement);
-                            }
-                        }
-
-                        if (inlined)
-                        {
-                            functions.Remove(functionName);
-                            newGlobalBody.Remove(function);
-
-                            executionParent.Body = newBody.ToArray();
-
-                            inlineCount++;
-                            _logEvent($"Inlining function {functionName}...");
-                        }
-                    }
-                }
-            } while (oldInlineCount != inlineCount);
-
-            _logEvent($"Inlined {inlineCount} functions");
-
-            parsed.Body = newGlobalBody.ToArray();
-
-            return RenderLuaAST(parsed);
+            return LuaParser.RenderLuaAST(luaAST);
         }
 
         protected LuaAST ParseLuaScript(string luaScript)
         {
-            using (var v8 = new V8ScriptEngine())
-            {
-                v8.Execute(Utils.ReadFile_NoEncoding(Path.Combine(Utils.ExeFolderPath, "luaparse.js")));
-                v8.Script.luaScript = luaScript;
-                v8.Execute("ast = JSON.stringify(luaparse.parse(luaScript, { luaVersion: '5.3' }));");
-                return JsonConvert.DeserializeObject<LuaAST>((string)v8.Script.ast, new JsonSerializerSettings() { MissingMemberHandling = MissingMemberHandling.Ignore, MaxDepth = Int32.MaxValue });
-            }
+            return LuaParser.ParseScript(luaScript);
         }
 
         protected JassCompilationUnitSyntax RenameJassFunctions(JassCompilationUnitSyntax jassScript, Dictionary<string, string> oldToNewFunctionNames)

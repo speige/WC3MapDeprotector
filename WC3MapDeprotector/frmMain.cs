@@ -1,5 +1,5 @@
-using Newtonsoft.Json;
 using NLua;
+using SpanJson;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -86,7 +86,7 @@ namespace WC3MapDeprotector
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
                 client.DefaultRequestHeaders.UserAgent.TryParseAdd("request");
                 var json = await client.GetStringAsync("https://api.github.com/repos/speige/WC3MapDeprotector/releases/latest");
-                return JsonConvert.DeserializeObject<GitHubReleaseInfo>(json);
+                return JsonSerializer.Generic.Utf16.Deserialize<GitHubReleaseInfo>(json);
             }
         }
 

@@ -1,5 +1,5 @@
-_G.__jass2luaTranspiler__pcall_errors = ''
-_G.__jass2luaTranspiler__safePreload = function(data)
+__jass2luaTranspiler__pcall_errors = ''
+function __jass2luaTranspiler__safePreload(data)
 	local maxChunkSize = 259
 	local i = 1
 	while i <= #data do
@@ -13,7 +13,7 @@ end
 	local success, err = pcall(function()
 		local code, err = load([[
 		{{PCALL_WRAPPER_GLOBAL_SCRIPT_CODE}}
-		]], nil, "t", _G)		
+		]], nil, "t", _G)
 		if (code) then
 			local success2, err2 = pcall(code)
 			if not success2 then

@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using Jass2Lua;
+using System.Text;
 using War3Net.Build;
 using War3Net.Build.Audio;
 using War3Net.Build.Environment;
@@ -23,7 +24,9 @@ namespace WC3MapDeprotector
 
             try
             {
-                return StormLibrary.SFileExtractFile(archiveHandle, archivePath, localDiskFileName, 0);
+                var result = StormLibrary.SFileExtractFile(archiveHandle, archivePath, localDiskFileName, 0);
+                result = result && File.Exists(localDiskFileName) && File.ReadAllBytes(localDiskFileName).Length > 0;
+                return result;
             }
             finally
             {
@@ -141,6 +144,11 @@ namespace WC3MapDeprotector
             }
 
             var tempScriptFileName = Path.GetTempFileName();
+            if (ExtractFile(mapFileName_Jass, LuaMapScript.FileName, tempScriptFileName) || ExtractFile(mapFileName_Jass, LuaMapScript.FullName, tempScriptFileName))
+            {
+                throw new Exception("Map has both a jass and lua file. Probably using map hack which is not supported in reforged. Needs to be converted manually.");
+            }
+
             if (!ExtractFile(mapFileName_Jass, JassMapScript.FileName, tempScriptFileName))
             {
                 if (!ExtractFile(mapFileName_Jass, JassMapScript.FullName, tempScriptFileName))
@@ -190,7 +198,7 @@ namespace WC3MapDeprotector
                                 {
                                     if (!string.IsNullOrWhiteSpace(function.Parameters?[0]?.Value))
                                     {
-                                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, AddStringPlusOperatorOverload = false, PrependTranspilerWarnings = false });
+                                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, AddHelperFunctions = false, PrependTranspilerWarnings = false });
                                     }
                                 }
                             }
@@ -210,33 +218,32 @@ namespace WC3MapDeprotector
             map.Info.SupportedModes = SupportedModes.SD | SupportedModes.HD;
             map.Script = ConvertJassToLua(Utils.ReadFile_NoEncoding(tempScriptFileName));
 
-            Directory.CreateDirectory(Path.GetDirectoryName(mapFileName_Lua));
-            File.Copy(mapFileName_Jass, mapFileName_Lua);
-
-            RemoveFile(mapFileName_Lua, MapInfo.FileName);
+            var tempLuaMapFileName = Path.GetTempFileName();
+            File.Copy(mapFileName_Jass, tempLuaMapFileName, true);
+            RemoveFile(tempLuaMapFileName, MapInfo.FileName);
             using (var mpqStream = map.GetNativeFile(MapInfo.FileName))
             using (var fileStream = File.Create(tempInfoFileName))
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
             }
-            if (!AddFile(mapFileName_Lua, tempInfoFileName, MapInfo.FileName))
+            if (!AddFile(tempLuaMapFileName, tempInfoFileName, MapInfo.FileName))
             {
                 throw new Exception("Unable to modify MPQ. It may be a protected map. Please de-protect first.");
             }
 
-            RemoveFile(mapFileName_Lua, JassMapScript.FileName);
-            RemoveFile(mapFileName_Lua, JassMapScript.FullName);
+            RemoveFile(tempLuaMapFileName, JassMapScript.FileName);
+            RemoveFile(tempLuaMapFileName, JassMapScript.FullName);
             using (var mpqStream = map.GetNativeFile(LuaMapScript.FileName))
             using (var fileStream = File.Create(tempScriptFileName))
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
             }
-            if (!AddFile(mapFileName_Lua, tempScriptFileName, LuaMapScript.FileName))
+            if (!AddFile(tempLuaMapFileName, tempScriptFileName, LuaMapScript.FileName))
             {
                 throw new Exception("Unknown error adding lua script to MPQ");
             }
 
-            RemoveFile(mapFileName_Lua, MapCustomTextTriggers.FileName);
+            RemoveFile(tempLuaMapFileName, MapCustomTextTriggers.FileName);
             if (map.CustomTextTriggers != null)
             {
                 using (var mpqStream = map.GetNativeFile(MapCustomTextTriggers.FileName))
@@ -244,13 +251,13 @@ namespace WC3MapDeprotector
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
                 }
-                if (!AddFile(mapFileName_Lua, tempCustomTextTriggersFileName, MapCustomTextTriggers.FileName))
+                if (!AddFile(tempLuaMapFileName, tempCustomTextTriggersFileName, MapCustomTextTriggers.FileName))
                 {
                     throw new Exception("Unknown error updating custom text triggers file");
                 }
             }
 
-            RemoveFile(mapFileName_Lua, MapTriggers.FileName);
+            RemoveFile(tempLuaMapFileName, MapTriggers.FileName);
             if (map.Triggers != null)
             {
                 using (var mpqStream = map.GetNativeFile(MapTriggers.FileName))
@@ -258,11 +265,14 @@ namespace WC3MapDeprotector
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
                 }
-                if (!AddFile(mapFileName_Lua, tempTriggersFileName, MapTriggers.FileName))
+                if (!AddFile(tempLuaMapFileName, tempTriggersFileName, MapTriggers.FileName))
                 {
                     throw new Exception("Unknown error updating GUI triggers file");
                 }
             }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(mapFileName_Lua));
+            File.Move(tempLuaMapFileName, mapFileName_Lua);
 
             Utils.SafeDeleteFile(tempInfoFileName);
             Utils.SafeDeleteFile(tempScriptFileName);
