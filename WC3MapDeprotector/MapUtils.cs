@@ -289,8 +289,8 @@ namespace WC3MapDeprotector
 
         public static Encoding GetCorrectFileEncoding(string mpqFileName)
         {
-            mpqFileName = Path.GetFileName((mpqFileName ?? "").Trim().ToLower());
-            if (JassMapScript.FileName == mpqFileName || LuaMapScript.FileName == mpqFileName)
+            mpqFileName = Path.GetFileName((mpqFileName ?? "").Trim());
+            if (JassMapScript.FileName.Equals(mpqFileName, StringComparison.InvariantCultureIgnoreCase) || LuaMapScript.FileName .Equals(mpqFileName, StringComparison.InvariantCultureIgnoreCase))
             {
                 return Utils.NO_ENCODING;
             }
@@ -299,117 +299,61 @@ namespace WC3MapDeprotector
         }
 
         private static string[] _allNativeMapFileNames = new[] { MapSounds.FileName, MapCameras.FileName, MapEnvironment.FileName, MapPathingMap.FileName, MapPreviewIcons.FileName, MapRegions.FileName, MapShadowMap.FileName, ImportedFiles.MapFileName, MapInfo.FileName, AbilityObjectData.MapFileName, BuffObjectData.MapFileName, DestructableObjectData.MapFileName, DoodadObjectData.MapFileName, ItemObjectData.MapFileName, UnitObjectData.MapFileName, UpgradeObjectData.MapFileName, AbilityObjectData.MapSkinFileName, BuffObjectData.MapSkinFileName, DestructableObjectData.MapSkinFileName, DoodadObjectData.MapSkinFileName, ItemObjectData.MapSkinFileName, UnitObjectData.MapSkinFileName, UpgradeObjectData.MapSkinFileName, MapCustomTextTriggers.FileName, MapTriggers.FileName, TriggerStrings.MapFileName, MapDoodads.FileName, MapUnits.FileName, JassMapScript.FileName, JassMapScript.FullName, LuaMapScript.FileName, LuaMapScript.FullName };
-        public static List<MpqKnownFile> GetAllNativeFiles(this Map map, bool ignoreExceptions = false)
+        private static readonly Dictionary<string, Func<Map, MpqFile>> NativeFileNameToGetMpqFileMethod;
+
+        static MapUtils()
         {
-            //NOTE: w3i & war3mapunits.doo versions have to correlate or the editor crashes.
-            //having mismatch can cause world editor to be very slow & take tons of memory, if it doesn't crash
-            //not sure how to know compatability, but current guess is Units.UseNewFormat can't be used for MapInfoFormatVersion < v28
-
-            if (map.Info == null)
+            KeyValuePair<string, Func<Map, MpqFile>> CreateMapping(string fileName, Func<Map, Encoding, MpqFile> action)
             {
-                map.Info = new MapInfo(default);
-                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
-                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
-                map.Info.GameVersion = new Version(1, 36, 1, 20719);
+                var encoding = GetCorrectFileEncoding(fileName);
+                Func<Map, MpqFile> curriedAction = map => action(map, encoding);
+                return new KeyValuePair<string, Func<Map, MpqFile>>(fileName.Trim(), curriedAction);
             }
-
-            if (map.Units != null && map.Info.FormatVersion >= MapInfoFormatVersion.v28)
+            var a = new []
             {
-                map.Units.UseNewFormat = true;
-            }
-
-            if (map.Units != null && map.Units.UseNewFormat)
-            {
-                foreach (var unit in map.Units.Units)
-                {
-                    unit.SkinId = unit.TypeId;
-                }
-            }
-
-            return _allNativeMapFileNames.Select(x => map.GetNativeFile(x)).OfType<MpqKnownFile>().Where(x => x != null).ToList();
+                CreateMapping(MapSounds.FileName, (map, encoding) => map.GetSoundsFile(encoding)),
+                CreateMapping(MapCameras.FileName, (map, encoding) => map.GetCamerasFile(encoding)),
+                CreateMapping(MapEnvironment.FileName, (map, encoding) => map.GetEnvironmentFile(encoding)),
+                CreateMapping(MapPathingMap.FileName, (map, encoding) => map.GetPathingMapFile(encoding)),
+                CreateMapping(MapPreviewIcons.FileName, (map, encoding) => map.GetPreviewIconsFile(encoding)),
+                CreateMapping(MapRegions.FileName, (map, encoding) => map.GetRegionsFile(encoding)),
+                CreateMapping(MapShadowMap.FileName, (map, encoding) => map.GetShadowMapFile(encoding)),
+                CreateMapping(ImportedFiles.MapFileName, (map, encoding) => map.GetImportedFilesFile(encoding)),
+                CreateMapping(MapInfo.FileName, (map, encoding) => map.GetInfoFile(encoding)),
+                CreateMapping(AbilityObjectData.MapFileName, (map, encoding) => map.GetAbilityObjectDataFile(encoding)),
+                CreateMapping(BuffObjectData.MapFileName, (map, encoding) => map.GetBuffObjectDataFile(encoding)),
+                CreateMapping(DestructableObjectData.MapFileName, (map, encoding) => map.GetDestructableObjectDataFile(encoding)),
+                CreateMapping(DoodadObjectData.MapFileName, (map, encoding) => map.GetDoodadObjectDataFile(encoding)),
+                CreateMapping(ItemObjectData.MapFileName, (map, encoding) => map.GetItemObjectDataFile(encoding)),
+                CreateMapping(UnitObjectData.MapFileName, (map, encoding) => map.GetUnitObjectDataFile(encoding)),
+                CreateMapping(UpgradeObjectData.MapFileName, (map, encoding) => map.GetUpgradeObjectDataFile(encoding)),
+                CreateMapping(AbilityObjectData.MapSkinFileName, (map, encoding) => map.GetAbilitySkinObjectDataFile(encoding)),
+                CreateMapping(BuffObjectData.MapSkinFileName, (map, encoding) => map.GetBuffSkinObjectDataFile(encoding)),
+                CreateMapping(DestructableObjectData.MapSkinFileName, (map, encoding) => map.GetDestructableSkinObjectDataFile(encoding)),
+                CreateMapping(DoodadObjectData.MapSkinFileName, (map, encoding) => map.GetDoodadSkinObjectDataFile(encoding)),
+                CreateMapping(ItemObjectData.MapSkinFileName, (map, encoding) => map.GetItemSkinObjectDataFile(encoding)),
+                CreateMapping(UnitObjectData.MapSkinFileName, (map, encoding) => map.GetUnitSkinObjectDataFile(encoding)),
+                CreateMapping(UpgradeObjectData.MapSkinFileName, (map, encoding) => map.GetUpgradeSkinObjectDataFile(encoding)),
+                CreateMapping(MapCustomTextTriggers.FileName, (map, encoding) => map.GetCustomTextTriggersFile(encoding)),
+                CreateMapping(MapTriggers.FileName, (map, encoding) => map.GetTriggersFile(encoding)),
+                CreateMapping(TriggerStrings.MapFileName, (map, encoding) => map.GetTriggerStringsFile(encoding)),
+                CreateMapping(MapDoodads.FileName, (map, encoding) => map.GetDoodadsFile(encoding)),
+                CreateMapping(MapUnits.FileName, (map, encoding) => map.GetUnitsFile(encoding)),
+                CreateMapping(JassMapScript.FileName, (map, encoding) => map?.Info?.ScriptLanguage == ScriptLanguage.Jass ? map.GetScriptFile(encoding) : null),
+                CreateMapping(JassMapScript.FullName, (map, encoding) => map?.Info?.ScriptLanguage == ScriptLanguage.Jass ? map.GetScriptFile(encoding) : null),
+                CreateMapping(LuaMapScript.FileName, (map, encoding) => map?.Info?.ScriptLanguage == ScriptLanguage.Lua ? map.GetScriptFile(encoding) : null),
+                CreateMapping(LuaMapScript.FullName, (map, encoding) => map?.Info?.ScriptLanguage == ScriptLanguage.Lua ? map.GetScriptFile(encoding) : null)
+            };
+            NativeFileNameToGetMpqFileMethod = a.ToDictionary(x => x.Key, x => x.Value, StringComparer.InvariantCultureIgnoreCase);
         }
 
         public static MpqFile GetNativeFile(this Map map, string fileName)
         {
             try
             {
-                Encoding encoding = GetCorrectFileEncoding(fileName);
-
-                switch ((fileName ?? "").Trim().ToLower())
+                if (NativeFileNameToGetMpqFileMethod.TryGetValue((fileName ?? "").Trim(), out var action))
                 {
-                    case MapSounds.FileName:
-                        return map.GetSoundsFile(encoding);
-                    case MapCameras.FileName:
-                        return map.GetCamerasFile(encoding);
-                    case MapEnvironment.FileName:
-                        return map.GetEnvironmentFile(encoding);
-                    case MapPathingMap.FileName:
-                        return map.GetPathingMapFile(encoding);
-                    case MapPreviewIcons.FileName:
-                        return map.GetPreviewIconsFile(encoding);
-                    case MapRegions.FileName:
-                        return map.GetRegionsFile(encoding);
-                    case MapShadowMap.FileName:
-                        return map.GetShadowMapFile(encoding);
-                    case ImportedFiles.MapFileName:
-                        return map.GetImportedFilesFile(encoding);
-                    case MapInfo.FileName:
-                        return map.GetInfoFile(encoding);
-                    case AbilityObjectData.MapFileName:
-                        return map.GetAbilityObjectDataFile(encoding);
-                    case BuffObjectData.MapFileName:
-                        return map.GetBuffObjectDataFile(encoding);
-                    case DestructableObjectData.MapFileName:
-                        return map.GetDestructableObjectDataFile(encoding);
-                    case DoodadObjectData.MapFileName:
-                        return map.GetDoodadObjectDataFile(encoding);
-                    case ItemObjectData.MapFileName:
-                        return map.GetItemObjectDataFile(encoding);
-                    case UnitObjectData.MapFileName:
-                        return map.GetUnitObjectDataFile(encoding);
-                    case UpgradeObjectData.MapFileName:
-                        return map.GetUpgradeObjectDataFile(encoding);
-                    case AbilityObjectData.MapSkinFileName:
-                        return map.GetAbilitySkinObjectDataFile(encoding);
-                    case BuffObjectData.MapSkinFileName:
-                        return map.GetBuffSkinObjectDataFile(encoding);
-                    case DestructableObjectData.MapSkinFileName:
-                        return map.GetDestructableSkinObjectDataFile(encoding);
-                    case DoodadObjectData.MapSkinFileName:
-                        return map.GetDoodadSkinObjectDataFile(encoding);
-                    case ItemObjectData.MapSkinFileName:
-                        return map.GetItemSkinObjectDataFile(encoding);
-                    case UnitObjectData.MapSkinFileName:
-                        return map.GetUnitSkinObjectDataFile(encoding);
-                    case UpgradeObjectData.MapSkinFileName:
-                        return map.GetUpgradeSkinObjectDataFile(encoding);
-                    case MapCustomTextTriggers.FileName:
-                        return map.GetCustomTextTriggersFile(encoding);
-                    case MapTriggers.FileName:
-                        return map.GetTriggersFile(encoding);
-                    case TriggerStrings.MapFileName:
-                        return map.GetTriggerStringsFile(encoding);
-                    case MapDoodads.FileName:
-                        return map.GetDoodadsFile(encoding);
-                    case MapUnits.FileName:
-                        return map.GetUnitsFile(encoding);
-
-                    case JassMapScript.FileName:
-                    case JassMapScript.FullName:
-                        if (map?.Info?.ScriptLanguage != ScriptLanguage.Jass)
-                        {
-                            return null;
-                        }
-
-                        return map.GetScriptFile(encoding);
-                    case LuaMapScript.FileName:
-                    case LuaMapScript.FullName:
-                        if (map?.Info?.ScriptLanguage != ScriptLanguage.Lua)
-                        {
-                            return null;
-                        }
-
-                        return map.GetScriptFile(encoding);
+                    return action(map);
                 }
             }
             catch (Exception e)
@@ -454,6 +398,37 @@ namespace WC3MapDeprotector
             }
 
             return false;
+        }
+
+
+        public static List<MpqKnownFile> GetAllNativeFiles(this Map map, bool ignoreExceptions = false)
+        {
+            //NOTE: w3i & war3mapunits.doo versions have to correlate or the editor crashes.
+            //having mismatch can cause world editor to be very slow & take tons of memory, if it doesn't crash
+            //not sure how to know compatability, but current guess is Units.UseNewFormat can't be used for MapInfoFormatVersion < v28
+
+            if (map.Info == null)
+            {
+                map.Info = new MapInfo(default);
+                map.Info.FormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderByDescending(x => x).First();
+                //map.Info.EditorVersion = Enum.GetValues(typeof(EditorVersion)).Cast<EditorVersion>().OrderByDescending(x => x).First();
+                map.Info.GameVersion = new Version(1, 36, 1, 20719);
+            }
+
+            if (map.Units != null && map.Info.FormatVersion >= MapInfoFormatVersion.v28)
+            {
+                map.Units.UseNewFormat = true;
+            }
+
+            if (map.Units != null && map.Units.UseNewFormat)
+            {
+                foreach (var unit in map.Units.Units)
+                {
+                    unit.SkinId = unit.TypeId;
+                }
+            }
+
+            return _allNativeMapFileNames.Select(x => map.GetNativeFile(x)).OfType<MpqKnownFile>().Where(x => x != null).ToList();
         }
     }
 }
