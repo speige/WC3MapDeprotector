@@ -45,12 +45,35 @@ namespace WC3MapDeprotector
                 const uint MPQ_COMPRESSION_ZLIB = 0x02;
                 const uint MPQ_COMPRESSION_HUFFMANN = 0x01;
                 const uint MPQ_COMPRESSION_NEXT_SAME = 0xFFFFFFFF;
-                return StormLibrary.SFileAddFileEx(archiveHandle, localDiskFileName, archivePath, MPQ_FILE_COMPRESS, string.Equals(Path.GetExtension(archivePath), ".wav", StringComparison.InvariantCultureIgnoreCase) ? MPQ_COMPRESSION_HUFFMANN : MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME);
+                if (!StormLibrary.SFileAddFileEx(archiveHandle, localDiskFileName, archivePath, MPQ_FILE_COMPRESS, string.Equals(Path.GetExtension(archivePath), ".wav", StringComparison.InvariantCultureIgnoreCase) ? MPQ_COMPRESSION_HUFFMANN : MPQ_COMPRESSION_ZLIB, MPQ_COMPRESSION_NEXT_SAME))
+                {
+                    return false;
+                }
             }
             finally
             {
                 StormLibrary.SFileCloseArchive(archiveHandle);
             }
+
+            var tempFile = Path.GetTempFileName();
+            try
+            {
+                if (!ExtractFile(mpqFileName, archivePath, tempFile))
+                {
+                    return false;
+                }
+
+                if (!File.ReadAllBytes(localDiskFileName).SequenceEqual(File.ReadAllBytes(tempFile)))
+                {
+                    return false;
+                }
+            }
+            finally
+            {
+                Utils.SafeDeleteFile(tempFile);
+            }
+
+            return true;
         }
 
         public static bool RemoveFile(string mpqFileName, string archivePath)
@@ -62,12 +85,32 @@ namespace WC3MapDeprotector
 
             try
             {
-                return StormLibrary.SFileRemoveFile(archiveHandle, archivePath, 0);
+                if (!StormLibrary.SFileRemoveFile(archiveHandle, archivePath, 0))
+                {
+                    return false;
+                }
             }
             finally
             {
                 StormLibrary.SFileCloseArchive(archiveHandle);
             }
+
+            var tempFile = Path.GetTempFileName();
+            try
+            {
+                ExtractFile(mpqFileName, archivePath, tempFile);
+
+                if (File.ReadAllBytes(tempFile).Length > 0)
+                {
+                    return false;
+                }
+            }
+            finally
+            {
+                Utils.SafeDeleteFile(tempFile);
+            }
+
+            return true;
         }
 
         public static void ConvertJassToLua(string mapFileName_Jass, string mapFileName_Lua)
@@ -176,7 +219,10 @@ namespace WC3MapDeprotector
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
             }
-            AddFile(mapFileName_Lua, tempInfoFileName, MapInfo.FileName);
+            if (!AddFile(mapFileName_Lua, tempInfoFileName, MapInfo.FileName))
+            {
+                throw new Exception("Unable to modify MPQ. It may be a protected map. Please de-protect first.");
+            }
 
             RemoveFile(mapFileName_Lua, JassMapScript.FileName);
             RemoveFile(mapFileName_Lua, JassMapScript.FullName);
@@ -185,7 +231,10 @@ namespace WC3MapDeprotector
             {
                 mpqStream.MpqStream.CopyTo(fileStream);
             }
-            AddFile(mapFileName_Lua, tempScriptFileName, LuaMapScript.FileName);
+            if (!AddFile(mapFileName_Lua, tempScriptFileName, LuaMapScript.FileName))
+            {
+                throw new Exception("Unknown error adding lua script to MPQ");
+            }
 
             RemoveFile(mapFileName_Lua, MapCustomTextTriggers.FileName);
             if (map.CustomTextTriggers != null)
@@ -195,7 +244,10 @@ namespace WC3MapDeprotector
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
                 }
-                AddFile(mapFileName_Lua, tempCustomTextTriggersFileName, MapCustomTextTriggers.FileName);
+                if (!AddFile(mapFileName_Lua, tempCustomTextTriggersFileName, MapCustomTextTriggers.FileName))
+                {
+                    throw new Exception("Unknown error updating custom text triggers file");
+                }
             }
 
             RemoveFile(mapFileName_Lua, MapTriggers.FileName);
@@ -206,7 +258,10 @@ namespace WC3MapDeprotector
                 {
                     mpqStream.MpqStream.CopyTo(fileStream);
                 }
-                AddFile(mapFileName_Lua, tempTriggersFileName, MapTriggers.FileName);
+                if (!AddFile(mapFileName_Lua, tempTriggersFileName, MapTriggers.FileName))
+                {
+                    throw new Exception("Unknown error updating GUI triggers file");
+                }
             }
 
             Utils.SafeDeleteFile(tempInfoFileName);
