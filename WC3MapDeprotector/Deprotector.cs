@@ -739,10 +739,10 @@ namespace WC3MapDeprotector
             PatchW3I();
 
             //These are probably protected, but the only way way to verify if they aren't is to parse the script (which is probably obfuscated), but if we can sucessfully parse, then we can just re-generate them to be safe.
-            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"));
-            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
-            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wtg"));
-            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.w3r"));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, MapUnits.FileName));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, MapCustomTextTriggers.FileName));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, MapTriggers.FileName));
+            MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, MapRegions.FileName));
             //todo: diff with decompiled versions from war3map.j so we can update _deprotectionResult.CountOfProtectionsFound
 
             var skinPath = Path.Combine(DiscoveredFilesPath, "war3mapSkin.txt");
@@ -853,19 +853,19 @@ namespace WC3MapDeprotector
                 }
             }
 
-            if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3mapunits.doo")))
+            if (!File.Exists(Path.Combine(DiscoveredFilesPath, MapUnits.FileName)))
             {
                 _deprotectionResult.CountOfProtectionsFound++;
-                File.Copy(Path.Combine(BlankMapFilesPath, "war3mapunits.doo"), Path.Combine(DiscoveredFilesPath, "war3mapunits.doo"), true);
+                File.Copy(Path.Combine(BlankMapFilesPath, MapUnits.FileName), Path.Combine(DiscoveredFilesPath, MapUnits.FileName), true);
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: war3mapunits.doo could not be recovered. See \"Object Manager\" in Help document");
             }
 
-            if (!File.Exists(Path.Combine(DiscoveredFilesPath, "war3map.wtg")))
+            if (!File.Exists(Path.Combine(DiscoveredFilesPath, MapTriggers.FileName)))
             {
                 _deprotectionResult.CountOfProtectionsFound++;
-                File.Copy(Path.Combine(BlankMapFilesPath, "war3map.wtg"), Path.Combine(DiscoveredFilesPath, "war3map.wtg"), true);
-                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, "war3map.wct"));
+                File.Copy(Path.Combine(BlankMapFilesPath, MapTriggers.FileName), Path.Combine(DiscoveredFilesPath, MapTriggers.FileName), true);
+                MoveExtractedFileToDeletedFolder(Path.Combine(DiscoveredFilesPath, MapCustomTextTriggers.FileName));
                 _deprotectionResult.CriticalWarningCount++;
                 _deprotectionResult.WarningMessages.Add("WARNING: triggers could not be recovered. Please review TempFiles to see which one is correct and copy/paste directly into trigger editor.");
                 _deprotectionResult.WarningMessages.Add($"TempFilePath: {WorkingFolderPath}");
@@ -1131,6 +1131,59 @@ namespace WC3MapDeprotector
             Utils.SafeDeleteFile(tempMapFileName);
         }
 
+        protected string GenerateLiveGameScanningMap()
+        {
+            var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
+            var baseFileNames = Directory.GetFiles(BlankMapFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, BlankMapFilesPath)).ToList();
+
+            var allFiles = nativeFileNames.Concat(baseFileNames).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
+            var liveGameScanningFolder = Path.Combine(TempFolderPath, "liveGameScanning");
+            foreach (var file in allFiles)
+            {
+                if (MapUtils.WorldEditorMapFileNames.Contains(file))
+                {
+                    continue;
+                }
+
+                var fileName = Path.Combine(DiscoveredFilesPath, file);
+                var tempFileName = Path.Combine(liveGameScanningFolder, file);
+
+                if (File.Exists(fileName))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(tempFileName));
+                    File.Copy(fileName, tempFileName, true);
+                }
+                else 
+                {
+                    fileName = Path.Combine(BlankMapFilesPath, file);
+                    if (File.Exists(fileName))
+                    {
+                        File.Copy(fileName, tempFileName, true);
+                    }
+                }
+            }
+
+            var mapFileName = Path.Combine(liveGameScanningFolder, "map.w3x");
+            BuildW3X(mapFileName, liveGameScanningFolder, allFiles.Select(x => @$"{liveGameScanningFolder}\{x}").Where(x => File.Exists(x)).ToList());
+
+            if (!MapUtils.IsLuaMap(mapFileName))
+            {
+                var luaMapFileName = Path.Combine(liveGameScanningFolder, "map_lua.w3x");
+                MapUtils.ConvertJassToLua(mapFileName, luaMapFileName);
+                mapFileName = luaMapFileName;
+            }
+
+            //todo: add lua introspection code
+            //prevent quitting due to single-player (or for any reason)
+            //monkey patch all functions to log in/out params
+            //monitor all functions for potential encryption & relay messages to main process
+            //relay any native functions during config/main for ObjectManager decompilation
+            //prefix all Preload with a subdirectory to avoid overwriting saved games
+            //execute all _G functions with no params
+
+            return mapFileName;
+        }
+
         protected void RepairW3XNativeFilesInEditor()
         {
             //NOTE: minor corruption can be repaired by opening map & saving, but need to remove all models/etc from w3x 1st or it will crash editor.
@@ -1138,7 +1191,7 @@ namespace WC3MapDeprotector
 
             var nativeFileNames = Directory.GetFiles(DiscoveredFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, DiscoveredFilesPath)).Where(x => StormMPQArchiveExtensions.IsInDefaultListFile(x)).ToList();
             var baseFileNames = Directory.GetFiles(BlankMapFilesPath, "*.*", SearchOption.AllDirectories).Select(x => RemovePathPrefix(x, BlankMapFilesPath)).ToList();
-            var notRepairableFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "war3map.j", "war3map.imp", "war3map.wct", "war3map.wtg" };
+            var notRepairableFiles = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { "war3map.j", ImportedFiles.MapFileName, MapCustomTextTriggers.FileName, MapTriggers.FileName };
 
             var allFiles = nativeFileNames.Concat(baseFileNames).Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
             var repairNativesFolder = Path.Combine(TempFolderPath, "repairNatives");
@@ -2161,7 +2214,7 @@ namespace WC3MapDeprotector
         {
             //note: the order of operations matters. For example, script file import fails if info file not yet imported. So we import each file 2x
             _logEvent("Analyzing map files");
-            var mapFiles = Directory.GetFiles(folder, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(folder, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => string.Equals(x, "war3map.w3i", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1).ToList();
+            var mapFiles = Directory.GetFiles(folder, "war3map*", SearchOption.AllDirectories).Union(Directory.GetFiles(folder, "war3campaign*", SearchOption.AllDirectories)).OrderBy(x => string.Equals(x, MapInfo.FileName, StringComparison.InvariantCultureIgnoreCase) ? 0 : 1).ToList();
 
             var map = new Map();
             for (var retry = 0; retry < 2; ++retry)
@@ -2402,7 +2455,7 @@ namespace WC3MapDeprotector
 
         protected void PatchW3I()
         {
-            var w3ipath = Path.Combine(DiscoveredFilesPath, "war3map.w3i");
+            var w3ipath = Path.Combine(DiscoveredFilesPath, MapInfo.FileName);
             _logEvent("Patching war3map.w3i...");
             using (var w3i = File.Open(w3ipath, FileMode.Open, FileAccess.ReadWrite))
             {
@@ -2440,7 +2493,7 @@ namespace WC3MapDeprotector
             }
             newfiles.Add("\x77\x61\x72\x33\x6D\x61\x70\x2E\x77\x61\x76\x00");
             newfiles = newfiles.Distinct(StringComparer.InvariantCultureIgnoreCase).ToList();
-            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, "war3map.imp"), FileMode.Create))
+            using (var stream = new FileStream(Path.Combine(DiscoveredFilesPath, ImportedFiles.MapFileName), FileMode.Create))
             using (var writer = new BinaryWriter(stream))
             {
                 writer.Write(1);

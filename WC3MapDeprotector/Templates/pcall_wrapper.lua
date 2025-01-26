@@ -11,9 +11,9 @@ end
 
 (function()
 	local success, err = pcall(function()
-		local code, err = load([[
+		local code, err = load([=[
 		{{PCALL_WRAPPER_GLOBAL_SCRIPT_CODE}}
-		]], nil, "t", _G)
+		]=], nil, "t", _G)
 		if (code) then
 			local success2, err2 = pcall(code)
 			if not success2 then

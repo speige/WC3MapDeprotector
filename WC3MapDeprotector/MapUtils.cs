@@ -116,6 +116,30 @@ namespace WC3MapDeprotector
             return true;
         }
 
+        public static bool IsLuaMap(string mapFileName)
+        {
+            var tempInfoFileName = Path.GetTempFileName();
+            try
+            {
+                if (!ExtractFile(mapFileName, MapInfo.FileName, tempInfoFileName))
+                {
+                    throw new Exception(MapInfo.FileName + " missing from MPQ Archive");
+                }
+
+                var map = new Map();
+                if (!map.SetNativeFile(tempInfoFileName, MapInfo.FileName))
+                {
+                    throw new Exception("Could not parse map info .w3i file");
+                }
+
+                return map.Info.ScriptLanguage == ScriptLanguage.Lua;
+            }
+            finally
+            {
+                Utils.SafeDeleteFile(tempInfoFileName);
+            }
+        }
+
         public static void ConvertJassToLua(string mapFileName_Jass, string mapFileName_Lua)
         {
             var tempInfoFileName = Path.GetTempFileName();
@@ -308,7 +332,8 @@ namespace WC3MapDeprotector
             return Encoding.UTF8;
         }
 
-        private static string[] _allNativeMapFileNames = new[] { MapSounds.FileName, MapCameras.FileName, MapEnvironment.FileName, MapPathingMap.FileName, MapPreviewIcons.FileName, MapRegions.FileName, MapShadowMap.FileName, ImportedFiles.MapFileName, MapInfo.FileName, AbilityObjectData.MapFileName, BuffObjectData.MapFileName, DestructableObjectData.MapFileName, DoodadObjectData.MapFileName, ItemObjectData.MapFileName, UnitObjectData.MapFileName, UpgradeObjectData.MapFileName, AbilityObjectData.MapSkinFileName, BuffObjectData.MapSkinFileName, DestructableObjectData.MapSkinFileName, DoodadObjectData.MapSkinFileName, ItemObjectData.MapSkinFileName, UnitObjectData.MapSkinFileName, UpgradeObjectData.MapSkinFileName, MapCustomTextTriggers.FileName, MapTriggers.FileName, TriggerStrings.MapFileName, MapDoodads.FileName, MapUnits.FileName, JassMapScript.FileName, JassMapScript.FullName, LuaMapScript.FileName, LuaMapScript.FullName };
+        public static readonly HashSet<string> WorldEditorMapFileNames = new HashSet<string>(StringComparer.InvariantCultureIgnoreCase) { ImportedFiles.MapFileName, MapCameras.FileName, MapCustomTextTriggers.FileName, MapDoodads.FileName, MapRegions.FileName, MapSounds.FileName, MapTriggers.FileName, MapUnits.FileName };
+        public static readonly HashSet<string> AllNativeMapFileNames = new HashSet<string>(WorldEditorMapFileNames, StringComparer.InvariantCultureIgnoreCase) { AbilityObjectData.MapFileName, AbilityObjectData.MapSkinFileName, BuffObjectData.MapFileName, BuffObjectData.MapSkinFileName, DestructableObjectData.MapFileName, DestructableObjectData.MapSkinFileName, DoodadObjectData.MapFileName, DoodadObjectData.MapSkinFileName, ItemObjectData.MapFileName, ItemObjectData.MapSkinFileName, JassMapScript.FileName, JassMapScript.FullName, LuaMapScript.FileName, LuaMapScript.FullName, MapEnvironment.FileName, MapInfo.FileName, MapPathingMap.FileName, MapPreviewIcons.FileName, MapShadowMap.FileName, TriggerStrings.MapFileName, UnitObjectData.MapFileName, UnitObjectData.MapSkinFileName, UpgradeObjectData.MapFileName, UpgradeObjectData.MapSkinFileName };
         private static readonly Dictionary<string, Func<Map, MpqFile>> NativeFileNameToGetMpqFileMethod;
 
         static MapUtils()
@@ -438,7 +463,7 @@ namespace WC3MapDeprotector
                 }
             }
 
-            return _allNativeMapFileNames.Select(x => map.GetNativeFile(x)).OfType<MpqKnownFile>().Where(x => x != null).ToList();
+            return AllNativeMapFileNames.Select(x => map.GetNativeFile(x)).OfType<MpqKnownFile>().Where(x => x != null).ToList();
         }
     }
 }
