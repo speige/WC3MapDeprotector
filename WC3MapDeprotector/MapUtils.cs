@@ -222,7 +222,7 @@ namespace WC3MapDeprotector
                                 {
                                     if (!string.IsNullOrWhiteSpace(function.Parameters?[0]?.Value))
                                     {
-                                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, AddHelperFunctions = false, PrependTranspilerWarnings = false });
+                                        function.Parameters[0].Value = ConvertJassToLua(function.Parameters[0].Value, new Jass2LuaTranspiler.Options() { AddGithubAttributionLink = false, PrependTranspilerWarnings = false });
                                     }
                                 }
                             }
@@ -307,7 +307,7 @@ namespace WC3MapDeprotector
         public static string ConvertJassToLua(string jassScript, Jass2LuaTranspiler.Options options = null)
         {
             var transpiler = new Jass2LuaTranspiler(options);
-            return transpiler.Transpile(jassScript, out var warnings);
+            return transpiler.Transpile(jassScript, out var warnings, out var sourceMap);
         }
 
         public static byte[] ToByteArray(this MpqFile file)

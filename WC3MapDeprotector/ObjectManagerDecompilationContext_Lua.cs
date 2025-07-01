@@ -1,6 +1,6 @@
 ﻿using War3Net.Build.Info;
 using War3Net.CodeAnalysis.Decompilers;
-using Jass2Lua;
+using Jass2Lua.Ast;
 using System.Collections.Immutable;
 
 namespace WC3MapDeprotector

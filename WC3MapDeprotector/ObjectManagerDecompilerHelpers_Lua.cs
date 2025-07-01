@@ -1,6 +1,6 @@
 ﻿using War3Net.Build.Audio;
 using System.Collections.Immutable;
-using Jass2Lua;
+using Jass2Lua.Ast;
 
 namespace WC3MapDeprotector
 {

@@ -39,7 +39,6 @@ namespace WC3MapDeprotector
         public MapCustomTextTriggers CustomTextTriggers { get; set; }
         public TriggerStrings TriggerStrings { get; set; }
         public MapUnits Units { get; set; }
-        public MapDoodads Doodads { get; set; }
 
         public List<MpqKnownFile> ConvertToFiles()
         {

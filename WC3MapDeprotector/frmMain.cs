@@ -380,37 +380,68 @@ namespace WC3MapDeprotector
             }
         }
 
+        private void BulkJassToLua()
+        {
+            var files = Directory.GetFiles(@"C:\temp\jass2lua\map testing", "*.w3x", SearchOption.TopDirectoryOnly);
+            foreach (var file in files)
+            {
+                var path = Path.GetDirectoryName(file);
+                var extension = Path.GetExtension(file);
+                var newFilePrefix = Path.GetFileNameWithoutExtension(file) + "_lua";
+
+                var newFileName = Path.Combine(Path.Combine(path, "lua"), newFilePrefix + extension);
+
+                if (File.Exists(newFileName))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    MapUtils.ConvertJassToLua(file, newFileName);
+                }
+                catch (Exception ex)
+                {
+                    //System.Media.SystemSounds.Exclamation.Play();
+                    //MessageBox.Show(ex.Message, "ERROR");
+                }
+            }
+        }
+
         private void btnJassToLua_Click(object sender, EventArgs e)
         {
+            BulkJassToLua();
+            return;
+
             using (var fd = new OpenFileDialog())
             {
                 fd.Filter = "\"Warcraft 3 Maps\"|*.w3m; *.w3x";
                 if (fd.ShowDialog() == DialogResult.OK)
                 {
-                    var path = Path.GetDirectoryName(fd.FileName);
-                    var extension = Path.GetExtension(fd.FileName);
-                    var newFilePrefix = Path.GetFileNameWithoutExtension(fd.FileName) + "_lua";
-                    var index = 1;
+                        var path = Path.GetDirectoryName(fd.FileName);
+                        var extension = Path.GetExtension(fd.FileName);
+                        var newFilePrefix = Path.GetFileNameWithoutExtension(fd.FileName) + "_lua";
+                        var index = 1;
 
-                    var newFileName = Path.Combine(path, newFilePrefix + extension);
-                    while(File.Exists(newFileName))
-                    {
-                        newFileName = Path.Combine(path, newFilePrefix + "_" + index + extension);
-                        index++;
-                    }
+                        var newFileName = Path.Combine(path, newFilePrefix + extension);
+                        while (File.Exists(newFileName))
+                        {
+                            newFileName = Path.Combine(path, newFilePrefix + "_" + index + extension);
+                            index++;
+                        }
 
-                    try
-                    {
-                        MapUtils.ConvertJassToLua(fd.FileName, newFileName);
+                        try
+                        {
+                            MapUtils.ConvertJassToLua(fd.FileName, newFileName);
                         MessageBox.Show("Done. Converted file at: " + newFileName);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Media.SystemSounds.Exclamation.Play();
-                        MessageBox.Show(ex.Message, "ERROR");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Media.SystemSounds.Exclamation.Play();
+                            MessageBox.Show(ex.Message, "ERROR");
+                        }
                     }
                 }
             }
         }
     }
-}

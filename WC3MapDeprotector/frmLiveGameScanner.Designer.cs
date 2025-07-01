@@ -48,7 +48,7 @@
             label1.Location = new Point(14, 9);
             label1.Margin = new Padding(5, 0, 5, 0);
             label1.Name = "label1";
-            label1.Size = new Size(664, 389);
+            label1.Size = new Size(664, 298);
             label1.TabIndex = 0;
             label1.Text = resources.GetString("label1.Text");
             // 
@@ -56,7 +56,7 @@
             // 
             label2.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label2.AutoSize = true;
-            label2.Location = new Point(386, 492);
+            label2.Location = new Point(386, 391);
             label2.Name = "label2";
             label2.Size = new Size(186, 25);
             label2.TabIndex = 1;
@@ -66,7 +66,7 @@
             // 
             label4.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             label4.AutoSize = true;
-            label4.Location = new Point(421, 548);
+            label4.Location = new Point(421, 447);
             label4.Name = "label4";
             label4.Size = new Size(151, 25);
             label4.TabIndex = 3;
@@ -75,18 +75,18 @@
             // btnQuit
             // 
             btnQuit.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            btnQuit.Location = new Point(494, 617);
+            btnQuit.Location = new Point(494, 516);
             btnQuit.Name = "btnQuit";
             btnQuit.Size = new Size(184, 41);
             btnQuit.TabIndex = 4;
-            btnQuit.Text = "Quit Testing";
+            btnQuit.Text = "Quit Scanning";
             btnQuit.UseVisualStyleBackColor = true;
             btnQuit.Click += btnQuit_Click;
             // 
             // tbUnknownFileCount
             // 
             tbUnknownFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbUnknownFileCount.Location = new Point(578, 492);
+            tbUnknownFileCount.Location = new Point(578, 391);
             tbUnknownFileCount.Name = "tbUnknownFileCount";
             tbUnknownFileCount.Size = new Size(100, 32);
             tbUnknownFileCount.TabIndex = 6;
@@ -94,7 +94,7 @@
             // tbDiscoveredFileCount
             // 
             tbDiscoveredFileCount.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            tbDiscoveredFileCount.Location = new Point(578, 548);
+            tbDiscoveredFileCount.Location = new Point(578, 447);
             tbDiscoveredFileCount.Name = "tbDiscoveredFileCount";
             tbDiscoveredFileCount.Size = new Size(100, 32);
             tbDiscoveredFileCount.TabIndex = 7;
@@ -102,7 +102,7 @@
             // btnRestartGame
             // 
             btnRestartGame.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            btnRestartGame.Location = new Point(14, 617);
+            btnRestartGame.Location = new Point(14, 516);
             btnRestartGame.Name = "btnRestartGame";
             btnRestartGame.Size = new Size(184, 41);
             btnRestartGame.TabIndex = 8;
@@ -112,16 +112,17 @@
             // 
             // tbWC3ExePath
             // 
-            tbWC3ExePath.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            tbWC3ExePath.Location = new Point(178, 415);
+            tbWC3ExePath.Anchor = AnchorStyles.Bottom;
+            tbWC3ExePath.Location = new Point(178, 314);
             tbWC3ExePath.Name = "tbWC3ExePath";
             tbWC3ExePath.Size = new Size(425, 32);
             tbWC3ExePath.TabIndex = 9;
             // 
             // label5
             // 
+            label5.Anchor = AnchorStyles.Bottom;
             label5.AutoSize = true;
-            label5.Location = new Point(14, 419);
+            label5.Location = new Point(14, 318);
             label5.Name = "label5";
             label5.Size = new Size(160, 25);
             label5.TabIndex = 10;
@@ -129,9 +130,9 @@
             // 
             // btnWC3ExePathBrowse
             // 
-            btnWC3ExePathBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnWC3ExePathBrowse.Anchor = AnchorStyles.Bottom;
             btnWC3ExePathBrowse.Image = (Image)resources.GetObject("btnWC3ExePathBrowse.Image");
-            btnWC3ExePathBrowse.Location = new Point(611, 403);
+            btnWC3ExePathBrowse.Location = new Point(611, 302);
             btnWC3ExePathBrowse.Margin = new Padding(5);
             btnWC3ExePathBrowse.Name = "btnWC3ExePathBrowse";
             btnWC3ExePathBrowse.Size = new Size(67, 55);
@@ -143,7 +144,7 @@
             // 
             AutoScaleDimensions = new SizeF(11F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(692, 670);
+            ClientSize = new Size(692, 569);
             Controls.Add(btnWC3ExePathBrowse);
             Controls.Add(label5);
             Controls.Add(tbWC3ExePath);

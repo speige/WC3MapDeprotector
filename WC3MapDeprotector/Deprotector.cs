@@ -1,8 +1,17 @@
 ﻿using CSharpLua;
+using FastMDX;
 using IniParser;
 using IniParser.Model.Configuration;
+using Jass2Lua;
+using Jass2Lua.Ast;
+using Microsoft.Win32;
+using SourcemapToolkit.SourcemapParser;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.IO.Compression;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -10,6 +19,7 @@ using War3Net.Build;
 using War3Net.Build.Audio;
 using War3Net.Build.Environment;
 using War3Net.Build.Extensions;
+using War3Net.Build.Import;
 using War3Net.Build.Info;
 using War3Net.Build.Script;
 using War3Net.Build.Widget;
@@ -18,14 +28,7 @@ using War3Net.CodeAnalysis.Jass;
 using War3Net.CodeAnalysis.Jass.Syntax;
 using War3Net.Common.Extensions;
 using War3Net.IO.Mpq;
-using System.Numerics;
-using FastMDX;
-using System.Collections.Concurrent;
-using Microsoft.Win32;
-using System.Diagnostics;
-using War3Net.Build.Import;
 using War3Net.IO.Slk;
-using Jass2Lua;
 
 namespace WC3MapDeprotector
 {
@@ -224,8 +227,9 @@ namespace WC3MapDeprotector
             return Utils.ExecuteCommand(UserSettings.WC3ExePath, $"-launch -nowfpause -loadfile \"{mapFileName}\"");
         }
 
-        protected void LiveGameScanForUnknownFiles(StormMPQArchive archive)
+        protected void LiveGameScan(StormMPQArchive archive)
         {
+            var tempMapLocation = GenerateLiveGameScanningMap();
             const string REGISTRY_KEY = @"HKEY_CURRENT_USER\SOFTWARE\Blizzard Entertainment\Warcraft III";
             const string REGISTRY_VALUE = "Allow Local Files";
 
@@ -235,23 +239,8 @@ namespace WC3MapDeprotector
             Registry.SetValue(REGISTRY_KEY, REGISTRY_VALUE, 1);
 
             Process process = null;
-            var tempMapLocation = Path.ChangeExtension(Path.GetTempPath(), "WC3MapDeprotector_LiveGameScan" + Path.GetExtension(_inMapFile));
             try
             {
-                File.Copy(_inMapFile, tempMapLocation, true);
-
-                var war3mapj = (new[] { JassMapScript.FileName, JassMapScript.FullName }).Select(x => Path.Combine(DiscoveredFilesPath, x)).Where(x => File.Exists(x)).FirstOrDefault();
-                if (File.Exists(war3mapj))
-                {
-                    var deobfuscated = DeObfuscateFourCCJass(Utils.ReadFile_NoEncoding(war3mapj)); // necessary because some international FourCC codes will crash game if not converted to ints
-                    var tempScriptFileName = Path.GetTempFileName();
-                    Utils.WriteFile_NoEncoding(tempScriptFileName, deobfuscated);
-                    MapUtils.RemoveFile(tempMapLocation, Path.Combine(DiscoveredFilesPath, JassMapScript.FileName));
-                    MapUtils.RemoveFile(tempMapLocation, Path.Combine(DiscoveredFilesPath, JassMapScript.FullName));
-                    MapUtils.AddFile(tempMapLocation, tempScriptFileName, Path.Combine(DiscoveredFilesPath, JassMapScript.FileName));
-                    Utils.SafeDeleteFile(tempScriptFileName);
-                }
-
                 using (var scanner = new ProcessFileAccessScanner())
                 using (var form = new frmLiveGameScanner())
                 {
@@ -283,7 +272,10 @@ namespace WC3MapDeprotector
 
                             if (!archive.ShouldKeepScanningForUnknowns)
                             {
-                                form.Close();
+                                form.BeginInvoke(() =>
+                                {
+                                    form.Close();
+                                });
                                 process.Kill();
                                 return;
                             }
@@ -307,11 +299,9 @@ namespace WC3MapDeprotector
 
                     form.UpdateLabels(archive);
                     form.ShowDialog();
+
+                    //todo: auto-click "press any key to continue" when mapis loaded
                 }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show("Unable to launch Live Game Scanner: " + e.Message);
             }
             finally
             {
@@ -484,6 +474,15 @@ namespace WC3MapDeprotector
                     inMPQArchive.ProcessDefaultListFile();
                 }
 
+                try
+                {
+                    //LiveGameScan(inMPQArchive);
+                }
+                catch (Exception e)
+                {
+                    _deprotectionResult.WarningMessages.Add("Unable to run live game scanning. See \"Object Manager\" and \"Unknown Files\" in Help document. Exception: " + e.Message);
+                }
+
                 _logEvent($"Unknown file count: {inMPQArchive.UnknownFileCount}");
 
                 if (!Map.TryOpen(DiscoveredFilesPath, out map_ObjectDataCollectionOnly, MapFiles.AbilityObjectData | MapFiles.BuffObjectData | MapFiles.DestructableObjectData | MapFiles.DoodadObjectData | MapFiles.ItemObjectData | MapFiles.UnitObjectData | MapFiles.UpgradeObjectData))
@@ -501,7 +500,7 @@ namespace WC3MapDeprotector
                             Merging only overwrites PropertyValues, not Parent or ObjectDataType
                             1) TXT PropertyValues (like Name) have precedence. Example, SLK may have hpea:name=custom_hpea and TXT may have [hpea]:Name=Peasant.
                             2) SLK Parent takes precedence. (only AbilityData.SLK has it, no other SLK/TXT does. Otherwise, we predict best Parent)
-                            3) SLK ObjectDataType takes precence. TXT can combine multiple object types (Example: CommonAbilityStrings.txt & ItemAbilityStrings.txt have FourCC for Abilities & Buffs).
+                            3) SLK ObjectDataType takes precedence. TXT can combine multiple object types (Example: CommonAbilityStrings.txt & ItemAbilityStrings.txt have FourCC for Abilities & Buffs).
                     */
                     if (!File.Exists(Path.Combine(ObjectEditorDataFilesFolder, RemovePathPrefix(fileName, DiscoveredFilesPath))))
                     {
@@ -717,11 +716,6 @@ namespace WC3MapDeprotector
                     {
                         _deprotectionResult.WarningMessages.Add($"Could not verify file extension for {fileName} - It's possible it's encrypted and was recovered under a fake file name. See \"Unknown Files\" in Help document");
                     }
-                }
-
-                if (inMPQArchive.ShouldKeepScanningForUnknowns && !DebugSettings.BulkDeprotect)
-                {
-                    LiveGameScanForUnknownFiles(inMPQArchive);
                 }
 
                 if (Settings.BruteForceUnknowns && inMPQArchive.ShouldKeepScanningForUnknowns)
@@ -1849,14 +1843,45 @@ namespace WC3MapDeprotector
         [GeneratedRegex(@"set\s+(\w+)\s*=\s*0[\r\n\s]+loop[\r\n\s]+exitwhen\s*\(\1\s*>\s*([0-9]+)\)[\r\n\s]+set\s+(\w+)\[\1\]\s*=\s*[^\r\n]*[\r\n\s]+set\s+\1\s*=\s*\1\s*\+\s*1[\r\n\s]+endloop[\r\n\s]+", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
         protected static partial Regex Regex_GetArraySize();
 
-        protected ScriptMetaData DecompileJassScriptMetaData_Internal(JassCompilationUnitSyntax jassParsed, out DecompilationContext decompilationMetaData)
+        protected ScriptMetaData DecompileJassScriptMetaData_Internal(JassCompilationUnitSyntax jassParsed, out ObjectManagerDecompilationContext_Lua decompilationMetaData)
         {
+            return DecompileJassScriptMetaData_Internal(jassParsed.RenderScriptAsString(), out decompilationMetaData);
+        }
+
+        protected SourceMap ParseSourceMap(string sourceMap)
+        {
+            var parser = new SourceMapParser();
+            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(sourceMap)))
+            using (var reader = new StreamReader(stream))
+            {
+                return parser.ParseSourceMap(reader);
+            }
+        }
+
+        protected ScriptMetaData DecompileJassScriptMetaData_Internal(string jassScript, out ObjectManagerDecompilationContext_Lua decompilationMetaData)
+        {
+            var transpiler = new Jass2LuaTranspiler();
+            var luaScript = transpiler.Transpile(jassScript, out var warnings, out var sourceMapText);
+            var sourceMap = ParseSourceMap(sourceMapText);
+            var luaAST = LuaParser.ParseScript(luaScript);
+            return DecompileLuaScriptMetaData_Internal(luaAST, out decompilationMetaData);
+        }
+
+        protected ScriptMetaData DecompileLuaScriptMetaData_Internal(LuaAST luaAST, out ObjectManagerDecompilationContext_Lua decompilationMetaData)
+        {
+            //todo: Run live game scanner with method execution logging 1st to cleanup obfuscated code
+
             var result = new ScriptMetaData();
 
             var map = SetNativeFiles(DiscoveredFilesPath);
             result.Info = map?.Info;
             result.TriggerStrings = map?.TriggerStrings;
             result.CustomTextTriggers = new MapCustomTextTriggers(MapCustomTextTriggersFormatVersion.v1, MapCustomTextTriggersSubVersion.v4) { GlobalCustomScriptCode = new CustomTextTrigger() { Code = "" }, GlobalCustomScriptComment = "Deprotected global script. Please ensure JassHelper:EnableJassHelper and JassHelper:EnableVJass settings are turned on. Auto-generated code has been renamed with a suffix of _old and/or commented out. There may be compiler errors or bugs that need to be resolved manually." };
+
+            if (map?.Info != null)
+            {
+                map.Info.ScriptLanguage = ScriptLanguage.Lua;
+            }
 
             var mapInfoFormatVersion = Enum.GetValues(typeof(MapInfoFormatVersion)).Cast<MapInfoFormatVersion>().OrderBy(x => x == map?.Info?.FormatVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault();
             var useNewFormat = map?.Info?.FormatVersion >= MapInfoFormatVersion.v28;
@@ -1875,16 +1900,15 @@ namespace WC3MapDeprotector
                     mapWidgetsUseNewFormat = useNewFormat,
                     specialDoodadVersion = Enum.GetValues(typeof(SpecialDoodadVersion)).Cast<SpecialDoodadVersion>().OrderBy(x => x == map?.Doodads?.SpecialDoodadVersion ? 0 : 1).ThenByDescending(x => x).FirstOrDefault()
                 };
-                var decompiler = new JassScriptDecompiler(jassParsed, options, map?.Info);
+                var decompiler = new ObjectManagerDecompiler_Lua(luaAST, options, map?.Info);
                 var decompiledMap = decompiler.DecompileObjectManagerData();
 
                 result.Cameras = decompiledMap.Cameras;
                 result.Regions = decompiledMap.Regions;
                 result.Sounds = decompiledMap.Sounds;
                 result.Units = decompiledMap.Units;
-                //result.Doodads = decompiledMap.Doodads; // No decompiler for Doodads yet
-                result.Doodads = map.Doodads;
 
+                decompilationMetaData = null;
                 decompilationMetaData = decompiler.Context;
 
                 if (!result.Units.Units.Any(x => x.TypeId != "sloc".FromRawcode()))
@@ -1892,18 +1916,19 @@ namespace WC3MapDeprotector
                     _deprotectionResult.WarningMessages.Add("WARNING: Only unit start locations could be recovered. See \"Object Manager\" in Help document");
                 }
             }
-            catch
+            catch (Exception e)
             {
                 _deprotectionResult.WarningMessages.Add("WARNING: Unable to decompiled ObjectManager data");
                 decompilationMetaData = null;
                 return null;
             }
 
-            SetTriggersFromDecompiledJass(result, map, jassParsed, decompilationMetaData);
+            //SetTriggersFromDecompiledLua(result, map, luaAST, decompilationMetaData);
             return result;
         }
 
-        public void SetTriggersFromDecompiledJass(ScriptMetaData result, Map map, JassCompilationUnitSyntax jassParsed, DecompilationContext decompilationMetaData)
+        /*
+        public void SetTriggersFromDecompiledJass(ScriptMetaData result, Map map, JassCompilationUnitSyntax jassParsed, ObjectManagerDecompilationContext_Lua decompilationMetaData)
         {
             //todo: review all non-commented lines in _old functions after deprotection to find pieces I'm not decompiling (example: "CreateAllDestructables", "InitTechTree")
 
@@ -2033,7 +2058,7 @@ namespace WC3MapDeprotector
                             if (name.StartsWith("gg_trg_"))
                             {
                                 var editorName = name.Substring(3);
-                                var userGeneratedName = "udg_" + editorName;
+                                var userGeneratedName = "" + editorName;
                                 jassScript = jassScript.Replace(name, userGeneratedName);
                             }
                             else
@@ -2143,6 +2168,7 @@ namespace WC3MapDeprotector
             jassScript = JassSyntaxFactory.ParseCompilationUnit(jassScript).RenderScriptAsString();
             result.CustomTextTriggers.GlobalCustomScriptCode.Code = jassScript.Replace("%", "%%");
         }
+        */
 
         protected ScriptMetaData DecompileJassScriptMetaData(string jassScript)
         {
@@ -2170,7 +2196,6 @@ namespace WC3MapDeprotector
             decompiled.AddRange(firstPass.Regions?.Regions?.Select(x => $"gg_rct_{x.Name}")?.ToList() ?? new List<string>());
             decompiled.AddRange(firstPass.Triggers?.TriggerItems?.OfType<TriggerDefinition>()?.Select(x => $"gg_trg_{x.Name}")?.ToList() ?? new List<string>());
             decompiled.AddRange(firstPass.Sounds?.Sounds?.Select(x => x.Name)?.ToList() ?? new List<string>()); //NOTE: War3Net doesn't remove gg_snd_ from name for some reason
-            decompiled.AddRange(firstPass.Doodads?.Doodads?.Select(x => x.GetVariableName()) ?? new List<string>());
             decompiled = decompiled.Where(x => x != null).Select(x => x.Replace(" ", "_")).ToList();
             var notDecompiledGlobalGenerateds = globalGenerateds.Except(decompiled).ToList();
             correctedUnitVariableNames.AddRange(notDecompiledGlobalGenerateds.Select(x => new KeyValuePair<string, string>(x, "udg_" + x.Substring("gg_".Length))));
@@ -2238,7 +2263,7 @@ namespace WC3MapDeprotector
 
         protected string RenderLuaAST(LuaAST luaAST)
         {
-            return LuaParser.RenderLuaAST(luaAST);
+            return Jass2Lua.Ast.LuaRenderer.Render(luaAST);
         }
 
         protected LuaAST ParseLuaScript(string luaScript)

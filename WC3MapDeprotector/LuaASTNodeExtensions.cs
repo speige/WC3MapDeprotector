@@ -1,9 +1,7 @@
-﻿using Jass2Lua;
+﻿using Jass2Lua.Ast;
 using System.Globalization;
-using System.Linq;
 using War3Net.CodeAnalysis.Decompilers;
 using War3Net.CodeAnalysis.Jass.Extensions;
-using War3Net.CodeAnalysis.Jass.Syntax;
 
 namespace WC3MapDeprotector
 {
@@ -142,7 +140,7 @@ namespace WC3MapDeprotector
             }
             else
             {
-                result = LuaParser.RenderLuaASTNode(node);
+                result = LuaRenderer.Render(node);
             }
             
             if (node.type == LuaASTType.BooleanLiteral)
