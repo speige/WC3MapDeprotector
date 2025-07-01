@@ -2072,16 +2072,18 @@ namespace WC3MapDeprotector
                     }
                     else if (isItem)
                     {
-                        var triggerFunction = new TriggerFunction() { Name = "UnitDropItemSlotBJ", Type = TriggerFunctionType.Action, IsEnabled = true };
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Function, Value = "GetLastCreatedUnit", Function = new TriggerFunction() { Name = "GetLastCreatedUnit", Type = TriggerFunctionType.Call, IsEnabled = true } } });
+                        var triggerFunction = new TriggerFunction() { Name = "SetItemVisibleBJ", Type = TriggerFunctionType.Action, IsEnabled = true };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Preset, Value = "ShowHideShow" } });
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
-                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "1" } });
                         emptyVariableTrigger.Functions.Add(triggerFunction);
                     }
                     else if (variable.StartsWith("gg_cam_"))
                     {
-                        var triggerFunction = new TriggerFunction() { Name = "BlzCameraSetupGetLabel", Type = TriggerFunctionType.Action, IsEnabled = true };
+                        var triggerFunction = new TriggerFunction() { Name = "CameraSetupApplyForPlayer", Type = TriggerFunctionType.Action, IsEnabled = true };
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Preset, Value = "CameraApplyNoPan" } });
                         triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Variable, Value = variable } });
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.Preset, Value = "PlayerNP" } });
+                        triggerFunction.Parameters.AddRange(new[] { new TriggerFunctionParameter() { Type = TriggerFunctionParameterType.String, Value = "0" } });
                         emptyVariableTrigger.Functions.Add(triggerFunction);
                     }
                 }
