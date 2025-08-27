@@ -96,7 +96,7 @@ jobs:
         copy Launch_WC3MapDeprotector.bat WC3MapDeprotector\bin\Release
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: WC3MapDeprotector
         path: WC3MapDeprotector\bin\Release
