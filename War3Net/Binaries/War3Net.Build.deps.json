@@ -6,11 +6,11 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v5.0": {
-      "War3Net.Build/5.8.0": {
+      "War3Net.Build/5.8.2": {
         "dependencies": {
           "StyleCop.Analyzers": "1.2.0-beta.435",
-          "War3Net.Build.Core": "5.8.0",
-          "War3Net.CodeAnalysis.Decompilers": "5.8.0",
+          "War3Net.Build.Core": "5.8.2",
+          "War3Net.CodeAnalysis.Decompilers": "5.8.2",
           "War3Net.CodeAnalysis.Transpilers": "5.8.0",
           "CSharp.lua": "2.0.0.0"
         },
@@ -803,16 +803,16 @@
           "System.Xml.ReaderWriter": "4.0.11"
         }
       },
-      "War3Net.Build.Core/5.8.0": {
+      "War3Net.Build.Core/5.8.2": {
         "dependencies": {
           "War3Net.CodeAnalysis.Jass": "5.8.0",
-          "War3Net.IO.Mpq": "5.8.0",
-          "War3Net.IO.Slk": "5.8.0"
+          "War3Net.IO.Mpq": "5.8.1",
+          "War3Net.IO.Slk": "5.8.1"
         },
         "runtime": {
           "War3Net.Build.Core.dll": {
-            "assemblyVersion": "5.8.0.0",
-            "fileVersion": "5.8.0.0"
+            "assemblyVersion": "5.8.2.0",
+            "fileVersion": "5.8.2.0"
           }
         }
       },
@@ -827,15 +827,15 @@
           }
         }
       },
-      "War3Net.CodeAnalysis.Decompilers/5.8.0": {
+      "War3Net.CodeAnalysis.Decompilers/5.8.2": {
         "dependencies": {
-          "War3Net.Build.Core": "5.8.0",
+          "War3Net.Build.Core": "5.8.2",
           "War3Net.CodeAnalysis.Jass": "5.8.0"
         },
         "runtime": {
           "War3Net.CodeAnalysis.Decompilers.dll": {
-            "assemblyVersion": "5.8.0.0",
-            "fileVersion": "5.8.0.0"
+            "assemblyVersion": "5.8.2.0",
+            "fileVersion": "5.8.2.0"
           }
         }
       },
@@ -901,25 +901,25 @@
           }
         }
       },
-      "War3Net.IO.Mpq/5.8.0": {
+      "War3Net.IO.Mpq/5.8.1": {
         "dependencies": {
           "War3Net.IO.Compression": "5.8.0"
         },
         "runtime": {
           "War3Net.IO.Mpq.dll": {
-            "assemblyVersion": "5.8.0.0",
-            "fileVersion": "5.8.0.0"
+            "assemblyVersion": "5.8.1.0",
+            "fileVersion": "5.8.1.0"
           }
         }
       },
-      "War3Net.IO.Slk/5.8.0": {
+      "War3Net.IO.Slk/5.8.1": {
         "dependencies": {
           "War3Net.Common": "5.8.0"
         },
         "runtime": {
           "War3Net.IO.Slk.dll": {
-            "assemblyVersion": "5.8.0.0",
-            "fileVersion": "5.8.0.0"
+            "assemblyVersion": "5.8.1.0",
+            "fileVersion": "5.8.1.0"
           }
         }
       },
@@ -934,7 +934,7 @@
     }
   },
   "libraries": {
-    "War3Net.Build/5.8.0": {
+    "War3Net.Build/5.8.2": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -1450,7 +1450,7 @@
       "path": "system.xml.xdocument/4.0.11",
       "hashPath": "system.xml.xdocument.4.0.11.nupkg.sha512"
     },
-    "War3Net.Build.Core/5.8.0": {
+    "War3Net.Build.Core/5.8.2": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -1460,7 +1460,7 @@
       "serviceable": false,
       "sha512": ""
     },
-    "War3Net.CodeAnalysis.Decompilers/5.8.0": {
+    "War3Net.CodeAnalysis.Decompilers/5.8.2": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
@@ -1490,12 +1490,12 @@
       "serviceable": false,
       "sha512": ""
     },
-    "War3Net.IO.Mpq/5.8.0": {
+    "War3Net.IO.Mpq/5.8.1": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "War3Net.IO.Slk/5.8.0": {
+    "War3Net.IO.Slk/5.8.1": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

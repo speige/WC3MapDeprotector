@@ -1,4 +1,5 @@
 ﻿using War3Net.Build;
+using War3Net.Build.Common;
 using Region = War3Net.Build.Environment.Region;
 
 namespace WC3MapDeprotector
