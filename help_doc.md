@@ -9,12 +9,12 @@
 1. [Bug Testing](#1-bug-testing)
 2. [Editor Crashes](#2-editor-crashes)
 3. [Jass Triggers](#3-jass-triggers)
-   - 3.1 [Jass Compiler](#31-jass-compiler-new)
-   - 3.2 [Fixing Errors](#32-fixing-errors-new)
+   - 3.1 [Jass Compiler](#31-jass-compiler)
+   - 3.2 [Fixing Errors](#32-fixing-errors)
 4. [Unknown Files](#4-unknown-files)
-   - 4.1 [Merging Listfiles – Find more unknown files](#41-merging-listfiles--find-more-unknown-files-new)
+   - 4.1 [Merging Listfiles - Find more unknown files](#section-4-1-merging-listfiles)
 5. [Duplicate Units](#5-duplicate-units)
-6. [Object Manager – Missing units or wrong attributes](#6-object-manager--missing-units-or-wrong-attributes)
+6. [Object Manager - Missing units or wrong attributes](#section-6-object-manager-missing-units-or-wrong-attributes)
 7. [Campaigns](#7-campaigns)
 
 ---
@@ -35,25 +35,25 @@ World Editor crashes frequently in HD mode, but works much better in SD mode. Yo
 
 You can change this in the editor by clicking **File/Preferences** and choosing **SD** under "Asset Mode". This will not affect map gameplay; only the editor will be affected.
 
-<img width="484" height="645" alt="img_0" src="Screenshots/image0.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_0" src="Screenshots/image0.jpg" />
 
 ## 3. Jass Triggers
 
 The deprotected JASS will be in plain text coding format. You can see it by clicking on the root icon of the trigger editor.
 
-<img width="1157" height="480" alt="img_1" src="Screenshots/image1.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_1" src="Screenshots/image1.jpg" />
 
 ### 3.1 Jass Compiler
 
 Before attempting to modify the JASS code, ensure that JassHelper is enabled. JassHelper is a vital compiler that helps identify errors and makes debugging easier.
 
-<img width="211" height="260" alt="img_2" src="Screenshots/image2.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_2" src="Screenshots/image2.jpg" />
 
 ### 3.2 Fixing Errors
 
 If there are JASS errors, simply copy the error message and code output by JassHelper and paste it into an LLM, such as ChatGPT, for a solution. Then, in the "Custom Script Code" section, replace the affected code with your fix. You may need to repeat this process several times. It may be helpful to work in a text editor.
 
-<img width="1281" height="923" alt="img_3" src="Screenshots/image3.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_3" src="Screenshots/image3.jpg" />
 
 ## 4. Unknown Files
 
@@ -67,7 +67,7 @@ An "unknown" 3D model will display in the world editor as a **green box**. An "u
 
 The deprotector utilizes all known automated methods to recover the file names; any remaining "unknowns" must be recovered manually.
 
-<img width="1147" height="668" alt="img_4" src="Screenshots/image4.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_4" src="Screenshots/image4.jpg" />
 
 ### Manual Recovery Process
 
@@ -86,7 +86,8 @@ To fix them:
 
 If you can discover the correct name, it will save you the step of correcting all the asset references. A possible way to do this is by using [Hive's "Asset Scanner"](https://www.hiveworkshop.com/asset-scanner). Even though the "unknown" file has the wrong name, the scanner can still find other maps containing the identical file because it searches the actual data in the file, not the name.
 
-### 4.1 Merging Listfiles – Find more unknown files
+<a id="section-4-1-merging-listfiles"></a>
+### 4.1 Merging Listfiles - Find more unknown files
 
 Warcraft 3 maps utilize a file called "Listfiles" to identify the names of all components and assets within a map. The world editor requires these names to properly view and interact with data. If too many files cannot be identified, it makes deprotection difficult.
 
@@ -97,7 +98,7 @@ C:\Users\Your Username\AppData\Roaming\WC3MapDeprotector
 
 The filenames included cover some of the more common map types, such as Anime RPGs and custom games. However, it is not fully complete, as maps are constantly being updated with new assets/filenames.
 
-<img width="894" height="614" alt="img_5" src="Screenshots/image5.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_5" src="Screenshots/image5.jpg" />
 
 #### Listfile Merging Process
 
@@ -110,15 +111,15 @@ One technique that can be applied is listfile merging. It's essentially rebuildi
 5. Point to where the listfile in the WC3 Map Deprotector is stored
 6. Re-run the deprotection tool
 
-<img width="638" height="650" alt="img_6" src="Screenshots/image6.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_6" src="Screenshots/image6.jpg" />
 
 By combining the listfile scanners from WC3 Map Deprotector and MPQ Editor, you can identify more files, making them much more manageable to work with.
 
-<img width="429" height="410" alt="img_7" src="Screenshots/image7.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_7" src="Screenshots/image7.jpg" />
 
 ## 5. Duplicate Units
 
-<img width="603" height="582" alt="img_8" src="Screenshots/image8.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_8" src="Screenshots/image8.jpg" />
 
 The world editor tracks units placed in the render window inside the W3X archive with a file named `War3MapUnits.doo`. Upon saving, these are converted into a function in the `War3Map.j` file called `CreateAllUnits`.
 
@@ -130,7 +131,8 @@ To fix this, you must search the triggers in the world editor for where these du
 - Start by looking at `main_old` and read the code & function calls from there
 - This can also happen with items, cameras, sounds, and regions
 
-## 6. Object Manager – Missing units or wrong attributes
+<a id="section-6-object-manager-missing-units-or-wrong-attributes"></a>
+## 6. Object Manager - Missing units or wrong attributes
 
 There are auto-generated native functions such as `CreateUnitsForPlayer1`. This is the Jass version of the objects displayed in the render window (shown in Object Manager).
 
@@ -138,18 +140,18 @@ Protection empties the "Object Manager" and obfuscates the Jass by scrambling th
 
 To help you determine what was deciphered and what was lost, it comments out the portion of the Jass that was deciphered correctly (since it will be re-generated by "World Editor" on save).
 
-<img width="732" height="315" alt="img_9" src="Screenshots/image9.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_9" src="Screenshots/image9.jpg" />
 
-<img width="1397" height="1259" alt="img_10" src="Screenshots/image10.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_10" src="Screenshots/image10.jpg" />
 
-<img width="1406" height="1074" alt="img_11" src="Screenshots/image11.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_11" src="Screenshots/image11.jpg" />
 
 ### Example Issues
 
 - **Missing Units:** A unit like "War Room" with FourCC `'h995'` might be shown in-game on the protected map but missing from the Object Manager in the World Editor
 - **Incorrect Attributes:** A unit might be created with default values instead of custom ones (e.g., Mana left at default instead of being reset to 0)
 
-<img width="610" height="539" alt="img_12" src="Screenshots/image12.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_12" src="Screenshots/image12.jpg" />
 
 ### Troubleshooting
 
@@ -169,7 +171,7 @@ You will know that deciphering the JASS into ObjectManager failed if, after savi
 
 > **Important:** Remember that Object Manager attributes are tied to a specific instance of a unit placed in the render window; this is different from the "Object Editor" where you set default values for all units of that type.
 
-<img width="1288" height="323" alt="img_13" src="Screenshots/image13.jpg" />
+<img style="max-width:100%;height:auto;" alt="img_13" src="Screenshots/image13.jpg" />
 
 ## 7. Campaigns
 
