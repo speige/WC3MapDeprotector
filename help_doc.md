@@ -1,5 +1,5 @@
 # Help Documentation
-### WC3 Map Deprotector
+### WC3 Map Repacker
 
 **Last Updated:** 10/5/2025
 
@@ -21,7 +21,7 @@
 
 ## 1. Bug Testing
 
-Deprotection is not perfect. Please thoroughly test the map and manually correct any issues that are found. The most common bugs are:
+Map repacking is not perfect. Please thoroughly test the map and manually correct any issues that are found. The most common bugs are:
 
 - Compiler errors in JASS Triggers
 - Duplicate Units/etc (see above)
@@ -39,7 +39,7 @@ You can change this in the editor by clicking **File/Preferences** and choosing 
 
 ## 3. Jass Triggers
 
-The deprotected JASS will be in plain text coding format. You can see it by clicking on the root icon of the trigger editor.
+The JASS will be in plain text coding format. You can see it by clicking on the root icon of the trigger editor. Visual/GUI triggers cannot be recovered.
 
 <img style="max-width:100%;height:auto;" alt="img_1" src="Screenshots/image1.jpg" />
 
@@ -57,21 +57,21 @@ If there are JASS errors, simply copy the error message and code output by JassH
 
 ## 4. Unknown Files
 
-The MPQ file format converts all filenames to numbers (called hashes) for quicker loading. The world editor still needs the real file name, but the game only needs the hash. Protectors delete the filenames, leaving only the hashes. This is what's called an "unknown" file. These are typically 3D models, textures, or sounds. The deprotector attempts to recover the original file names, but it's not 100% successful for all files.
+The MPQ file format converts all filenames to numbers (called hashes) for quicker loading. The world editor still needs the real file name, but the game only needs the hash. Protectors delete the filenames, leaving only the hashes. This is what's called an "unknown" file. These are typically 3D models, textures, or sounds. The repacker attempts to recover the original file names, but it's not 100% successful for all files.
 
-When a name cannot be recovered, it may mean the actual file is not in use. For example, maybe the author added a 3D model but never assigned it to a unit. The only way to verify this is by testing the map for bugs after deprotection.
+When a name cannot be recovered, it may mean the actual file is not in use. For example, maybe the author added a 3D model but never assigned it to a unit. The only way to verify this is by testing the map for bugs after running this tool.
 
 > **Note:** "Unknown" does not mean the file is missing or corrupt; it means we don't know the correct file name. It can still be opened in an image editor.
 
 An "unknown" 3D model will display in the world editor as a **green box**. An "unknown" texture will display in the world editor as a unit that's **completely white**. The purple boxes are pathing blockers and can be ignored.
 
-The deprotector utilizes all known automated methods to recover the file names; any remaining "unknowns" must be recovered manually.
+The repacker utilizes all known automated methods to recover the file names; any remaining "unknowns" must be recovered manually.
 
 <img style="max-width:100%;height:auto;" alt="img_4" src="Screenshots/image4.jpg" />
 
 ### Manual Recovery Process
 
-To view the "unknown" files, you need to use MPQEditor to export the (listfile) from the deprotected map and import it into the original map. Any remaining `File00000###.blp` (or mdx, wav, mp3, etc) files are the "Unknowns".
+To view the "unknown" files, you need to use MPQEditor to export the (listfile) from the repacked map and import it into the original map. Any remaining `File00000###.blp` (or mdx, wav, mp3, etc) files are the "Unknowns".
 
 To fix them:
 
@@ -86,44 +86,13 @@ To fix them:
 
 If you can discover the correct name, it will save you the step of correcting all the asset references. A possible way to do this is by using [Hive's "Asset Scanner"](https://www.hiveworkshop.com/asset-scanner). Even though the "unknown" file has the wrong name, the scanner can still find other maps containing the identical file because it searches the actual data in the file, not the name.
 
-<a id="section-4-1-merging-listfiles"></a>
-### 4.1 Merging Listfiles - Find more unknown files
-
-Warcraft 3 maps utilize a file called "Listfiles" to identify the names of all components and assets within a map. The world editor requires these names to properly view and interact with data. If too many files cannot be identified, it makes deprotection difficult.
-
-WC3 Map Deprotector includes a fairly comprehensive listfile saved at this location:
-```
-C:\Users\Your Username\AppData\Roaming\WC3MapDeprotector
-```
-
-The filenames included cover some of the more common map types, such as Anime RPGs and custom games. However, it is not fully complete, as maps are constantly being updated with new assets/filenames.
-
-<img style="max-width:100%;height:auto;" alt="img_5" src="Screenshots/image5.jpg" />
-
-#### Listfile Merging Process
-
-One technique that can be applied is listfile merging. It's essentially rebuilding a listfile specially tailored for the map you want to deprotect.
-
-1. Download **MPQ Editor** (Available on MPQ Archive through Google search)
-2. Open the MPQ of the map you want to deprotect
-3. Go to **Tools** → **W3X Name Scanner**
-4. Hit **Scan**, then **Merge Listfiles**
-5. Point to where the listfile in the WC3 Map Deprotector is stored
-6. Re-run the deprotection tool
-
-<img style="max-width:100%;height:auto;" alt="img_6" src="Screenshots/image6.jpg" />
-
-By combining the listfile scanners from WC3 Map Deprotector and MPQ Editor, you can identify more files, making them much more manageable to work with.
-
-<img style="max-width:100%;height:auto;" alt="img_7" src="Screenshots/image7.jpg" />
-
 ## 5. Duplicate Units
 
 <img style="max-width:100%;height:auto;" alt="img_8" src="Screenshots/image8.jpg" />
 
 The world editor tracks units placed in the render window inside the W3X archive with a file named `War3MapUnits.doo`. Upon saving, these are converted into a function in the `War3Map.j` file called `CreateAllUnits`.
 
-Protection deletes the `war3mapunits.doo` file and de-protection attempts to recover it. If successful, it comments out the original `CreateAllUnits`. However, if protection also scrambled the code inside `CreateAllUnits`, de-protection might fail to comment out the correct lines of code.
+Protection deletes the `war3mapunits.doo` file and repacking attempts to recover it. If successful, it comments out the original `CreateAllUnits`. However, if corruption also scrambled the code inside `CreateAllUnits`, corruption removal might fail to comment out the correct lines of code.
 
 ### Fix Process
 
@@ -136,7 +105,7 @@ To fix this, you must search the triggers in the world editor for where these du
 
 There are auto-generated native functions such as `CreateUnitsForPlayer1`. This is the Jass version of the objects displayed in the render window (shown in Object Manager).
 
-Protection empties the "Object Manager" and obfuscates the Jass by scrambling the code (renaming `CreateUnitsForPlayer1` to random characters, such as `NXE`). When de-protection can decipher the code, it adds them back to the "Object Manager" & render window. If it fails to decipher the code, units will be lost or their attributes will be wrong.
+Corruption empties the "Object Manager" and obfuscates the Jass by scrambling the code (renaming `CreateUnitsForPlayer1` to random characters, such as `NXE`). When the tool can decipher the code, it adds them back to the "Object Manager" & render window. If it fails to decipher the code, units will be lost or their attributes will be wrong.
 
 To help you determine what was deciphered and what was lost, it comments out the portion of the Jass that was deciphered correctly (since it will be re-generated by "World Editor" on save).
 
@@ -148,7 +117,7 @@ To help you determine what was deciphered and what was lost, it comments out the
 
 ### Example Issues
 
-- **Missing Units:** A unit like "War Room" with FourCC `'h995'` might be shown in-game on the protected map but missing from the Object Manager in the World Editor
+- **Missing Units:** A unit like "War Room" with FourCC `'h995'` might be shown in-game on the original map but missing from the Object Manager in the World Editor after repacking
 - **Incorrect Attributes:** A unit might be created with default values instead of custom ones (e.g., Mana left at default instead of being reset to 0)
 
 <img style="max-width:100%;height:auto;" alt="img_12" src="Screenshots/image12.jpg" />
@@ -164,7 +133,7 @@ You can resolve these issues by:
 
 You will know that deciphering the JASS into ObjectManager failed if, after saving in World Editor, you test the map and find bugs. Use the **WinMerge** app to find clues:
 
-1. Open the deprotected map in MPQEditor
+1. Open the repacked map in MPQEditor
 2. Extract `war3map.j`
 3. Compare it against the World Editor triggers
 4. Look for sections where part of the code is commented out and part isn't
@@ -177,16 +146,16 @@ You will know that deciphering the JASS into ObjectManager failed if, after savi
 
 Campaign files have the `.w3n` file extension. This is still the same MPQ format that all WC3 maps use; however, it shares resources (3D models/textures/etc) in the base archive, and each mission is embedded as a separate W3X inside the W3N.
 
-### Deprotecting Campaigns
+### Repacking Campaigns
 
-This tool only supports deprotecting `.w3x` files, but there is an easy workaround:
+This tool only supports repacking `.w3x` files, but there is an easy workaround:
 
 1. Download [Xetanth87's Campaign Splitter](https://www.hiveworkshop.com/threads/xetanth87s-campaign-splitter-turn-custom-campaigns-into-separate-maps-now-with-archon-mode.340521)
 2. Open a command prompt and run:
    ```bash
    java -jar XT87CampaignSplitterGUI.jar
    ```
-3. After your campaign is split into separate files, run the deprotector on each `.w3x` file separately
+3. After your campaign is split into separate files, run the repacker on each `.w3x` file separately
 
 ---
-© 2025 WC3 Map Deprotector Team • Licensed under MIT
+© 2025 WC3 Map Repacker Team • Licensed under MIT

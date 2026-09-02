@@ -1,8 +1,8 @@
-# WC3 Map Deprotector 
-A tool for reassembling protected Warcraft 3 maps so they can be opened in World Editor.
+> [!WARNING]
+> **This repository is unmaintained.** No active development or support is being provided.
 
-https://www.youtube.com/watch?v=MiIXexjbcQ0
-[![Tutorial](https://img.youtube.com/vi/MiIXexjbcQ0/maxresdefault.jpg)](https://www.youtube.com/watch?v=MiIXexjbcQ0)
+# WC3 Map Repacker 
+A tool for reassembling corrupted Warcraft 3 maps. This can help repair a map that experiences a bug from a breaking change in a WC3 version upgrade, or help upgrade a map from classic to reforged, or help open it in the World Editor.
 
 ## Dependencies
 [.NET Runtime 8.0.0 (Windows x64)](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.0-windows-x64-installer)
@@ -13,7 +13,7 @@ https://www.youtube.com/watch?v=MiIXexjbcQ0
 - Resurrect a map which is no longer being maintained
 
 ## Features
-- Map deprotection
+- Remove corruption from map files
 - Unknown filename scanner (regenerates missing listfile.txt)
 - Restore object editor data from SLK format
 - Restore triggers (plain text only, not Visual/GUI)
@@ -21,11 +21,11 @@ https://www.youtube.com/watch?v=MiIXexjbcQ0
 - Convert Jass to Lua syntax
 
 ## Disclaimer
-This program is not perfect. Deprotection is complicated and every map is different. Manual bug fixes may be necessary.
-To troubleshoot potential issues, press the help button embedded in the app or click on bug report.
+This program is not perfect. Map repacking is complicated and every map is different. Manual bug fixes may be necessary.
+To troubleshoot potential issues, press the help button embedded in the app.
 
 ## Watermarks
-To help players avoid distributing or playing hacked maps, this tool intentionally adds both obvious & subtle clues to tell a player it has been deprotected. If your goal is to maintain a dead map, you will need to remove these by hand. I will not tell you how to do it, think of it as a coding test to prove you are worthy to take over maintenance of the map.
+To help players avoid distributing or playing modified maps, this tool intentionally adds both obvious & subtle clues to tell a player the map has been edited. If your goal is to maintain a dead map, you will need to remove these by hand.
 
 ## Ethical Notice
 Usage of this app requires acceptance of the following ethical notice:
@@ -42,10 +42,10 @@ Maintaining a Dead Map
 > Please pick a new map name to avoid confusing the existing player base.\
 > For example, rename from “DOTA” to “DOTA Resurrected” or “DOTA Reforged”, etc.\
 > Please also give credit to the original map creator on your map splash screen.\
-> Please do extensive testing and fix any bugs caused by deprotection before releasing on Battle.net
+> NOTE: Repacking sometimes introduces bugs, these will need to be fixed manually. Please do extensive testing before releasing on Battle.net
 
 ${\color{red}Copyright}$
 > A map contains an author’s hard work and is protected by law as intellectual property.\
 > Although maps are available for free, they are still protected by copyright law.\
-> Deprotection is perfectly legal as long as it’s for learning and/or bug fixing.\
+> Repacking is perfectly legal as long as it’s for learning and/or bug fixing.\
 > However, claiming someone else’s work as your own is stealing and is illegal.
